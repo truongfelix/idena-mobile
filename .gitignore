@@ -1,0 +1,16 @@
+# Build outputs (scripts/ builds them) and local settings.
+build/
+.gradle/
+.kotlin/
+app/libs/
+local.properties
+scripts/env.local.sh
+*.apk
+*.aab
+
+# Signing keys never go in the repository.
+*.keystore
+*.jks
+
+# Python cache.
+__pycache__/

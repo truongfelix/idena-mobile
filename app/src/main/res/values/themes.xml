@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The screen draws its own light and dark colors. forceDarkAllowed=false keeps MIUI's forced dark
+         mode from recoloring part of it (light text on light cards). -->
+    <style name="Theme.IdenaNode" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

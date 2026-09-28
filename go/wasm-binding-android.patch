@@ -1,0 +1,32 @@
+diff -ruN a/lib/link_std_android_arm64.go b/lib/link_std_android_arm64.go
+--- a/lib/link_std_android_arm64.go	1970-01-01 01:00:00.000000000 +0100
++++ b/lib/link_std_android_arm64.go	2026-09-28 23:42:34.040252628 +0200
+@@ -0,0 +1,10 @@
++//go:build android && arm64
++
++// libidena_wasm_android_arm64.a is built from ubiubi18/idena-wasm b686ed8 (the revision of the
++// shipped Linux libraries) with `cargo build --locked --release --all-features --target
++// aarch64-linux-android`, Android NDK r27d, API level 29.
++
++package lib
++
++// #cgo LDFLAGS: -L. -lidena_wasm_android_arm64 -ldl -llog -lunwind -lm -lc
++import "C"
+diff -ruN a/lib/link_std_linux_aarch64.go b/lib/link_std_linux_aarch64.go
+--- a/lib/link_std_linux_aarch64.go	2026-09-28 23:42:34.036813141 +0200
++++ b/lib/link_std_linux_aarch64.go	2026-09-28 23:42:34.040183749 +0200
+@@ -1,4 +1,4 @@
+-//go:build linux && arm64
++//go:build linux && !android && arm64
+ 
+ package lib
+ 
+diff -ruN a/lib/link_std_linux_amd64.go b/lib/link_std_linux_amd64.go
+--- a/lib/link_std_linux_amd64.go	2026-09-28 23:42:34.036735924 +0200
++++ b/lib/link_std_linux_amd64.go	2026-09-28 23:42:34.040099568 +0200
+@@ -1,4 +1,4 @@
+-//go:build linux && amd64
++//go:build linux && !android && amd64
+ 
+ package lib
+ 
