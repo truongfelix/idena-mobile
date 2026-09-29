@@ -187,6 +187,8 @@ fun Session(
                 // Best also approves the flip; one flip at most carries it.
                 ToggleButton("★ Best", selected = answers.best == flip.hash, colors.tertiary, colors.onTertiary, enabled = flip.loaded) {
                     answers = answers.toggleBest(flip.hash)
+                    // Marking the best approves the flip: go on like Approve. Removing the mark stays.
+                    if (answers.best == flip.hash) advance { answers.relevance(it.hash) != Relevance.None }
                 }
             }
             Text(
