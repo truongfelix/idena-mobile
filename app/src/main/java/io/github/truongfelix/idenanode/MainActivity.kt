@@ -170,6 +170,7 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
             state = state.copy(syncEnabled = enabled, startError = null)
         }
         AccountCard(state, network)
+        state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
         // The epoch and the flips are current once the fast sync has downloaded the state.
         state.status?.takeUnless { it.accountPending }?.let { ValidationCard(it) }
         state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
@@ -506,6 +507,70 @@ private fun ValidationCard(status: NodeStatus) {
     }
 }
 
+/** Waits until the node has the transaction in a block, asking every 10 seconds. */
+private suspend fun waitUntilMined(context: Context, hash: String) {
+    while (!withContext(Dispatchers.IO) {
+            runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false)
+        }
+    ) {
+        delay(10_000)
+    }
+}
+
+/**
+ * An invitation sent to the identity's address, waiting to be accepted: the activation transaction
+ * makes the identity a candidate for the next validation. Only outside the ceremony.
+ */
+@Composable
+private fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var confirming by remember { mutableStateOf(false) }
+    var pendingTx by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    fun accept() {
+        message = null
+        scope.launch {
+            val hash = withContext(Dispatchers.IO) {
+                runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).acceptInvitation() }
+            }.getOrElse {
+                message = "The node refused: ${it.message}"
+                return@launch
+            }
+            pendingTx = hash
+            waitUntilMined(context, hash)
+            pendingTx = null
+            message = "Invitation accepted: the identity is a candidate for the next validation."
+            onChanged()
+        }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Invitation", style = MaterialTheme.typography.titleMedium)
+            Text("You are invited to Idena. Accept the invitation to take part in the next validation as a candidate.")
+            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            when {
+                !canAcceptInvitation(status.period, status.identityState) ->
+                    Text("The invitation can be accepted once the validation is over.", style = MaterialTheme.typography.bodySmall)
+                pendingTx == null -> Button(onClick = { confirming = true }) { Text("Accept the invitation") }
+            }
+        }
+    }
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("Accept the invitation") },
+            text = { Text("The node sends the activation transaction of your address. Your identity becomes a candidate: take part in the next validation to become a Newbie.") },
+            confirmButton = { TextButton(onClick = { confirming = false; accept() }) { Text("Send") } },
+            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+        )
+    }
+}
+
 /** A mining change the validator confirms: the dialog text and the node call. */
 private enum class MiningChange(val title: String, val text: String) {
     Start(
@@ -560,9 +625,7 @@ private fun MiningCard(status: NodeStatus, onChanged: () -> Unit) {
                 return@launch
             }
             pendingTx = hash
-            while (!withContext(Dispatchers.IO) { runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false) }) {
-                delay(10_000)
-            }
+            waitUntilMined(context, hash)
             pendingTx = null
             message = "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
             onChanged()

@@ -51,7 +51,16 @@ class IdentityTest {
         assertEquals("Wait for the validation or create 2 optional flips", currentTask("None", "Human", 3, 5, 3, false))
         assertEquals("Wait for the validation", currentTask("None", "Newbie", 3, 3, 3, false))
         assertEquals("Wait for the validation", currentTask("None", "Candidate", 0, 0, 0, false))
-        assertEquals("Accept the invitation (on app.idena.io)", currentTask("None", "Invite", 0, 0, 0, false))
+        assertEquals("Accept the invitation", currentTask("None", "Invite", 0, 0, 0, false))
+    }
+
+    @Test
+    fun invitationCanBeAcceptedOnlyInTheInviteStateOutsideTheCeremony() {
+        assertTrue(canAcceptInvitation("None", "Invite"))
+        assertFalse(canAcceptInvitation("FlipLottery", "Invite"))
+        assertFalse(canAcceptInvitation("LongSession", "Invite"))
+        assertFalse(canAcceptInvitation("None", "Candidate"))
+        assertFalse(canAcceptInvitation("None", "Undefined"))
     }
 
     @Test

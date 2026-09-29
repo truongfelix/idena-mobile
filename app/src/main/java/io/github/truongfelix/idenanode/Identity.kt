@@ -61,7 +61,7 @@ fun currentTask(
     }
     "AfterLongSession" -> "Wait for the validation end"
     else -> when {
-        state == "Invite" -> "Accept the invitation (on app.idena.io)"
+        state == "Invite" -> "Accept the invitation"
         state == "Undefined" -> "Activate an invitation (on app.idena.io)"
         state in validatedStates -> {
             val requiredLeft = requiredFlips - publishedFlips
@@ -76,6 +76,13 @@ fun currentTask(
         else -> "No task: this identity cannot take part"
     }
 }
+
+/**
+ * Whether the node would accept the invitation now (validateActivationTx): the identity is in the Invite
+ * state (an invitation was sent to its address) and the ceremony is not running. Accepting makes it a
+ * candidate for the next validation.
+ */
+fun canAcceptInvitation(period: String, state: String): Boolean = state == "Invite" && period == "None"
 
 /**
  * The mining actions the node would accept now (validateOnlineStatusTx, validateDelegateTx,

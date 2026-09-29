@@ -79,6 +79,12 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
     fun undelegate(): String = call("dna_undelegate", JSONArray().put(JSONObject())) as String
 
     /**
+     * Accepts the invitation sent to the node's address: an activation transaction from the address to
+     * itself (dna_activateInvite without an invitation code). Returns the transaction hash.
+     */
+    fun acceptInvitation(): String = call("dna_activateInvite", JSONArray().put(JSONObject())) as String
+
+    /**
      * The network data of the APY (see [NetworkRewards]). Reads every identity and the last
      * [sampleBlocks] blocks: call it rarely, and only once the node's state is current.
      */
