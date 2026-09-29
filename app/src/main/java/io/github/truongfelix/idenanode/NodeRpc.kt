@@ -6,6 +6,9 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** The mainnet god address (config.DefaultGodAddress); it takes part in the staking reward. */
+private const val GOD_ADDRESS = "0x4d60dc6a2cba8c3ef1ba5e1eba5c12c54cee6b61"
+
 /** A JSON-RPC client for the app's own node. Calls block: use them off the main thread. */
 class NodeRpc(private val port: Int, private val apiKey: String) {
 
@@ -74,6 +77,60 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
     fun stopMining(): String = call("dna_becomeOffline", JSONArray().put(JSONObject())) as String
     fun delegate(pool: String): String = call("dna_delegate", JSONArray().put(JSONObject().put("to", pool))) as String
     fun undelegate(): String = call("dna_undelegate", JSONArray().put(JSONObject())) as String
+
+    /**
+     * The network data of the APY (see [NetworkRewards]). Reads every identity and the last
+     * [sampleBlocks] blocks: call it rarely, and only once the node's state is current.
+     */
+    fun networkRewards(sampleBlocks: Int = 100): NetworkRewards {
+        val validated = setOf("Newbie", "Verified", "Human")
+        val identities = call("dna_identities") as? JSONArray ?: JSONArray()
+        var totalStakingWeight = 0.0
+        val counted = HashSet<String>()
+        val onlineWeights = ArrayList<Double>()
+        val delegatorWeights = HashMap<String, MutableList<Double>>()
+        for (i in 0 until identities.length()) {
+            val identity = identities.getJSONObject(i)
+            if (identity.optString("state") !in validated) continue
+            val address = identity.optString("address").lowercase()
+            val weight = stakeWeight(identity.optString("stake").toDoubleOrNull() ?: 0.0)
+            totalStakingWeight += weight
+            counted += address
+            val delegatee = identity.optString("delegatee").takeUnless { identity.isNull("delegatee") || it.isEmpty() }
+            when {
+                delegatee != null -> delegatorWeights.getOrPut(delegatee.lowercase()) { mutableListOf() } += weight
+                identity.optBoolean("online") -> onlineWeights += weight
+            }
+        }
+        // Delegators validate through their pool when it is online (ValidatorsCache: pool.delegators).
+        for ((pool, weights) in delegatorWeights) {
+            val online = (call("dna_identity", JSONArray().put(pool)) as? JSONObject)?.optBoolean("online") == true
+            if (online) onlineWeights += weights
+        }
+        // The god address shares the staking reward too (addSuccessfulValidationReward).
+        if (GOD_ADDRESS !in counted) {
+            val god = call("dna_getBalance", JSONArray().put(GOD_ADDRESS)) as? JSONObject
+            totalStakingWeight += stakeWeight(god?.optString("stake")?.toDoubleOrNull() ?: 0.0)
+        }
+        val epoch = call("dna_epoch") as JSONObject
+        val start = (call("bcn_blockAt", JSONArray().put(epoch.optLong("startBlock"))) as? JSONObject)?.optLong("timestamp") ?: 0L
+        val end = parseValidationTime(epoch.optString("nextValidation"))?.epochSecond ?: 0L
+        val head = (call("bcn_lastBlock") as JSONObject).optLong("height")
+        var proposed = 0
+        var sampled = 0
+        for (height in (head - sampleBlocks + 1).coerceAtLeast(1)..head) {
+            val block = call("bcn_blockAt", JSONArray().put(height)) as? JSONObject ?: continue
+            sampled++
+            if (!block.optBoolean("isEmpty")) proposed++
+        }
+        return NetworkRewards(
+            totalStakingWeight = totalStakingWeight,
+            validators = onlineWeights.size,
+            averageValidatorWeight = if (onlineWeights.isEmpty()) 0.0 else onlineWeights.average(),
+            epochDays = if (start > 0 && end > start) (end - start) / 86_400.0 else 0.0,
+            proposedBlockShare = if (sampled > 0) proposed.toDouble() / sampled else 1.0,
+        )
+    }
 
     /** Whether the transaction is in a block: the node reports a zero block hash while it is in the mempool. */
     fun isMined(hash: String): Boolean {

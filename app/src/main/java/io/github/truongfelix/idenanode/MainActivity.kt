@@ -109,6 +109,7 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(ScreenState()) }
+    var network by remember { mutableStateOf<NetworkRewards?>(null) }
     val syncRate = remember { SyncRate() }
 
     suspend fun refresh() {
@@ -124,6 +125,22 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
             while (true) {
                 refresh()
                 delay(3_000)
+            }
+        }
+    }
+
+    // The APY's network data reads every identity: every 10 minutes, once the node is synced.
+    LaunchedEffect(Unit) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                if (state.status?.let { !it.syncing && !it.accountPending } == true) {
+                    withContext(Dispatchers.IO) {
+                        runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).networkRewards() }.getOrNull()
+                    }?.let { network = it }
+                    delay(10 * 60_000L)
+                } else {
+                    delay(30_000L)
+                }
             }
         }
     }
@@ -152,7 +169,7 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
             }
             state = state.copy(syncEnabled = enabled, startError = null)
         }
-        AccountCard(state)
+        AccountCard(state, network)
         // The epoch and the flips are current once the fast sync has downloaded the state.
         state.status?.takeUnless { it.accountPending }?.let { ValidationCard(it) }
         state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
@@ -302,7 +319,7 @@ private fun NodeCard(state: ScreenState, onSyncChange: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun AccountCard(state: ScreenState) {
+private fun AccountCard(state: ScreenState, network: NetworkRewards?) {
     val status = state.status
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -333,6 +350,13 @@ private fun AccountCard(state: ScreenState) {
             val fail = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Fail)
             if (miss != null && fail != null) {
                 Field("Protection", "${percent(miss)} if missed, ${percent(fail)} if failed")
+            }
+            network?.let { apy(stake, it) }?.let {
+                Field("APY", "${percent(it.yearly)} (staking + mining)")
+                Text(
+                    "If the identity validates and mines itself; flip and invitation rewards are not counted.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             Field("Balance", idna(status.balance))
             if (status.syncing) {
@@ -609,7 +633,7 @@ private fun Field(name: String, value: String) {
     }
 }
 
-/** "57%": the share of the stake the identity keeps, rounded down so it never shows more than it is. */
+/** "57%": a share (stake kept, APY) as a percentage, rounded down so it never shows more than it is. */
 private fun percent(share: Double): String = "${(share * 100 + 1e-9).toLong()}%"
 
 /** Formats an iDNA amount from the node (a decimal string) with at most 4 decimals. */
