@@ -2,11 +2,14 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.8
 
-// The node: branch mobile-node of truongfelix/idena-go, ubiubi18/idena-go master (ef206ae) with the open
-// pull requests #35 (validator and switch lookups), #36 (compact the database at start only when it pays
-// off) and #39 (fast sync keeps going when old transactions can't be read). Back to ubiubi18/idena-go
+// The node: branch mobile-node of truongfelix/idena-go, ubiubi18/idena-go master (ef206ae) with all our
+// open pull requests merged: #32-#36 (ceremony, validation and epoch performance, validator and switch
+// lookups, database compaction at start only when it pays off), #39, #41, #42 (fast sync: keeps going
+// when old transactions can't be read, restores the consensus config, keeps the headers when no
+// snapshot completes it), #40 (snapshots byte-identical to official nodes), #43 (evidence read skipped
+// without shards), #44 (gossip pulls), #45, #46 (rpc tests, Windows IPC). Back to ubiubi18/idena-go
 // once they are merged.
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260928215925-94ea0ba7d1a1
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260929184709-9988029a7d66
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/idena-network/iavl v0.12.3-0.20211223100228-a33b117aa31e
@@ -26,6 +29,7 @@ require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/Jorropo/jsync v1.0.1 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/RaduBerinde/axisds v0.1.0 // indirect
 	github.com/RaduBerinde/btreemap v0.0.0-20250419174037-3d62b7205d54 // indirect
 	github.com/RoaringBitmap/roaring v1.9.4 // indirect
@@ -269,7 +273,6 @@ require (
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
