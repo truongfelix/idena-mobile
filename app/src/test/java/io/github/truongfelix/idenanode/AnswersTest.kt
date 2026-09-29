@@ -1,7 +1,9 @@
 package io.github.truongfelix.idenanode
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnswersTest {
@@ -21,14 +23,40 @@ class AnswersTest {
     }
 
     @Test
-    fun onlyOneApprovedFlipIsTheBest() {
+    fun reportLimitIsTheMostThatStaysUnderTheNodes34Percent() {
+        // core/ceremony/qualification.go: reported / flips >= 0.34 voids all grades and reports.
+        for (count in 1..30) {
+            val allowed = Answers(count).reportsAllowed
+            assertTrue("$allowed of $count", allowed < 0.34 * count)
+            assertTrue("${allowed + 1} of $count", allowed + 1 >= 0.34 * count)
+        }
+    }
+
+    @Test
+    fun bestApprovesTheFlipAndOnlyOneFlipIsTheBest() {
         var answers = Answers(flips.size).toggleBest("flip1")
-        assertNull("a flip must be approved to be the best", answers.best)
-        answers = answers.approve("flip1").approve("flip2").toggleBest("flip1").toggleBest("flip2")
+        assertEquals("flip1", answers.best)
+        assertEquals("the best flip is approved", 5, answers.grade("flip1"))
+        answers = answers.toggleBest("flip2")
         assertEquals("flip2", answers.best)
-        assertEquals(listOf(2, 5), listOf(answers.grade("flip1"), answers.grade("flip2")))
+        assertEquals("the mark moves, the flip stays approved", listOf(2, 5), listOf(answers.grade("flip1"), answers.grade("flip2")))
+        assertEquals(1, flips.count { answers.grade(it) == 5 })
+        assertEquals(2, answers.toggleBest("flip2").grade("flip2"))
         assertNull(answers.toggleBest("flip2").best)
         assertNull("reporting the best flip removes the mark", answers.report("flip2").best)
+        // Best on a reported flip approves it and frees the report.
+        answers = answers.report("flip3")
+        assertEquals(1, answers.reportsUsed)
+        answers = answers.toggleBest("flip3")
+        assertEquals(listOf(0, 5), listOf(answers.reportsUsed, answers.grade("flip3")))
+    }
+
+    @Test
+    fun hasApprovedOnlyWithAnApprovedFlip() {
+        assertFalse(Answers(flips.size).hasApproved)
+        assertFalse(Answers(flips.size).report("flip1").hasApproved)
+        assertTrue(Answers(flips.size).approve("flip1").hasApproved)
+        assertTrue(Answers(flips.size).toggleBest("flip1").hasApproved)
     }
 
     @Test

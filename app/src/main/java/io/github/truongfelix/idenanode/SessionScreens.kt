@@ -143,7 +143,11 @@ fun Session(
             val relevance = answers.relevance(flip.hash)
             Row {
                 Text("Flip ${index + 1} of ${flips.size}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                Text("Reports left ${answers.reportsLeft}", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Reports ${answers.reportsUsed} of ${answers.reportsAllowed}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (answers.reportsLeft == 0) colors.error else Color.Unspecified,
+                )
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Story(
@@ -166,7 +170,7 @@ fun Session(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToggleButton("Approve", selected = relevance == Relevance.Approved, colors.primary, colors.onPrimary, enabled = flip.loaded) {
+                ToggleButton("Approve", selected = relevance == Relevance.Approved && answers.best != flip.hash, colors.primary, colors.onPrimary, enabled = flip.loaded) {
                     answers = answers.approve(flip.hash)
                     advance { answers.relevance(it.hash) != Relevance.None }
                 }
@@ -180,13 +184,17 @@ fun Session(
                     answers = answers.report(flip.hash)
                     advance { answers.relevance(it.hash) != Relevance.None }
                 }
-                Spacer(Modifier.weight(1f))
-                if (relevance == Relevance.Approved) {
-                    TextButton(onClick = { answers = answers.toggleBest(flip.hash) }) {
-                        Text(if (answers.best == flip.hash) "★ Best" else "☆ Best")
-                    }
+                // Best also approves the flip; one flip at most carries it.
+                ToggleButton("★ Best", selected = answers.best == flip.hash, colors.tertiary, colors.onTertiary, enabled = flip.loaded) {
+                    answers = answers.toggleBest(flip.hash)
                 }
             }
+            Text(
+                "Report at most ${answers.reportsAllowed} of these ${flips.size} flips and mark at most one as the best: " +
+                    "more makes the node ignore all your grades.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+            )
             Dots(flips.size, index, colorOf = {
                 when (answers.relevance(flips[it].hash)) {
                     Relevance.Approved -> colors.primary
@@ -194,6 +202,13 @@ fun Session(
                     Relevance.None -> null
                 }
             }) { index = it }
+            if (!answers.hasApproved) {
+                Text(
+                    "Approve at least one flip: without an approved flip the node ignores your grades.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { checkingKeywords = false }) { Text("Back to the stories") }
                 Spacer(Modifier.weight(1f))

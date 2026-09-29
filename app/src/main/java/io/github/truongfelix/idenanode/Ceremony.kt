@@ -41,8 +41,11 @@ enum class Choice(val value: Int) { None(0), Left(1), Right(2) }
 enum class Relevance { None, Approved, Reported }
 
 /**
- * The answers of one session. As in the desktop app, reports are limited to a third of the flips and
- * one approved flip can be marked as the best.
+ * The answers of one session. The node ignores all grades and reports of a validator who reports 34% or
+ * more of the long-session flips, grades more than one flip above "approved", or approves none
+ * (core/ceremony/qualification.go, Upgrade 11). So reports are limited to a third of the flips (the most
+ * that stays under 34% for any long session, at most 30 flips), one flip at most is the best, and the
+ * screen warns while no flip is approved.
  */
 data class Answers(
     val flipCount: Int,
@@ -51,7 +54,9 @@ data class Answers(
     val best: String? = null,
 ) {
     val reportsAllowed: Int get() = flipCount / 3
-    val reportsLeft: Int get() = reportsAllowed - relevanceByHash.count { it.value == Relevance.Reported }
+    val reportsUsed: Int get() = relevanceByHash.count { it.value == Relevance.Reported }
+    val reportsLeft: Int get() = reportsAllowed - reportsUsed
+    val hasApproved: Boolean get() = relevanceByHash.any { it.value == Relevance.Approved }
 
     fun choice(hash: String): Choice = choiceByHash[hash] ?: Choice.None
     fun relevance(hash: String): Relevance = relevanceByHash[hash] ?: Relevance.None
@@ -69,12 +74,13 @@ data class Answers(
         )
     }
 
-    /** Marks an approved flip as the best (taking the mark from another flip), or removes the mark. */
-    fun toggleBest(hash: String): Answers = when {
-        best == hash -> copy(best = null)
-        relevance(hash) == Relevance.Approved -> copy(best = hash)
-        else -> this
-    }
+    /**
+     * Marks the flip as the best: approves it (a reported flip frees its report) and takes the mark from
+     * any other flip. On the best flip, removes the mark; the flip stays approved.
+     */
+    fun toggleBest(hash: String): Answers =
+        if (best == hash) copy(best = null)
+        else copy(relevanceByHash = relevanceByHash + (hash to Relevance.Approved), best = hash)
 
     /** The grade the node expects (types.Grade): 0 none, 1 reported, 2 approved, 5 approved and the best. */
     fun grade(hash: String): Int = when (relevance(hash)) {
