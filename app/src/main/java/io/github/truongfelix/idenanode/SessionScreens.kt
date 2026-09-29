@@ -245,6 +245,8 @@ private fun Story(flip: Flip, order: List<Int>, selected: Boolean, modifier: Mod
 @Composable
 private fun FlipImage(flip: Flip, index: Int, modifier: Modifier) {
     val bitmap by produceState(FlipImages.cached(flip, index), flip.hash, index) {
+        // produceState keeps its state when the keys change: start from this flip's image, not the last one's.
+        value = FlipImages.cached(flip, index)
         if (value == null) value = withContext(Dispatchers.Default) { FlipImages.decode(flip, index) }
     }
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
