@@ -61,7 +61,24 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             period = epoch.optString("currentPeriod"),
             requiredFlips = identity.optInt("requiredFlips"),
             madeFlips = identity.optInt("madeFlips"),
+            availableFlips = identity.optInt("availableFlips"),
+            lockedStake = identity.optString("lockedStake"),
+            epoch = epoch.optInt("epoch"),
+            delegationEpoch = identity.optInt("delegationEpoch"),
+            penaltySeconds = identity.optLong("penaltySeconds"),
         )
+    }
+
+    /** Mining transactions of the node's identity; each returns the transaction hash. */
+    fun startMining(): String = call("dna_becomeOnline", JSONArray().put(JSONObject())) as String
+    fun stopMining(): String = call("dna_becomeOffline", JSONArray().put(JSONObject())) as String
+    fun delegate(pool: String): String = call("dna_delegate", JSONArray().put(JSONObject().put("to", pool))) as String
+    fun undelegate(): String = call("dna_undelegate", JSONArray().put(JSONObject())) as String
+
+    /** Whether the transaction is in a block: the node reports a zero block hash while it is in the mempool. */
+    fun isMined(hash: String): Boolean {
+        val tx = call("bcn_transaction", JSONArray().put(hash)) as? JSONObject ?: return false
+        return tx.optString("blockHash").removePrefix("0x").any { it != '0' }
     }
 
     /** The epoch, its ceremony period and the validation time (the current one during the ceremony). */
@@ -139,9 +156,17 @@ data class NodeStatus(
     /** The next validation (RFC 3339) and the ceremony period now (None, FlipLottery, ShortSession...). */
     val nextValidation: String,
     val period: String,
-    /** The flips the identity must make this epoch, and those it made. */
+    /** The flips the identity must make this epoch, those it published and the most it may make. */
     val requiredFlips: Int,
     val madeFlips: Int,
+    val availableFlips: Int,
+    /** Stake locked by a replenishment, burnt first if the identity is killed (iDNA, as text). */
+    val lockedStake: String,
+    val epoch: Int,
+    /** The epoch of the delegation to a pool; undelegating is possible from the next one. */
+    val delegationEpoch: Int,
+    /** A mining penalty still running; no delegation until it ends. */
+    val penaltySeconds: Long,
 ) {
     /** Whether the identity, stake and balance are still those of an old state (fast sync running). */
     val accountPending: Boolean

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -154,6 +155,7 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
         AccountCard(state)
         // The epoch and the flips are current once the fast sync has downloaded the state.
         state.status?.takeUnless { it.accountPending }?.let { ValidationCard(it) }
+        state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
         if (!state.ignoringBatteryOptimizations) BackgroundCard()
         TextButton(onClick = { context.startActivity(Intent(context, CeremonyActivity::class.java)) }) {
             Text("Practice validation")
@@ -324,6 +326,14 @@ private fun AccountCard(state: ScreenState) {
             Field("Identity", "${status.identityState}, age ${status.age}")
             Field("Mining", status.miningStatus)
             Field("Stake", idna(status.stake))
+            val stake = status.stake.toDoubleOrNull() ?: 0.0
+            val locked = status.lockedStake.toDoubleOrNull() ?: 0.0
+            if (locked > 0) Field("Locked", idna(status.lockedStake))
+            val miss = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Miss)
+            val fail = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Fail)
+            if (miss != null && fail != null) {
+                Field("Protection", "${percent(miss)} if missed, ${percent(fail)} if failed")
+            }
             Field("Balance", idna(status.balance))
             if (status.syncing) {
                 Text(
@@ -442,6 +452,11 @@ private fun ValidationCard(status: NodeStatus) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Next validation", style = MaterialTheme.typography.titleMedium)
+            val answersSent = NodeSettings.answersSentFile(context, status.epoch, short = false).exists()
+            Field(
+                "My task",
+                currentTask(status.period, status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips, answersSent),
+            )
             Field("Date", date)
             periodText(status.period)?.let { Field("Now", it) }
             if (status.period in listOf("FlipLottery", "ShortSession", "LongSession")) {
@@ -467,6 +482,120 @@ private fun ValidationCard(status: NodeStatus) {
     }
 }
 
+/** A mining change the validator confirms: the dialog text and the node call. */
+private enum class MiningChange(val title: String, val text: String) {
+    Start(
+        "Mine on this phone",
+        "Your identity mines with this phone's node, which must then keep running. If it stays offline for " +
+            "about an hour, other nodes can switch your identity offline with a mining penalty.",
+    ),
+    Stop("Stop mining", "Your identity stops mining with this phone's node."),
+    Delegate(
+        "Delegate to a pool",
+        "Your identity mines through the pool's node, and the pool receives your mining and validation " +
+            "rewards. You can lose your stake and all these rewards to the pool. The delegation can be stopped " +
+            "from the next epoch.",
+    ),
+    Undelegate("Stop delegation", "Your identity stops mining through the pool; the rewards come to your address again."),
+}
+
+/**
+ * Mining: with this phone's node, delegated to a pool, or none. Offers the changes the node would accept
+ * now (see [MiningActions]) and follows the transaction until it is in a block. The node applies online
+ * and delegation changes every 50 blocks (about 17 minutes).
+ */
+@Composable
+private fun MiningCard(status: NodeStatus, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val actions = MiningActions.of(
+        status.period, status.identityState, status.online, status.isPool, status.delegatee != null,
+        status.delegationEpoch, status.epoch, status.penaltySeconds,
+    )
+    var change by remember { mutableStateOf<MiningChange?>(null) }
+    var pool by remember { mutableStateOf("") }
+    var pendingTx by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    fun send(change: MiningChange) {
+        message = null
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
+                    when (change) {
+                        MiningChange.Start -> rpc.startMining()
+                        MiningChange.Stop -> rpc.stopMining()
+                        MiningChange.Delegate -> rpc.delegate(pool.trim())
+                        MiningChange.Undelegate -> rpc.undelegate()
+                    }
+                }
+            }
+            val hash = result.getOrElse {
+                message = "The node refused: ${it.message}"
+                return@launch
+            }
+            pendingTx = hash
+            while (!withContext(Dispatchers.IO) { runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false) }) {
+                delay(10_000)
+            }
+            pendingTx = null
+            message = "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
+            onChanged()
+        }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Mining", style = MaterialTheme.typography.titleMedium)
+            Field("Status", status.miningStatus)
+            if (status.penaltySeconds > 0) {
+                Field("Penalty", "${duration(status.penaltySeconds.toDouble())} left")
+            }
+            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            when {
+                status.period != "None" -> Text("Mining changes wait until the validation is over.", style = MaterialTheme.typography.bodySmall)
+                pendingTx == null -> {
+                    if (actions.canStartMining) OutlinedButton(onClick = { change = MiningChange.Start }) { Text(MiningChange.Start.title) }
+                    if (actions.canStopMining) OutlinedButton(onClick = { change = MiningChange.Stop }) { Text(MiningChange.Stop.title) }
+                    if (actions.canDelegate) OutlinedButton(onClick = { change = MiningChange.Delegate }) { Text(MiningChange.Delegate.title) }
+                    if (actions.canUndelegate) OutlinedButton(onClick = { change = MiningChange.Undelegate }) { Text(MiningChange.Undelegate.title) }
+                    if (status.delegatee != null && !actions.canUndelegate) {
+                        Text("The delegation can be stopped from the next epoch.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (status.delegatee == null && !actions.canDelegate && status.penaltySeconds > 0) {
+                        Text("No delegation while a mining penalty runs.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+    }
+
+    change?.let { selected ->
+        val poolValid = Regex("^0x[0-9a-fA-F]{40}$").matches(pool.trim())
+        AlertDialog(
+            onDismissRequest = { change = null },
+            title = { Text(selected.title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(selected.text)
+                    if (selected == MiningChange.Delegate) {
+                        OutlinedTextField(value = pool, onValueChange = { pool = it }, label = { Text("Pool address (0x…)") }, singleLine = true)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { change = null; send(selected) },
+                    enabled = selected != MiningChange.Delegate || poolValid,
+                ) { Text("Send") }
+            },
+            dismissButton = { TextButton(onClick = { change = null }) { Text("Cancel") } },
+        )
+    }
+}
+
 /** Opens the Idena web app in the browser; nothing happens if the phone has no browser. */
 private fun openWebApp(context: Context) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.idena.io"))) }
@@ -479,6 +608,9 @@ private fun Field(name: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
+
+/** "57%": the share of the stake the identity keeps, rounded down so it never shows more than it is. */
+private fun percent(share: Double): String = "${(share * 100 + 1e-9).toLong()}%"
 
 /** Formats an iDNA amount from the node (a decimal string) with at most 4 decimals. */
 private fun idna(amount: String): String = try {
