@@ -63,7 +63,62 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             madeFlips = identity.optInt("madeFlips"),
         )
     }
+
+    /** The epoch, its ceremony period and the validation time (the current one during the ceremony). */
+    fun ceremony(): CeremonyState {
+        val epoch = call("dna_epoch") as JSONObject
+        val intervals = call("dna_ceremonyIntervals") as JSONObject
+        return CeremonyState(
+            epoch = epoch.optInt("epoch"),
+            period = epoch.optString("currentPeriod"),
+            validationTime = epoch.optString("nextValidation"),
+            shortSessionSeconds = intervals.optDouble("ShortSessionDuration"),
+            longSessionSeconds = intervals.optDouble("LongSessionDuration"),
+        )
+    }
+
+    /** The flips of a session; throws with the node's reason when the identity has none. */
+    fun flipHashes(short: Boolean): List<FlipHash> {
+        val array = call(if (short) "flip_shortHashes" else "flip_longHashes") as? JSONArray ?: return emptyList()
+        return (0 until array.length()).map {
+            val item = array.getJSONObject(it)
+            FlipHash(item.getString("hash"), item.optBoolean("ready"), item.optBoolean("extra"))
+        }
+    }
+
+    /** A flip decrypted by the node, without its keywords. */
+    fun flip(hash: String): Flip {
+        val result = call("flip_get", JSONArray().put(hash)) as JSONObject
+        return decodeFlip(hash, result.getString("hex"), result.optString("privateHex"))
+    }
+
+    /** The keywords of a long-session flip, from [all] the node's keywords (assets/keywords.json). */
+    fun flipKeywords(hash: String, all: List<Keyword>): List<Keyword> {
+        val indexes = (call("flip_words", JSONArray().put(hash)) as JSONObject).getJSONArray("words")
+        return keywordsOf((0 until indexes.length()).map { indexes.getInt(it) }, all)
+    }
+
+    /** Sends the answers of a session; returns the transaction hash. */
+    fun submitAnswers(short: Boolean, answers: List<SubmittedAnswer>): String {
+        val list = JSONArray()
+        answers.forEach { list.put(JSONObject().put("hash", it.hash).put("answer", it.answer).put("grade", it.grade)) }
+        val result = call(
+            if (short) "flip_submitShortAnswers" else "flip_submitLongAnswers",
+            JSONArray().put(JSONObject().put("answers", list)),
+        ) as JSONObject
+        return result.optString("txHash")
+    }
 }
+
+data class CeremonyState(
+    val epoch: Int,
+    /** None, FlipLottery, ShortSession, LongSession or AfterLongSession. */
+    val period: String,
+    /** The validation start (RFC 3339): the next one outside the ceremony, the current one during it. */
+    val validationTime: String,
+    val shortSessionSeconds: Double,
+    val longSessionSeconds: Double,
+)
 
 data class NodeStatus(
     val address: String,

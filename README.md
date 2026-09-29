@@ -16,10 +16,14 @@ meant to be delegated to a pool, such as a desktop node.
 - **Key**: import the private key exported from the Idena app or app.idena.io (encrypted, with its
   password). Sync stays off until a key is imported. The app keeps the key on the phone and out of
   Android backups.
+- **Validation**: during the ceremony, the main screen opens it. It waits for the short session (the flips
+  load meanwhile), shows the node's flips, then the long session with the keyword check (approve, report
+  up to a third of the flips, one best flip). Answers go to the node 10 s before each session ends, or
+  when submitted. Not tried in a real ceremony yet.
 - **Practice validation**: the short and long sessions with the sample flips of the Idena web app, then
   the results with the right answers and why a flip should be reported.
 
-Planned: the validation ceremony itself, and importing the key from its QR code.
+Planned: importing the key from its QR code.
 
 ## Phone requirements
 
@@ -77,4 +81,7 @@ deletes the chain and the imported key.
   [ubiubi18](https://github.com/ubiubi18) fork.
 - The practice flips are the sample validation of the Idena web app (app.idena.io), bundled with the
   Idena team's agreement.
+- The keyword list (`app/src/main/assets/keywords.json`) is idena-go's `keywords/keywords.json`. The flip
+  used by the decoding test comes from the test fixtures of
+  [idena-desktop](https://github.com/idena-network/idena-desktop) (MIT).
 - License: LGPL-3.0, like idena-go (see `LICENSE`).

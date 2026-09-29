@@ -40,6 +40,10 @@ object NodeSettings {
         return key
     }
 
+    /** Marks that the answers of a session of [epoch] reached the node, so the screen does not ask again. */
+    fun answersSentFile(context: Context, epoch: Int, short: Boolean): File =
+        File(nodeDir(context), "answers_sent_${epoch}_${if (short) "short" else "long"}")
+
     /** Whether the user switched sync on. The node process checks it when Android restarts it. */
     fun isSyncEnabled(context: Context): Boolean = syncEnabledFile(context).exists()
 

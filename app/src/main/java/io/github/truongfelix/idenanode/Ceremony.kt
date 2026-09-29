@@ -24,6 +24,14 @@ class Flip(
     val keywords: List<Keyword>,
 ) {
     fun order(choice: Choice): List<Int> = if (choice == Choice.Right) rightOrder else leftOrder
+
+    /** False while the node has not delivered the flip: the screen shows it as loading. */
+    val loaded: Boolean get() = images.isNotEmpty()
+
+    companion object {
+        /** A flip the node has not delivered yet. */
+        fun loading(hash: String) = Flip(hash, emptyList(), emptyList(), emptyList(), emptyList())
+    }
 }
 
 /** The story the validator picked; [value] is the answer the node expects. */

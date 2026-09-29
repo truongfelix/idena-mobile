@@ -444,6 +444,12 @@ private fun ValidationCard(status: NodeStatus) {
             Text("Next validation", style = MaterialTheme.typography.titleMedium)
             Field("Date", date)
             periodText(status.period)?.let { Field("Now", it) }
+            if (status.period in listOf("FlipLottery", "ShortSession", "LongSession")) {
+                Button(
+                    onClick = { context.startActivity(Intent(context, ValidationActivity::class.java)) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open the validation") }
+            }
             if (status.requiredFlips > 0) {
                 val left = status.requiredFlips - status.madeFlips
                 Field("Flips", "${status.madeFlips} of ${status.requiredFlips} made" + if (left <= 0) " ✓" else "")
