@@ -2,14 +2,14 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.8
 
-// The node: branch mobile-node of truongfelix/idena-go, ubiubi18/idena-go master (ef206ae) with all our
-// open pull requests merged: #32-#36 (ceremony, validation and epoch performance, validator and switch
+// The node: branch mobile-node of truongfelix/idena-go, ubiubi18/idena-go master (ab49b92, with #32) with
+// all our open pull requests merged: #33-#36 (validation and epoch performance, validator and switch
 // lookups, database compaction at start only when it pays off), #39, #41, #42 (fast sync: keeps going
 // when old transactions can't be read, restores the consensus config, keeps the headers when no
 // snapshot completes it), #40 (snapshots byte-identical to official nodes), #43 (evidence read skipped
-// without shards), #44 (gossip pulls), #45, #46 (rpc tests, Windows IPC). Back to ubiubi18/idena-go
-// once they are merged.
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260929184709-9988029a7d66
+// without shards), #44 (gossip pulls), #45, #46 (rpc tests, Windows IPC), #47 (bcn_blocksWithAddress,
+// which the Social tab uses). Back to ubiubi18/idena-go once they are merged.
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260930065427-c3c2539d5f13
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/idena-network/iavl v0.12.3-0.20211223100228-a33b117aa31e

@@ -74,8 +74,9 @@ deletes the chain and the imported key.
   idena-go to the `mobile-node` branch of truongfelix/idena-go: the ubiubi18 master with the open pull
   requests [#35](https://github.com/ubiubi18/idena-go/pull/35),
   [#36](https://github.com/ubiubi18/idena-go/pull/36) (without it, the node rewrites its whole database at
-  each start) and [#39](https://github.com/ubiubi18/idena-go/pull/39) (fast sync on phones), until they
-  are merged.
+  each start), [#39](https://github.com/ubiubi18/idena-go/pull/39) (fast sync on phones) and
+  [#47](https://github.com/ubiubi18/idena-go/pull/47) (`bcn_blocksWithAddress`, which the Social tab uses to
+  find the blocks of idena.social from their headers), until they are merged.
 - `go/wasm-binding-android.patch`: Android support for the wasm binding (a link file and build tags),
   applied by `scripts/build-node-aar.sh`.
 - The node on the phone: RPC on 127.0.0.1 only, with a random key and no browser access; the IPFS
