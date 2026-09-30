@@ -22,6 +22,12 @@ meant to be delegated to a pool, such as a desktop node.
   when submitted. Not tried in a real ceremony yet.
 - **Practice validation**: the short and long sessions with the sample flips of the Idena web app, then
   the results with the right answers and why a flip should be reported.
+- **Social** tab: the posts of [idena.social](https://idena.social), read from the phone's own node, with
+  their replies and likes, and posting with the identity (a contract call, about 3.5 iDNA for a short
+  post). While "Scan blocks" is selected, the tab reads the new blocks up to the node's, then the older
+  ones back to the contract's creation (once, kept on the phone), then follows the new blocks. Nothing
+  is scanned while the tab is hidden, the node syncs or a validation runs. Not shown yet: media, texts
+  stored on IPFS, comments on replies, messages.
 
 Planned: importing the key from its QR code.
 
@@ -62,7 +68,9 @@ deletes the chain and the imported key.
 ## How it fits together
 
 - `app/`: the Android app (Kotlin, Jetpack Compose).
-- `go/`: the Go module bound with gomobile: package `mobile` starts the node and imports the key. It pins
+- `go/`: the Go module bound with gomobile: package `mobile` starts the node, imports the key and decodes
+  the contract calls of a block body (for idena.social: the node keeps no index of other accounts'
+  transactions, so the app reads the blocks and recovers the senders). It pins
   idena-go to the `mobile-node` branch of truongfelix/idena-go: the ubiubi18 master with the open pull
   requests [#35](https://github.com/ubiubi18/idena-go/pull/35),
   [#36](https://github.com/ubiubi18/idena-go/pull/36) (without it, the node rewrites its whole database at

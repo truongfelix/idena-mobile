@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.truongfelix.idenanode"
         minSdk = 29
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 10
+        versionName = "0.1.9"
         ndk {
             // The node library is built for 64-bit ARM only.
             abiFilters += "arm64-v8a"
@@ -59,4 +59,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    // The real org.json for the JVM tests (android.jar only has stubs).
+    testImplementation("org.json:json:20240303")
 }

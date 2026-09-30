@@ -1,5 +1,6 @@
 // Package mobile is the API of the node for the Android app, bound with gomobile. It only uses types
-// gomobile supports (strings, booleans); an empty string means success.
+// gomobile supports (strings, booleans, errors); functions that only report an outcome return an empty
+// string on success.
 //
 // The app runs the node in a process of its own: Start runs it in the calling process until that
 // process ends, as the desktop app ends the node process to stop it.

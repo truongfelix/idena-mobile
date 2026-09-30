@@ -36,6 +36,39 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
         }
     }
 
+    /**
+     * Calls [method] once per entry of [params] in one request (a JSON-RPC batch) and returns the results
+     * in the same order. Throws if any call fails.
+     */
+    fun batch(method: String, params: List<JSONArray>): List<Any?> {
+        if (params.isEmpty()) return emptyList()
+        val conn = URL("http://127.0.0.1:$port").openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 2_000
+            // Block bodies the node does not have come from its peers.
+            conn.readTimeout = 60_000
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            val requests = JSONArray()
+            params.forEachIndexed { id, p ->
+                requests.put(JSONObject().put("jsonrpc", "2.0").put("id", id).put("method", method).put("params", p).put("key", apiKey))
+            }
+            conn.outputStream.use { it.write(requests.toString().toByteArray()) }
+            val responses = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
+            val results = arrayOfNulls<Any?>(params.size)
+            for (i in 0 until responses.length()) {
+                val response = responses.getJSONObject(i)
+                val error = response.optJSONObject("error")
+                if (error != null) throw IOException(error.optString("message", "RPC error"))
+                results[response.getInt("id")] = if (response.isNull("result")) null else response.get("result")
+            }
+            return results.toList()
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** Reads what the screen shows. Throws if the node does not answer. */
     fun status(): NodeStatus {
         val sync = call("bcn_syncing") as JSONObject
@@ -235,11 +268,15 @@ data class NodeStatus(
     val accountPending: Boolean
         get() = syncing && stateBlock < currentBlock
 
-    /** Mining as the node sees it: delegated to a pool, online itself, or not mining. */
+    /**
+     * Mining as the node sees it: delegated to a pool, online itself, or not mining ("offline" only while
+     * the node syncs, when the state may still change).
+     */
     val miningStatus: String
         get() = when {
             delegatee != null -> "Delegated to pool $delegatee"
             online -> "Mining (online)"
-            else -> "Not mining (offline)"
+            syncing -> "Not mining (offline)"
+            else -> "Not mining"
         }
 }

@@ -37,6 +37,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -47,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,9 +80,38 @@ class MainActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 Scaffold { padding ->
-                    NodeScreen(Modifier.padding(padding))
+                    MainScreen(Modifier.padding(padding))
                 }
             }
+        }
+    }
+}
+
+/** The main tabs, which stay at the top of the screen. */
+private enum class MainTab(val title: String) { Node("Node"), Social("Social") }
+
+@Composable
+private fun MainScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var tab by rememberSaveable { mutableStateOf(MainTab.Node) }
+
+    // An app update or a force stop ends the node without switching sync off: start it again. The
+    // service ignores the start when the node already runs.
+    LaunchedEffect(Unit) {
+        if (NodeSettings.isSyncEnabled(context)) NodeService.start(context)
+    }
+
+    Column(modifier.fillMaxSize()) {
+        Text("Idena", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall)
+        TabRow(selectedTabIndex = tab.ordinal) {
+            MainTab.entries.forEach {
+                Tab(selected = tab == it, onClick = { tab = it }, text = { Text(it.title) })
+            }
+        }
+        // Each tab reads the node only while it is shown.
+        when (tab) {
+            MainTab.Node -> NodeScreen(Modifier.weight(1f))
+            MainTab.Social -> SocialScreen(Modifier.weight(1f))
         }
     }
 }
@@ -118,9 +150,6 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
     }
 
     LaunchedEffect(Unit) {
-        // An app update or a force stop ends the node without switching sync off: start it again. The
-        // service ignores the start when the node already runs.
-        if (NodeSettings.isSyncEnabled(context)) NodeService.start(context)
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 refresh()
@@ -156,8 +185,6 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Idena Node", style = MaterialTheme.typography.headlineSmall)
-
         NodeCard(state) { enabled ->
             if (enabled) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
