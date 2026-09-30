@@ -55,7 +55,7 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
 
     override fun head(): Long = (rpc.call("bcn_lastBlock") as JSONObject).getLong("height")
 
-    override fun posts(from: Long, to: Long): List<PostCall> {
+    override fun calls(from: Long, to: Long): BlockCalls {
         val heights = if (addressFilter()) blocksWithContract(from, to) else (from..to).toList()
         val blocks = rpc.batch("bcn_blockAt", heights.map { JSONArray().put(it) }).mapIndexed { i, block ->
             block as? JSONObject ?: throw IOException("block ${heights[i]} is missing")
@@ -63,24 +63,25 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
         val withTransactions = blocks.filter { (it.optJSONArray("transactions")?.length() ?: 0) > 0 && !it.isNull("ipfsCid") }
         val bodies = rpc.batch("ipfs_get", withTransactions.map { JSONArray().put(it.getString("ipfsCid")) })
         val posts = ArrayList<PostCall>()
+        val tips = ArrayList<TipCall>()
         withTransactions.zip(bodies).forEach { (block, body) ->
             val height = block.getLong("height")
+            val time = block.getLong("timestamp")
             val calls = JSONArray(Mobile.contractCalls(body as? String ?: throw IOException("body of block $height is missing"), SOCIAL_CONTRACT))
             for (i in 0 until calls.length()) {
                 val call = calls.getJSONObject(i)
                 val args = call.getJSONArray("args")
-                if (call.getString("method") != "makePost" || args.length() == 0) continue
-                PostCall.parse(
-                    hash = call.getString("hash"),
-                    height = height,
-                    time = block.getLong("timestamp"),
-                    index = call.getInt("index"),
-                    from = call.getString("from"),
-                    argHex = args.getString(0),
-                )?.let { posts += it }
+                if (args.length() == 0) continue
+                val hash = call.getString("hash")
+                val index = call.getInt("index")
+                val from = call.getString("from")
+                when (call.getString("method")) {
+                    "makePost" -> PostCall.parse(hash, height, time, index, from, args.getString(0))?.let { posts += it }
+                    "sendTip" -> TipCall.parse(hash, height, time, index, from, call.optString("amount"), args.getString(0))?.let { tips += it }
+                }
             }
         }
-        return posts
+        return BlockCalls(posts, tips)
     }
 
     override fun authors(): Map<Long, String> {
@@ -109,16 +110,21 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
 /** The fee of a post as the node estimates it, and the most it may cost (the transaction's max fee). */
 data class PostFee(val fee: BigDecimal, val maxFee: BigDecimal)
 
-/** Posting on idena.social with the node's key: a makePost call of the contract. */
+/**
+ * A call of the idena.social contract: [method] with its one JSON [argument] and [amount] iDNA sent, as
+ * idena.social makes them (a post sends [SocialPosting.POST_AMOUNT], a tip the tipped amount).
+ */
+data class SocialCall(val method: String, val argument: String, val amount: String)
+
+/** Calling idena.social with the node's key: posts (makePost) and tips (sendTip). */
 class SocialPosting(private val rpc: NodeRpc) {
-    private fun callArgs(from: String, argument: String, maxFee: BigDecimal?): JSONArray {
+    private fun callArgs(from: String, call: SocialCall, maxFee: BigDecimal?): JSONArray {
         val args = JSONObject()
             .put("from", from)
             .put("contract", SOCIAL_CONTRACT)
-            .put("method", "makePost")
-            // idena.social sends this amount with each post (the contract passes it on in its event).
-            .put("amount", POST_AMOUNT)
-            .put("args", JSONArray().put(JSONObject().put("index", 0).put("format", "string").put("value", argument)))
+            .put("method", call.method)
+            .put("amount", call.amount)
+            .put("args", JSONArray().put(JSONObject().put("index", 0).put("format", "string").put("value", call.argument)))
         maxFee?.let { args.put("maxFee", it.toPlainString()) }
         return JSONArray().put(args)
     }
@@ -129,19 +135,28 @@ class SocialPosting(private val rpc: NodeRpc) {
      * before the post is in a block, and only the fee actually used is taken. Throws with the node's
      * reason (e.g. insufficient funds) or the contract's.
      */
-    fun estimate(from: String, argument: String): PostFee {
-        val receipt = rpc.call("contract_estimateCall", callArgs(from, argument, null)) as JSONObject
+    fun estimate(from: String, call: SocialCall): PostFee {
+        val receipt = rpc.call("contract_estimateCall", callArgs(from, call, null)) as JSONObject
         if (!receipt.optBoolean("success")) throw IOException(receipt.optString("error").ifEmpty { "the contract refused the post" })
         val fee = BigDecimal(receipt.optString("txFee", "0")) + BigDecimal(receipt.optString("gasCost", "0"))
         return PostFee(fee, (fee * BigDecimal(2)).setScale(6, RoundingMode.UP))
     }
 
-    /** Sends the post; returns the transaction hash. */
-    fun send(from: String, argument: String, maxFee: BigDecimal): String =
-        rpc.call("contract_call", callArgs(from, argument, maxFee)) as String
+    /** Sends the call; returns the transaction hash. */
+    fun send(from: String, call: SocialCall, maxFee: BigDecimal): String =
+        rpc.call("contract_call", callArgs(from, call, maxFee)) as String
+
+    /** The spendable balance of [address] in iDNA. */
+    fun balance(address: String): BigDecimal =
+        BigDecimal((rpc.call("dna_getBalance", JSONArray().put(address)) as JSONObject).optString("balance", "0"))
 
     companion object {
+        /** idena.social sends this amount with each post (the contract passes it on in its event). */
         const val POST_AMOUNT = "0.00001"
+
+        fun post(argument: String) = SocialCall("makePost", argument, POST_AMOUNT)
+
+        fun tip(postId: Long, amount: Long) = SocialCall("sendTip", sendTipArgument(postId, amount), amount.toString())
     }
 }
 

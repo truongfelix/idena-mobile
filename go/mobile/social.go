@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/idena-network/idena-go/blockchain"
 	"github.com/idena-network/idena-go/blockchain/attachments"
 	"github.com/idena-network/idena-go/blockchain/types"
 	"github.com/idena-network/idena-go/common"
@@ -13,9 +14,11 @@ import (
 // ContractCall is a call of a contract among the transactions of a block.
 type ContractCall struct {
 	// Index is the position of the transaction in the block.
-	Index  int    `json:"index"`
-	Hash   string `json:"hash"`
-	From   string `json:"from"`
+	Index int    `json:"index"`
+	Hash  string `json:"hash"`
+	From  string `json:"from"`
+	// Amount is the iDNA sent with the call, as a decimal number.
+	Amount string `json:"amount"`
 	Method string `json:"method"`
 	// Args are the call's arguments, hex encoded, in the order of their indexes.
 	Args []string `json:"args"`
@@ -55,6 +58,7 @@ func ContractCalls(bodyHex string, contract string) (string, error) {
 			Index:  i,
 			Hash:   tx.Hash().Hex(),
 			From:   sender.Hex(),
+			Amount: blockchain.ConvertToFloat(tx.AmountOrZero()).String(),
 			Method: attachment.Method,
 			Args:   args,
 		})

@@ -2,10 +2,11 @@ package io.github.truongfelix.idenanode
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.math.BigDecimal
 
 /*
  * idena.social (https://idena.social), read from the node: posts are makePost calls of its contract,
- * whose JSON argument holds the text. The rules follow idena.social-ui (getNewPosterAndPost in
+ * whose JSON argument holds the text, and tips are sendTip calls. The rules follow idena.social-ui (getNewPosterAndPost in
  * src/logic/asyncUtils.ts, PostComponent.tsx), for posts made since its current contract (v12).
  */
 
@@ -76,13 +77,80 @@ data class PostCall(
     }
 }
 
+/** A sendTip call as found in a block: [amount] iDNA sent, [tipAmount] of them for post [postId]'s author. */
+data class TipCall(
+    val hash: String,
+    val height: Long,
+    val time: Long,
+    val index: Int,
+    /** The tipper, lowercase. */
+    val from: String,
+    val postId: String,
+    /** The tip as the argument has it; the contract takes whole iDNA. */
+    val tipAmount: String,
+    /** The iDNA sent with the call (decimal). */
+    val amount: String,
+) {
+    /**
+     * The tip in iDNA when the contract accepts it (sendTip): a whole number of at least 1 and no more
+     * than was sent; null otherwise (such a call fails).
+     */
+    val validAmount: Long?
+        get() {
+            val tip = tipAmount.takeIf { WHOLE_IDNA.matches(it) }?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+            val sent = amount.toBigDecimalOrNull() ?: return null
+            return tip.takeIf { sent >= BigDecimal(it) }
+        }
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("hash", hash).put("height", height).put("time", time).put("index", index).put("from", from)
+        .put("postId", postId).put("tipAmount", tipAmount).put("amount", amount)
+
+    companion object {
+        private val WHOLE_IDNA = Regex("^[0-9]{1,15}$")
+
+        fun fromJson(json: JSONObject) = TipCall(
+            hash = json.getString("hash"),
+            height = json.getLong("height"),
+            time = json.getLong("time"),
+            index = json.getInt("index"),
+            from = json.getString("from"),
+            postId = json.optString("postId"),
+            tipAmount = json.optString("tipAmount"),
+            amount = json.optString("amount"),
+        )
+
+        /** The tip of a sendTip call, from its argument (hex of {"postId", "tipAmount"}); null if not such JSON. */
+        fun parse(hash: String, height: Long, time: Long, index: Int, from: String, amount: String, argHex: String): TipCall? {
+            val args = runCatching { JSONObject(String(hexToBytes(argHex), Charsets.UTF_8)) }.getOrNull() ?: return null
+            return TipCall(hash, height, time, index, from.lowercase(), args.optString("postId"), args.optString("tipAmount"), amount)
+        }
+    }
+}
+
+/** The idena.social calls of some blocks. */
+data class BlockCalls(val posts: List<PostCall>, val tips: List<TipCall>)
+
 /**
- * A post of the feed with its likes and what answers it, oldest first: a post's replies, or a reply's
- * comments (idena.social's two levels; a comment has none).
+ * A post of the feed with its likes (the like calls), its valid tips, and what answers it, oldest first:
+ * a post's replies, or a reply's comments (idena.social's two levels; a comment has none).
  */
-data class SocialPost(val id: Long, val call: PostCall, val likedBy: List<String>, val replies: List<SocialPost>) {
+data class SocialPost(
+    val id: Long,
+    val call: PostCall,
+    val likeCalls: List<PostCall>,
+    val tips: List<TipCall>,
+    val replies: List<SocialPost>,
+) {
     val likes: Int
-        get() = likedBy.size
+        get() = likeCalls.size
+
+    val likedBy: List<String>
+        get() = likeCalls.map { it.author }
+
+    /** The iDNA tipped to the post's author for it. */
+    val tipTotal: Long
+        get() = tips.sumOf { it.validAmount ?: 0 }
 }
 
 /** The channel of the comments under reply [replyId] on idena.social. */
@@ -113,14 +181,15 @@ fun postIds(posts: List<PostCall>, authors: Map<Long, String>): Map<String, Long
  * under each post its replies; under each reply its comments, in the channel "discuss:<reply id>"
  * (a main-channel answer to a reply or a comment counts as a comment too). A like (a reply made of
  * [LIKE]) only counts on what it replies to. Each post needs a text or media, an id, and a known,
- * older parent that is not a like; posts in other channels are left out.
+ * older parent that is not a like; posts in other channels are left out. A tip counts on the post it
+ * names when its amount is valid and it comes after that post in the chain.
  */
-fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>): List<SocialPost> {
+fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<TipCall> = emptyList()): List<SocialPost> {
     val ids = postIds(posts, authors)
     val byId = HashMap<Long, PostCall>()
     for (post in posts) ids[post.hash]?.let { byId[it] = post }
     val answers = HashMap<Long, MutableList<Long>>()
-    val likes = HashMap<Long, MutableList<String>>()
+    val likes = HashMap<Long, MutableList<PostCall>>()
     val topLevel = ArrayList<Long>()
     // The level of each accepted post, and the reply each comment belongs to. A post always has a
     // greater id than the post it answers: in id order, parents come first.
@@ -146,7 +215,7 @@ fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>): List<SocialPo
         val target = byId.getValue(targetId)
         if (post.time <= target.time || target.isLike) continue
         if (post.isLike) {
-            likes.getOrPut(targetId) { mutableListOf() } += post.author
+            likes.getOrPut(targetId) { mutableListOf() } += post
             levels[id] = LIKE_LEVEL
             continue
         }
@@ -169,8 +238,19 @@ fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>): List<SocialPo
         }
     }
 
-    fun build(id: Long): SocialPost =
-        SocialPost(id, byId.getValue(id), likes[id].orEmpty(), answers[id].orEmpty().map { build(it) })
+    val tipsOf = HashMap<Long, MutableList<TipCall>>()
+    for (tip in tips) {
+        val postId = tip.postId.toLongOrNull() ?: continue
+        val level = levels[postId] ?: continue
+        val post = byId.getValue(postId)
+        val after = tip.height > post.height || tip.height == post.height && tip.index > post.index
+        if (level != LIKE_LEVEL && after && tip.validAmount != null) tipsOf.getOrPut(postId) { mutableListOf() } += tip
+    }
+
+    fun build(id: Long): SocialPost = SocialPost(
+        id, byId.getValue(id), likes[id].orEmpty(), tipsOf[id].orEmpty().sortedWith(compareBy({ it.height }, { it.index })),
+        answers[id].orEmpty().map { build(it) },
+    )
 
     return topLevel.asReversed().map { build(it) }
 }
@@ -182,6 +262,72 @@ private const val LIKE_LEVEL = 3
 
 /** The number of replies under [post], at every depth. */
 fun replyCount(post: SocialPost): Int = post.replies.sumOf { 1 + replyCount(it) }
+
+enum class ActivityKind { Like, Reply, Comment, Tip }
+
+/**
+ * Something another identity did on one of [me]'s posts, replies or comments: [what] is that post,
+ * [answer] the reply or comment made, [amount] the tip; [threadId] is the thread to open.
+ */
+data class ActivityItem(
+    val kind: ActivityKind,
+    val actor: String,
+    val height: Long,
+    val index: Int,
+    val time: Long,
+    val threadId: Long,
+    val what: PostCall,
+    val answer: PostCall? = null,
+    val amount: Long? = null,
+)
+
+/**
+ * The activity on [me]'s posts, newest first, as idena.social's Post Activity: likes, replies to a
+ * post, comments on a reply or answering a comment, and tips, made by others.
+ */
+fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
+    val items = ArrayList<ActivityItem>()
+    fun likesAndTips(node: SocialPost, threadId: Long) {
+        for (like in node.likeCalls) {
+            if (like.author != me) items += ActivityItem(ActivityKind.Like, like.author, like.height, like.index, like.time, threadId, node.call)
+        }
+        for (tip in node.tips) {
+            if (tip.from != me) items += ActivityItem(ActivityKind.Tip, tip.from, tip.height, tip.index, tip.time, threadId, node.call, amount = tip.validAmount)
+        }
+    }
+    for (post in feed) {
+        if (post.call.author == me) {
+            likesAndTips(post, post.id)
+            for (reply in post.replies) {
+                if (reply.call.author != me) {
+                    items += ActivityItem(ActivityKind.Reply, reply.call.author, reply.call.height, reply.call.index, reply.call.time, post.id, post.call, reply.call)
+                }
+            }
+        }
+        for (reply in post.replies) {
+            if (reply.call.author == me) {
+                likesAndTips(reply, post.id)
+                for (comment in reply.replies) {
+                    // Comments on the reply itself; those answering another comment count for that comment.
+                    val onReply = comment.call.replyTo.isEmpty() || comment.call.replyTo == reply.id.toString()
+                    if (onReply && comment.call.author != me) {
+                        items += ActivityItem(ActivityKind.Comment, comment.call.author, comment.call.height, comment.call.index, comment.call.time, post.id, reply.call, comment.call)
+                    }
+                }
+            }
+            for (mine in reply.replies) {
+                if (mine.call.author != me) continue
+                likesAndTips(mine, post.id)
+                for (comment in reply.replies) {
+                    if (comment.call.replyTo == mine.id.toString() && comment.call.author != me) {
+                        items += ActivityItem(ActivityKind.Comment, comment.call.author, comment.call.height, comment.call.index, comment.call.time, post.id, mine.call, comment.call)
+                    }
+                }
+            }
+        }
+    }
+    return items.sortedWith(compareByDescending<ActivityItem> { it.height }.thenByDescending { it.index })
+}
 
 /**
  * The continuation token of a contract_iterateMap page, or null after the last page, where the node
@@ -211,8 +357,8 @@ const val SOCIAL_BATCH = 500L
 
 /**
  * What the phone has scanned, kept in the app's files so that no block is scanned twice: the blocks
- * [low]..[high] (none while [high] < [low]), the posts found there, and the post authors as of block
- * [authorsHeight].
+ * [low]..[high] (none while [high] < [low]), the posts and tips found there, and the post authors as of
+ * block [authorsHeight].
  */
 data class SocialCache(
     val low: Long,
@@ -220,6 +366,7 @@ data class SocialCache(
     val posts: List<PostCall>,
     val authors: Map<Long, String>,
     val authorsHeight: Long,
+    val tips: List<TipCall> = emptyList(),
 ) {
     /** Whether the scan reached the first block of the contract. */
     val historyDone: Boolean
@@ -234,23 +381,34 @@ data class SocialCache(
     val oldestPostTime: Long?
         get() = posts.minOfOrNull { it.time }
 
-    /** The feed of the posts the author map covers. */
-    fun feed(): List<SocialPost> = socialFeed(posts.filter { it.height <= authorsHeight }, authors)
+    /** The feed of the posts and tips the author map covers. */
+    fun feed(): List<SocialPost> =
+        socialFeed(posts.filter { it.height <= authorsHeight }, authors, tips.filter { it.height <= authorsHeight })
+
+    /** This cache with the calls of more blocks. */
+    fun plus(calls: BlockCalls) = copy(posts = posts + calls.posts, tips = tips + calls.tips)
 
     fun toJson(): JSONObject {
         val postArray = JSONArray()
         posts.forEach { postArray.put(it.toJson()) }
+        val tipArray = JSONArray()
+        tips.forEach { tipArray.put(it.toJson()) }
         val authorObject = JSONObject()
         authors.forEach { (id, author) -> authorObject.put(id.toString(), author) }
-        return JSONObject().put("contract", SOCIAL_CONTRACT).put("low", low).put("high", high)
-            .put("posts", postArray).put("authors", authorObject).put("authorsHeight", authorsHeight)
+        return JSONObject().put("contract", SOCIAL_CONTRACT).put("version", VERSION).put("low", low).put("high", high)
+            .put("posts", postArray).put("tips", tipArray).put("authors", authorObject).put("authorsHeight", authorsHeight)
     }
 
     companion object {
-        /** The cache from its JSON; null when it is for another contract. */
+        /** 2: the tips are kept too; a scan of version 1 dropped them and is done again. */
+        const val VERSION = 2
+
+        /** The cache from its JSON; null when it is for another contract or an older version. */
         fun fromJson(json: JSONObject): SocialCache? {
             if (!json.optString("contract").equals(SOCIAL_CONTRACT, ignoreCase = true)) return null
+            if (json.optInt("version", 1) != VERSION) return null
             val postArray = json.getJSONArray("posts")
+            val tipArray = json.optJSONArray("tips") ?: JSONArray()
             val authorObject = json.getJSONObject("authors")
             return SocialCache(
                 low = json.getLong("low"),
@@ -258,6 +416,7 @@ data class SocialCache(
                 posts = (0 until postArray.length()).map { PostCall.fromJson(postArray.getJSONObject(it)) },
                 authors = authorObject.keys().asSequence().associate { it.toLong() to authorObject.getString(it) },
                 authorsHeight = json.getLong("authorsHeight"),
+                tips = (0 until tipArray.length()).map { TipCall.fromJson(tipArray.getJSONObject(it)) },
             )
         }
     }
@@ -265,14 +424,14 @@ data class SocialCache(
 
 /** What the scan needs from the node. */
 interface SocialSource {
-    /** The most blocks [posts] takes at once. */
+    /** The most blocks [calls] takes at once. */
     fun batchSize(): Long
 
     /** The node's head block. */
     fun head(): Long
 
-    /** The posts of blocks [from]..[to]; throws if a block is missing. */
-    fun posts(from: Long, to: Long): List<PostCall>
+    /** The posts and tips of blocks [from]..[to]; throws if a block is missing. */
+    fun calls(from: Long, to: Long): BlockCalls
 
     /** The post authors (contract map "p:") in the node's current state. */
     fun authors(): Map<Long, String>
@@ -298,7 +457,7 @@ fun checkNewBlocks(
         while (next.high < head) {
             if (!keepGoing()) return next
             val to = minOf(next.high + source.batchSize(), head)
-            next = next.copy(high = to, posts = next.posts + source.posts(next.high + 1, to))
+            next = next.plus(source.calls(next.high + 1, to)).copy(high = to)
             save(next)
         }
         val authors = source.authors()
@@ -316,7 +475,8 @@ fun checkNewBlocks(
 fun scanOlderBlocks(cache: SocialCache, source: SocialSource, save: (SocialCache) -> Unit): SocialCache {
     if (cache.historyDone) return cache
     val from = maxOf(cache.low - source.batchSize(), SOCIAL_FIRST_BLOCK)
-    val next = cache.copy(low = from, posts = source.posts(from, cache.low - 1) + cache.posts)
+    val older = source.calls(from, cache.low - 1)
+    val next = cache.copy(low = from, posts = older.posts + cache.posts, tips = older.tips + cache.tips)
     save(next)
     return next
 }
@@ -351,6 +511,10 @@ fun jsonString(text: String): String {
     }
     return out.append('"').toString()
 }
+
+/** The argument of a sendTip call: [amount] whole iDNA for the author of post [postId]. */
+fun sendTipArgument(postId: Long, amount: Long): String =
+    "{\"postId\":${jsonString(postId.toString())},\"tipAmount\":${jsonString(amount.toString())}}"
 
 /**
  * The argument of a makePost call, with idena.social's keys in its order: [message], [replyTo] for a

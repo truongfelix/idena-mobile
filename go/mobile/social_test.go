@@ -46,6 +46,9 @@ func TestContractCallsFindsThePost(t *testing.T) {
 	if !strings.EqualFold(call.From, "0xB12b1222D0CE70d03bd984a861c825A86aC67898") {
 		t.Errorf("from = %s", call.From)
 	}
+	if call.Amount != "0.00001" {
+		t.Errorf("amount = %s, want 0.00001 (what idena.social sends with a post)", call.Amount)
+	}
 	if call.Method != "makePost" || call.Index != 0 || len(call.Args) != 1 {
 		t.Fatalf("call = %+v", call)
 	}

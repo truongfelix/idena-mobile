@@ -93,6 +93,82 @@ class SocialTest {
         assertEquals(0, replyCount(feed[0]))
     }
 
+    private fun tip(hash: String, from: String, postId: String, tipAmount: String, amount: String, height: Long, index: Int = 0) =
+        TipCall(hash, height, height, index, from, postId, tipAmount, amount)
+
+    @Test
+    fun onlyTipsTheContractAcceptsAreValid() {
+        assertEquals(5L, tip("t", a, "1", "5", "5", 10).validAmount)
+        assertEquals("more sent than tipped", 5L, tip("t", a, "1", "5", "6.5", 10).validAmount)
+        assertNull("a fraction: the contract reads 0 and refuses", tip("t", a, "1", "0.5", "0.5", 10).validAmount)
+        assertNull(tip("t", a, "1", "0", "1", 10).validAmount)
+        assertNull("more tipped than sent", tip("t", a, "1", "5", "4.99", 10).validAmount)
+        assertNull(tip("t", a, "1", "", "1", 10).validAmount)
+    }
+
+    @Test
+    fun tipsCountOnTheirPostAfterIt() {
+        val posts = listOf(post("p1", a, "hello", 100), post("p2", b, "reply", 110, replyTo = "1"))
+        val authors = mapOf(1L to a, 2L to b)
+        val tips = listOf(
+            tip("t1", b, "1", "3", "3", 105),
+            tip("t2", c, "1", "2", "2", 120),
+            tip("t3", c, "1", "1", "1", 90),
+            tip("t4", c, "2", "0.5", "0.5", 120),
+            tip("t5", c, "9", "1", "1", 120),
+            tip("t6", a, "2", "4", "4", 130),
+        )
+        val feed = socialFeed(posts, authors, tips)
+        assertEquals("before the post (t3), a fraction (t4) and an unknown post (t5) do not count", listOf("t1", "t2"), feed[0].tips.map { it.hash })
+        assertEquals(5L, feed[0].tipTotal)
+        assertEquals(4L, feed[0].replies[0].tipTotal)
+    }
+
+    @Test
+    fun activityListsWhatOthersDidOnMyPosts() {
+        val posts = listOf(
+            post("p1", a, "my post", 100),
+            post("p2", b, "a reply to me", 110, replyTo = "1"),
+            post("p3", c, LIKE, 120, replyTo = "1"),
+            post("p4", a, LIKE, 125, replyTo = "1"),
+            post("p5", a, "my reply to b", 130, replyTo = "1"),
+            post("p6", c, "comment on my reply", 140, replyTo = "5", channel = "discuss:5"),
+            post("p7", a, "my comment", 150, replyTo = "2", channel = "discuss:2"),
+            post("p8", b, "answer to my comment", 160, replyTo = "7", channel = "discuss:2"),
+            post("p9", b, "someone else's post", 170),
+        )
+        val authors = posts.mapIndexed { i, p -> (i + 1).toLong() to p.author }.toMap()
+        val tips = listOf(tip("t1", c, "5", "2", "2", 180), tip("t2", a, "9", "1", "1", 190))
+        val items = socialActivity(socialFeed(posts, authors, tips), a)
+        assertEquals(
+            listOf(
+                ActivityKind.Tip to c, ActivityKind.Comment to b, ActivityKind.Comment to c,
+                ActivityKind.Like to c, ActivityKind.Reply to b,
+            ),
+            items.map { it.kind to it.actor },
+        )
+        assertEquals("the tip on my reply", 2L, items[0].amount)
+        assertEquals("my reply was tipped", "my reply to b", items[0].what.message)
+        assertEquals("every item opens post 1's thread", setOf(1L), items.map { it.threadId }.toSet())
+    }
+
+    @Test
+    fun theTipArgumentIsWrittenAsIdenaSocialWritesIt() {
+        assertEquals("{\"postId\":\"102\",\"tipAmount\":\"5\"}", sendTipArgument(102, 5))
+        val parsed = TipCall.parse("0x01", 1, 1, 0, "0xAB", "5", hex(sendTipArgument(102, 5)))!!
+        assertEquals("102", parsed.postId)
+        assertEquals(5L, parsed.validAmount)
+        assertEquals("0xab", parsed.from)
+    }
+
+    @Test
+    fun aScanWithoutTipsIsDoneAgain() {
+        val cache = SocialCache(1, 2, emptyList(), emptyMap(), 2, listOf(tip("t", a, "1", "1", "1", 2)))
+        assertEquals(cache, SocialCache.fromJson(JSONObject(cache.toJson().toString())))
+        assertNull("version 1 dropped the tips", SocialCache.fromJson(cache.toJson().put("version", 1)))
+        assertNull("no version is version 1", SocialCache.fromJson(cache.toJson().apply { remove("version") }))
+    }
+
     @Test
     fun postAuthorsReadsTheContractMap() {
         // An item of contract_iterateMap(idena.social, "p:", ..., "hex", "hex") on mainnet: post 1.
@@ -124,9 +200,9 @@ class SocialTest {
 
         override fun head(): Long = heads[minOf(headCalls++, heads.size - 1)]
 
-        override fun posts(from: Long, to: Long): List<PostCall> {
+        override fun calls(from: Long, to: Long): BlockCalls {
             ranges += from..to
-            return (from..to).mapNotNull { postsAt[it] }
+            return BlockCalls((from..to).mapNotNull { postsAt[it] }, emptyList())
         }
 
         override fun authors(): Map<Long, String> {

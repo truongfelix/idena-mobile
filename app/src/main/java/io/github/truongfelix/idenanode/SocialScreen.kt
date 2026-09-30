@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +44,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,6 +110,9 @@ fun SocialScreen(modifier: Modifier = Modifier) {
     // What happened to the last paid action, shown at the top of the tab.
     var sendStatus by remember { mutableStateOf<String?>(null) }
     var myAddress by remember { mutableStateOf<String?>(null) }
+    // The post being tipped (the amount dialog), and whether the Activity list is shown instead of the feed.
+    var tipping by remember { mutableStateOf<SocialPost?>(null) }
+    var showActivity by remember { mutableStateOf(false) }
 
     suspend fun show(next: SocialCache) {
         cache = next
@@ -124,31 +129,34 @@ fun SocialScreen(modifier: Modifier = Modifier) {
         withTimeoutOrNull(ms) { snapshotFlow { scanning to wake }.drop(1).first() }
     }
 
-    /** Asks the node for the fee of [message] answering [target], then for the user's confirmation. */
-    fun prepare(what: String, message: String, target: PostTarget) {
+    /** Asks the node for the fee of [call], then for the user's confirmation; [detail] tells what it does. */
+    fun prepare(what: String, call: SocialCall, detail: String? = null) {
         busy = true
         sendStatus = null
         scope.launch {
-            val argument = makePostArgument(message, target.replyTo, target.channel)
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val rpc = rpc(context)
                     val from = rpc.call("dna_getCoinbaseAddr") as String
-                    from to SocialPosting(rpc).estimate(from, argument)
+                    from to SocialPosting(rpc).estimate(from, call)
                 }
             }
             busy = false
-            result.onSuccess { (from, fee) -> confirm = PendingPost(what, argument, from, fee) }
+            result.onSuccess { (from, fee) -> confirm = PendingPost(what, call, from, fee, detail) }
                 .onFailure { sendStatus = "$what: the node refused: ${it.message}" }
         }
     }
+
+    /** A post, reply, comment or like: [message] answering [target]. */
+    fun preparePost(what: String, message: String, target: PostTarget) =
+        prepare(what, SocialPosting.post(makePostArgument(message, target.replyTo, target.channel)))
 
     /** Sends a confirmed action, then scans the new blocks once it is in one. */
     fun send(pending: PendingPost) {
         busy = true
         scope.launch {
             val hash = withContext(Dispatchers.IO) {
-                runCatching { SocialPosting(rpc(context)).send(pending.from, pending.argument, pending.fee.maxFee) }
+                runCatching { SocialPosting(rpc(context)).send(pending.from, pending.call, pending.fee.maxFee) }
             }.getOrElse {
                 busy = false
                 sendStatus = "${pending.what}: the node refused: ${it.message}"
@@ -243,7 +251,7 @@ fun SocialScreen(modifier: Modifier = Modifier) {
                 onText = { draftText = it },
                 canPost = ready && !busy,
                 onCancel = { draft = null },
-                onPost = { prepare(current.what, draftText.trim(), current.target) },
+                onPost = { preparePost(current.what, draftText.trim(), current.target) },
             )
             threadId != null -> ThreadView(
                 post = thread,
@@ -253,8 +261,9 @@ fun SocialScreen(modifier: Modifier = Modifier) {
                 waitReason = activity.takeUnless { ready },
                 sendStatus = sendStatus,
                 onBack = { threadId = null },
-                onLike = { target -> prepare("Like", LIKE, target) },
+                onLike = { target -> preparePost("Like", LIKE, target) },
                 onAnswer = { draft = it },
+                onTip = { tipping = it },
             )
             else -> {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -273,8 +282,20 @@ fun SocialScreen(modifier: Modifier = Modifier) {
                         },
                         label = { Text("Scan blocks") },
                     )
+                    val items = remember(feed, myAddress) { myAddress?.let { socialActivity(feed, it) }.orEmpty() }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !showActivity, onClick = { showActivity = false }, label = { Text("Feed") })
+                        FilterChip(selected = showActivity, onClick = { showActivity = true }, label = { Text("Activity (${items.size})") })
+                    }
                     HorizontalDivider()
-                    LazyColumn(
+                    if (showActivity) {
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (items.isEmpty()) item { Text("No likes, answers or tips on your posts yet.", style = MaterialTheme.typography.bodyMedium) }
+                            items(items, key = { "${it.kind}:${it.height}:${it.index}:${it.what.hash}" }) { item ->
+                                ActivityCard(item) { threadId = item.threadId }
+                            }
+                        }
+                    } else LazyColumn(
                         Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         // Room for the write button over the last post.
@@ -289,16 +310,19 @@ fun SocialScreen(modifier: Modifier = Modifier) {
                                 myAddress = myAddress,
                                 canAct = ready && !busy,
                                 onOpen = { threadId = post.id },
-                                onLike = { prepare("Like", LIKE, PostTarget.onPost(post.id)) },
+                                onLike = { preparePost("Like", LIKE, PostTarget.onPost(post.id)) },
+                                onTip = { tipping = post },
                                 onReply = { draft = Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call) },
                             )
                         }
                     }
                 }
-                FloatingActionButton(
-                    onClick = { draft = Draft("Post", "New post", PostTarget.NEW_POST, null) },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                ) { Text("✎", fontSize = 22.sp) }
+                if (!showActivity) {
+                    FloatingActionButton(
+                        onClick = { draft = Draft("Post", "New post", PostTarget.NEW_POST, null) },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    ) { Text("✎", fontSize = 22.sp) }
+                }
             }
         }
     }
@@ -309,7 +333,8 @@ fun SocialScreen(modifier: Modifier = Modifier) {
             title = { Text("${pending.what} on idena.social") },
             text = {
                 Text(
-                    "It is public and stays on the blockchain for good, signed by your identity " +
+                    (pending.detail?.let { "$it. " } ?: "") +
+                        "It is public and stays on the blockchain for good, signed by your identity " +
                         "${shortAddress(pending.from)}. Fee: about ${pending.fee.fee.setScale(2, RoundingMode.UP).toPlainString()} iDNA " +
                         "(at most ${pending.fee.maxFee.setScale(2, RoundingMode.UP).toPlainString()} iDNA).",
                 )
@@ -318,10 +343,21 @@ fun SocialScreen(modifier: Modifier = Modifier) {
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
         )
     }
+
+    tipping?.let { post ->
+        TipDialog(
+            post = post,
+            onDismiss = { tipping = null },
+            onTip = { amount ->
+                tipping = null
+                prepare("Tip", SocialPosting.tip(post.id, amount), "Tip $amount iDNA to ${shortAddress(post.call.author)} for this post")
+            },
+        )
+    }
 }
 
 /** A post, reply, comment or like waiting for the user's confirmation, with the node's fee estimate. */
-private data class PendingPost(val what: String, val argument: String, val from: String, val fee: PostFee)
+private data class PendingPost(val what: String, val call: SocialCall, val from: String, val fee: PostFee, val detail: String?)
 
 /** What the editor writes: the action's name, the editor's title, what it answers and that text. */
 private data class Draft(val what: String, val title: String, val target: PostTarget, val answering: PostCall?)
@@ -393,6 +429,7 @@ private fun PostCard(
     onOpen: () -> Unit,
     onLike: () -> Unit,
     onReply: () -> Unit,
+    onTip: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -400,25 +437,99 @@ private fun PostCard(
                 PostHeader(post.call, states)
                 Text(postText(post.call), style = MaterialTheme.typography.bodyLarge, maxLines = 8, overflow = TextOverflow.Ellipsis)
                 val replies = replyCount(post)
-                if (replies > 0) {
-                    Text(if (replies == 1) "💬 1 answer · open" else "💬 $replies answers · open", style = MaterialTheme.typography.bodyMedium)
-                }
+                val counts = listOfNotNull(
+                    replies.takeIf { it > 0 }?.let { if (it == 1) "💬 1 answer" else "💬 $it answers" },
+                    post.tipTotal.takeIf { it > 0 }?.let { "🪙 $it iDNA tipped" },
+                )
+                if (counts.isNotEmpty()) Text(counts.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium)
             }
-            Actions(post, myAddress, canAct, "Reply", onLike, onReply)
+            Actions(post, myAddress, canAct, "Reply", onLike, onReply, onTip)
         }
     }
 }
 
-/** Like and answer buttons; "Liked" once the identity liked it. */
+/** Like, answer and tip buttons; "Liked" once the identity liked it, no tip for its own posts. */
 @Composable
-private fun Actions(post: SocialPost, myAddress: String?, canAct: Boolean, answer: String, onLike: () -> Unit, onAnswer: () -> Unit) {
+private fun Actions(
+    post: SocialPost,
+    myAddress: String?,
+    canAct: Boolean,
+    answer: String,
+    onLike: () -> Unit,
+    onAnswer: () -> Unit,
+    onTip: () -> Unit,
+) {
     val liked = myAddress != null && myAddress in post.likedBy
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = onLike, enabled = canAct && !liked, modifier = Modifier.height(48.dp)) {
-            Text(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}  Like", style = MaterialTheme.typography.titleMedium)
+    val padding = PaddingValues(horizontal = 12.dp)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = onLike, enabled = canAct && !liked, modifier = Modifier.height(48.dp), contentPadding = padding) {
+            Text(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", style = MaterialTheme.typography.titleMedium)
         }
-        OutlinedButton(onClick = onAnswer, enabled = canAct, modifier = Modifier.height(48.dp)) {
+        OutlinedButton(onClick = onAnswer, enabled = canAct, modifier = Modifier.height(48.dp), contentPadding = padding) {
             Text("💬 $answer", style = MaterialTheme.typography.titleMedium)
+        }
+        OutlinedButton(onClick = onTip, enabled = canAct && post.call.author != myAddress, modifier = Modifier.height(48.dp), contentPadding = padding) {
+            Text("🪙 Tip", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+/** The tips a post received, when it has some. */
+@Composable
+private fun TipsLine(post: SocialPost) {
+    if (post.tipTotal > 0) Text("🪙 ${post.tipTotal} iDNA tipped", style = MaterialTheme.typography.bodyMedium)
+}
+
+/** The amount of a tip: whole iDNA (the contract refuses fractions), with the balance for reference. */
+@Composable
+private fun TipDialog(post: SocialPost, onDismiss: () -> Unit, onTip: (Long) -> Unit) {
+    val context = LocalContext.current
+    var amount by remember { mutableStateOf("1") }
+    var balance by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        balance = withContext(Dispatchers.IO) {
+            runCatching {
+                val rpc = rpc(context)
+                SocialPosting(rpc).balance(rpc.call("dna_getCoinbaseAddr") as String).setScale(2, RoundingMode.DOWN).toPlainString()
+            }.getOrNull()
+        }
+    }
+    val value = amount.toLongOrNull()?.takeIf { it > 0 }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tip ${shortAddress(post.call.author)}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("The tip goes to the author of this post, through the idena.social contract. Whole iDNA only.")
+                balance?.let { Text("Your balance: $it iDNA", style = MaterialTheme.typography.bodyMedium) }
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { text -> amount = text.filter { it.isDigit() }.take(9) },
+                    label = { Text("iDNA") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { value?.let(onTip) }, enabled = value != null) { Text("Next") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** One entry of the Activity list; a tap opens its thread. */
+@Composable
+private fun ActivityCard(item: ActivityItem, onOpen: () -> Unit) {
+    val action = when (item.kind) {
+        ActivityKind.Like -> "liked"
+        ActivityKind.Reply -> "replied to"
+        ActivityKind.Comment -> "commented on"
+        ActivityKind.Tip -> "tipped you ${item.amount} iDNA for"
+    }
+    Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("${shortAddress(item.actor)} $action your post  ·  ${formatTime(item.time)}", style = MaterialTheme.typography.bodyMedium)
+            Text("“${postText(item.what)}”", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            item.answer?.let { Text(postText(it), style = MaterialTheme.typography.bodyLarge, maxLines = 4, overflow = TextOverflow.Ellipsis) }
         }
     }
 }
@@ -438,6 +549,7 @@ private fun ThreadView(
     onBack: () -> Unit,
     onLike: (PostTarget) -> Unit,
     onAnswer: (Draft) -> Unit,
+    onTip: (SocialPost) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         TextButton(onClick = onBack) { Text("‹ Back") }
@@ -455,9 +567,10 @@ private fun ThreadView(
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         PostHeader(post.call, states)
                         Text(postText(post.call), style = MaterialTheme.typography.bodyLarge)
-                        Actions(post, myAddress, canAct, "Reply", { onLike(PostTarget.onPost(post.id)) }) {
+                        TipsLine(post)
+                        Actions(post, myAddress, canAct, "Reply", { onLike(PostTarget.onPost(post.id)) }, {
                             onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
-                        }
+                        }) { onTip(post) }
                     }
                 }
             }
@@ -467,16 +580,18 @@ private fun ThreadView(
                     HorizontalDivider()
                     PostHeader(reply.call, states)
                     Text(postText(reply.call), style = MaterialTheme.typography.bodyLarge)
-                    Actions(reply, myAddress, canAct, "Comment", { onLike(PostTarget.onReply(reply.id)) }) {
+                    TipsLine(reply)
+                    Actions(reply, myAddress, canAct, "Comment", { onLike(PostTarget.onReply(reply.id)) }, {
                         onAnswer(Draft("Comment", "Comment", PostTarget.onReply(reply.id), reply.call))
-                    }
+                    }) { onTip(reply) }
                     for (comment in reply.replies) {
                         Column(Modifier.padding(start = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             PostHeader(comment.call, states)
                             Text(postText(comment.call), style = MaterialTheme.typography.bodyLarge)
-                            Actions(comment, myAddress, canAct, "Answer", { onLike(PostTarget.onComment(reply.id, comment.id)) }) {
+                            TipsLine(comment)
+                            Actions(comment, myAddress, canAct, "Answer", { onLike(PostTarget.onComment(reply.id, comment.id)) }, {
                                 onAnswer(Draft("Comment", "Comment", PostTarget.onComment(reply.id, comment.id), comment.call))
-                            }
+                            }) { onTip(comment) }
                         }
                     }
                 }
