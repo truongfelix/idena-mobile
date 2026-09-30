@@ -1,13 +1,17 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,8 +20,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,9 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CancellationException
@@ -88,6 +98,16 @@ fun SocialScreen(modifier: Modifier = Modifier) {
     // After a post, the new blocks are scanned once even without "Scan blocks".
     val scanNewOnce = remember { AtomicBoolean(false) }
     var wake by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    // The open thread (a post id), the editor's draft, and a paid action waiting for confirmation.
+    var threadId by remember { mutableStateOf<Long?>(null) }
+    var draft by remember { mutableStateOf<Draft?>(null) }
+    var draftText by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf<PendingPost?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    // What happened to the last paid action, shown at the top of the tab.
+    var sendStatus by remember { mutableStateOf<String?>(null) }
+    var myAddress by remember { mutableStateOf<String?>(null) }
 
     suspend fun show(next: SocialCache) {
         cache = next
@@ -102,6 +122,53 @@ fun SocialScreen(modifier: Modifier = Modifier) {
     /** Waits [ms], or less when a button changes or a post was made. */
     suspend fun pause(ms: Long) {
         withTimeoutOrNull(ms) { snapshotFlow { scanning to wake }.drop(1).first() }
+    }
+
+    /** Asks the node for the fee of [message] answering [target], then for the user's confirmation. */
+    fun prepare(what: String, message: String, target: PostTarget) {
+        busy = true
+        sendStatus = null
+        scope.launch {
+            val argument = makePostArgument(message, target.replyTo, target.channel)
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val rpc = rpc(context)
+                    val from = rpc.call("dna_getCoinbaseAddr") as String
+                    from to SocialPosting(rpc).estimate(from, argument)
+                }
+            }
+            busy = false
+            result.onSuccess { (from, fee) -> confirm = PendingPost(what, argument, from, fee) }
+                .onFailure { sendStatus = "$what: the node refused: ${it.message}" }
+        }
+    }
+
+    /** Sends a confirmed action, then scans the new blocks once it is in one. */
+    fun send(pending: PendingPost) {
+        busy = true
+        scope.launch {
+            val hash = withContext(Dispatchers.IO) {
+                runCatching { SocialPosting(rpc(context)).send(pending.from, pending.argument, pending.fee.maxFee) }
+            }.getOrElse {
+                busy = false
+                sendStatus = "${pending.what}: the node refused: ${it.message}"
+                return@launch
+            }
+            busy = false
+            if (draft != null) {
+                draft = null
+                draftText = ""
+            }
+            sendStatus = "${pending.what} sent, waiting for a block (${hash.take(10)}…)"
+            while (!withContext(Dispatchers.IO) { runCatching { rpc(context).isMined(hash) }.getOrDefault(false) }) delay(10_000)
+            sendStatus = "${pending.what} is in a block."
+            scanNewOnce.set(true)
+            wake++
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        myAddress = withContext(Dispatchers.IO) { runCatching { rpc(context).call("dna_getCoinbaseAddr") as String }.getOrNull() }?.lowercase()
     }
 
     LaunchedEffect(Unit) {
@@ -162,31 +229,102 @@ fun SocialScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Posts of idena.social", style = MaterialTheme.typography.titleMedium)
-        Text(newestText(cache, head), style = MaterialTheme.typography.bodySmall)
-        Text(historyText(cache, feed.size), style = MaterialTheme.typography.bodySmall)
-        Text(activity, style = MaterialTheme.typography.bodySmall)
-        FilterChip(
-            selected = scanning,
-            onClick = {
-                scanning = !scanning
-                scanningFlag.set(scanning)
-                SocialStore.setScanning(context, scanning)
-            },
-            label = { Text("Scan blocks") },
-        )
-        Composer(enabled = ready) {
-            scanNewOnce.set(true)
-            wake++
-        }
-        HorizontalDivider()
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (feed.isEmpty()) item { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
-            items(feed, key = { it.id }) { PostCard(it, states) }
+    BackHandler(enabled = draft != null || threadId != null) {
+        if (draft != null) draft = null else threadId = null
+    }
+
+    Box(modifier.fillMaxSize()) {
+        val current = draft
+        val thread = threadId?.let { id -> feed.firstOrNull { it.id == id } }
+        when {
+            current != null -> Editor(
+                draft = current,
+                text = draftText,
+                onText = { draftText = it },
+                canPost = ready && !busy,
+                onCancel = { draft = null },
+                onPost = { prepare(current.what, draftText.trim(), current.target) },
+            )
+            threadId != null -> ThreadView(
+                post = thread,
+                states = states,
+                myAddress = myAddress,
+                canAct = ready && !busy,
+                waitReason = activity.takeUnless { ready },
+                sendStatus = sendStatus,
+                onBack = { threadId = null },
+                onLike = { target -> prepare("Like", LIKE, target) },
+                onAnswer = { draft = it },
+            )
+            else -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Spacer(Modifier.width(0.dp))
+                    Text("Posts of idena.social", style = MaterialTheme.typography.titleMedium)
+                    Text(newestText(cache, head), style = MaterialTheme.typography.bodySmall)
+                    Text(historyText(cache, feed.size), style = MaterialTheme.typography.bodySmall)
+                    Text(activity, style = MaterialTheme.typography.bodySmall)
+                    sendStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+                    FilterChip(
+                        selected = scanning,
+                        onClick = {
+                            scanning = !scanning
+                            scanningFlag.set(scanning)
+                            SocialStore.setScanning(context, scanning)
+                        },
+                        label = { Text("Scan blocks") },
+                    )
+                    HorizontalDivider()
+                    LazyColumn(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        // Room for the write button over the last post.
+                        contentPadding = PaddingValues(bottom = 88.dp),
+                    ) {
+                        if (feed.isEmpty()) item { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
+                        if (!ready) item { WaitNote(activity) }
+                        items(feed, key = { it.id }) { post ->
+                            PostCard(
+                                post = post,
+                                states = states,
+                                myAddress = myAddress,
+                                canAct = ready && !busy,
+                                onOpen = { threadId = post.id },
+                                onLike = { prepare("Like", LIKE, PostTarget.onPost(post.id)) },
+                                onReply = { draft = Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call) },
+                            )
+                        }
+                    }
+                }
+                FloatingActionButton(
+                    onClick = { draft = Draft("Post", "New post", PostTarget.NEW_POST, null) },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                ) { Text("✎", fontSize = 22.sp) }
+            }
         }
     }
+
+    confirm?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("${pending.what} on idena.social") },
+            text = {
+                Text(
+                    "It is public and stays on the blockchain for good, signed by your identity " +
+                        "${shortAddress(pending.from)}. Fee: about ${pending.fee.fee.setScale(2, RoundingMode.UP).toPlainString()} iDNA " +
+                        "(at most ${pending.fee.maxFee.setScale(2, RoundingMode.UP).toPlainString()} iDNA).",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirm = null; send(pending) }) { Text("Send") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+        )
+    }
 }
+
+/** A post, reply, comment or like waiting for the user's confirmation, with the node's fee estimate. */
+private data class PendingPost(val what: String, val argument: String, val from: String, val fee: PostFee)
+
+/** What the editor writes: the action's name, the editor's title, what it answers and that text. */
+private data class Draft(val what: String, val title: String, val target: PostTarget, val answering: PostCall?)
 
 private val blockNumber: NumberFormat = NumberFormat.getIntegerInstance()
 
@@ -228,126 +366,155 @@ private fun postText(call: PostCall): String = buildString {
     if (call.hasMedia) append(if (isEmpty()) "(image or video, not shown here)" else "\n(image or video, not shown here)")
 }
 
+/** "0x1234…abcd · Human · 30 Sep 2026, 10:05". */
 @Composable
-private fun PostCard(post: SocialPost, states: Map<String, String>) {
-    var expanded by remember { mutableStateOf(false) }
-    val replies = replyCount(post)
-    Card(Modifier.fillMaxWidth().clickable(enabled = replies > 0) { expanded = !expanded }) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PostBody(post, states)
-            val counts = listOfNotNull(
-                post.likes.takeIf { it > 0 }?.let { "$LIKE $it" },
-                replies.takeIf { it > 0 }?.let { if (expanded) "Hide replies" else if (it == 1) "1 reply" else "$it replies" },
-            )
-            if (counts.isNotEmpty()) Text(counts.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall)
-            if (expanded) Replies(post.replies, states, depth = 1)
-        }
-    }
-}
-
-@Composable
-private fun Replies(replies: List<SocialPost>, states: Map<String, String>, depth: Int) {
-    for (reply in replies) {
-        Column(Modifier.padding(start = (12 * depth).dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            HorizontalDivider()
-            PostBody(reply, states)
-            if (reply.likes > 0) Text("$LIKE ${reply.likes}", style = MaterialTheme.typography.bodySmall)
-        }
-        Replies(reply.replies, states, depth + 1)
-    }
-}
-
-@Composable
-private fun PostBody(post: SocialPost, states: Map<String, String>) {
-    val author = post.call.author
-    val state = states[author]?.takeIf { it.isNotEmpty() && it != "Undefined" }
+private fun PostHeader(call: PostCall, states: Map<String, String>) {
+    val state = states[call.author]?.takeIf { it.isNotEmpty() && it != "Undefined" }
     Text(
-        listOfNotNull(shortAddress(author), state, formatTime(post.call.time)).joinToString("  ·  "),
-        style = MaterialTheme.typography.labelMedium,
+        listOfNotNull(shortAddress(call.author), state, formatTime(call.time)).joinToString("  ·  "),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Text(postText(post.call), style = MaterialTheme.typography.bodyMedium)
+}
+
+/** Why Like and the answers are off: the node must be synced and outside a validation. */
+@Composable
+private fun WaitNote(reason: String) {
+    Text("Like and reply need the node synced. $reason", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+}
+
+/** A post of the feed: its start, its answer count, Like and Reply; a tap on the text opens the thread. */
+@Composable
+private fun PostCard(
+    post: SocialPost,
+    states: Map<String, String>,
+    myAddress: String?,
+    canAct: Boolean,
+    onOpen: () -> Unit,
+    onLike: () -> Unit,
+    onReply: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                PostHeader(post.call, states)
+                Text(postText(post.call), style = MaterialTheme.typography.bodyLarge, maxLines = 8, overflow = TextOverflow.Ellipsis)
+                val replies = replyCount(post)
+                if (replies > 0) {
+                    Text(if (replies == 1) "💬 1 answer · open" else "💬 $replies answers · open", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Actions(post, myAddress, canAct, "Reply", onLike, onReply)
+        }
+    }
+}
+
+/** Like and answer buttons; "Liked" once the identity liked it. */
+@Composable
+private fun Actions(post: SocialPost, myAddress: String?, canAct: Boolean, answer: String, onLike: () -> Unit, onAnswer: () -> Unit) {
+    val liked = myAddress != null && myAddress in post.likedBy
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = onLike, enabled = canAct && !liked, modifier = Modifier.height(48.dp)) {
+            Text(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}  Like", style = MaterialTheme.typography.titleMedium)
+        }
+        OutlinedButton(onClick = onAnswer, enabled = canAct, modifier = Modifier.height(48.dp)) {
+            Text("💬 $answer", style = MaterialTheme.typography.titleMedium)
+        }
+    }
 }
 
 /**
- * Writes a post: the node estimates the fee, the user confirms, the node signs and sends the makePost
- * call, and the screen checks the new blocks once it is in one.
+ * A post with its replies and, under each reply, its comments (idena.social's levels), each with Like
+ * and answer buttons.
  */
 @Composable
-private fun Composer(enabled: Boolean, onPosted: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var text by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
-    var confirm by remember { mutableStateOf<Pair<String, PostFee>?>(null) }
-
-    fun estimate() {
-        message = null
-        busy = true
-        scope.launch {
-            val argument = makePostArgument(text.trim())
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val rpc = rpc(context)
-                    val from = rpc.call("dna_getCoinbaseAddr") as String
-                    from to SocialPosting(rpc).estimate(from, argument)
+private fun ThreadView(
+    post: SocialPost?,
+    states: Map<String, String>,
+    myAddress: String?,
+    canAct: Boolean,
+    waitReason: String?,
+    sendStatus: String?,
+    onBack: () -> Unit,
+    onLike: (PostTarget) -> Unit,
+    onAnswer: (Draft) -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        TextButton(onClick = onBack) { Text("‹ Back") }
+        sendStatus?.let {
+            Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        }
+        waitReason?.let { Column(Modifier.padding(horizontal = 16.dp)) { WaitNote(it) } }
+        if (post == null) {
+            Text("This post is not in the scanned blocks.", Modifier.padding(16.dp))
+            return
+        }
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        PostHeader(post.call, states)
+                        Text(postText(post.call), style = MaterialTheme.typography.bodyLarge)
+                        Actions(post, myAddress, canAct, "Reply", { onLike(PostTarget.onPost(post.id)) }) {
+                            onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
+                        }
+                    }
                 }
             }
-            busy = false
-            result.onSuccess { (from, fee) -> confirm = from to fee }
-                .onFailure { message = "The node refused: ${it.message}" }
-        }
-    }
-
-    fun send(from: String, fee: PostFee) {
-        busy = true
-        scope.launch {
-            val argument = makePostArgument(text.trim())
-            val hash = withContext(Dispatchers.IO) { runCatching { SocialPosting(rpc(context)).send(from, argument, fee.maxFee) } }
-                .getOrElse {
-                    busy = false
-                    message = "The node refused: ${it.message}"
-                    return@launch
+            if (post.replies.isEmpty()) item { Text("No replies yet.", style = MaterialTheme.typography.bodySmall) }
+            items(post.replies, key = { it.id }) { reply ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    HorizontalDivider()
+                    PostHeader(reply.call, states)
+                    Text(postText(reply.call), style = MaterialTheme.typography.bodyLarge)
+                    Actions(reply, myAddress, canAct, "Comment", { onLike(PostTarget.onReply(reply.id)) }) {
+                        onAnswer(Draft("Comment", "Comment", PostTarget.onReply(reply.id), reply.call))
+                    }
+                    for (comment in reply.replies) {
+                        Column(Modifier.padding(start = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            PostHeader(comment.call, states)
+                            Text(postText(comment.call), style = MaterialTheme.typography.bodyLarge)
+                            Actions(comment, myAddress, canAct, "Answer", { onLike(PostTarget.onComment(reply.id, comment.id)) }) {
+                                onAnswer(Draft("Comment", "Comment", PostTarget.onComment(reply.id, comment.id), comment.call))
+                            }
+                        }
+                    }
                 }
-            message = "Post sent, waiting for a block (${hash.take(10)}…)"
-            while (!withContext(Dispatchers.IO) { runCatching { rpc(context).isMined(hash) }.getOrDefault(false) }) delay(10_000)
-            text = ""
-            busy = false
-            message = "Posted."
-            onPosted()
+            }
         }
     }
+}
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+/** The full-screen editor of a post, reply or comment. */
+@Composable
+private fun Editor(draft: Draft, text: String, onText: (String) -> Unit, canPost: Boolean, onCancel: () -> Unit, onPost: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+            Spacer(Modifier.weight(1f))
+            Text(draft.title, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.weight(1f))
+            Button(onClick = onPost, enabled = canPost && text.isNotBlank()) { Text("Post") }
+        }
+        draft.answering?.let {
+            Text(
+                "Answering ${shortAddress(it.author)}: ${postText(it)}",
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         OutlinedTextField(
             value = text,
-            onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Write a post") },
-            enabled = !busy,
-            minLines = 2,
-            maxLines = 5,
+            onValueChange = onText,
+            modifier = Modifier.fillMaxWidth().weight(1f).focusRequester(focus),
+            placeholder = { Text("What's new?") },
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { estimate() }, enabled = enabled && !busy && text.isNotBlank()) { Text("Post") }
-            Spacer(Modifier.width(8.dp))
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        }
-    }
-
-    confirm?.let { (from, fee) ->
-        AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text("Post on idena.social") },
-            text = {
-                Text(
-                    "The post is public and stays on the blockchain for good, signed by your identity " +
-                        "${shortAddress(from)}. Fee: about ${fee.fee.setScale(2, RoundingMode.UP).toPlainString()} iDNA " +
-                        "(at most ${fee.maxFee.setScale(2, RoundingMode.UP).toPlainString()} iDNA).",
-                )
-            },
-            confirmButton = { TextButton(onClick = { confirm = null; send(from, fee) }) { Text("Post") } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+        Text(
+            "Posts are public and stay on the blockchain for good. The fee is shown before sending.",
+            style = MaterialTheme.typography.bodySmall,
         )
     }
 }

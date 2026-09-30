@@ -23,8 +23,9 @@ meant to be delegated to a pool, such as a desktop node.
 - **Practice validation**: the short and long sessions with the sample flips of the Idena web app, then
   the results with the right answers and why a flip should be reported.
 - **Social** tab: the posts of [idena.social](https://idena.social), read from the phone's own node, with
-  their replies and likes, and posting with the identity (a contract call, about 3.5 iDNA for a short
-  post). While "Scan blocks" is selected, the tab reads the new blocks up to the node's, then the older
+  their replies, comments and likes. With the identity: write a post (✎), like, reply to a post, comment
+  on a reply, as idena.social writes them (contract calls: about 3.7 iDNA for the first of an epoch, about
+  1.8 after; the fee is shown before sending). A tap on a post opens its thread. While "Scan blocks" is selected, the tab reads the new blocks up to the node's, then the older
   ones back to the contract's creation (once, kept on the phone), then follows the new blocks. Nothing
   is scanned while the tab is hidden, the node syncs or a validation runs. Not shown yet: media, texts
   stored on IPFS, comments on replies, messages.

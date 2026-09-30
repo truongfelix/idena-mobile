@@ -41,6 +41,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -55,9 +56,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.truongfelix.idenanode.go.mobile.Mobile
@@ -101,19 +104,37 @@ private fun MainScreen(modifier: Modifier = Modifier) {
         if (NodeSettings.isSyncEnabled(context)) NodeService.start(context)
     }
 
-    Column(modifier.fillMaxSize()) {
-        Text("Idena", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall)
-        TabRow(selectedTabIndex = tab.ordinal) {
-            MainTab.entries.forEach {
-                Tab(selected = tab == it, onClick = { tab = it }, text = { Text(it.title) })
+    // The tabs' text a bit larger than Material's defaults (the validation screens keep them).
+    MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
+        Column(modifier.fillMaxSize()) {
+            Text("Idena", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall)
+            TabRow(selectedTabIndex = tab.ordinal) {
+                MainTab.entries.forEach {
+                    Tab(selected = tab == it, onClick = { tab = it }, text = { Text(it.title) })
+                }
+            }
+            // Each tab reads the node only while it is shown.
+            when (tab) {
+                MainTab.Node -> NodeScreen(Modifier.weight(1f))
+                MainTab.Social -> SocialScreen(Modifier.weight(1f))
             }
         }
-        // Each tab reads the node only while it is shown.
-        when (tab) {
-            MainTab.Node -> NodeScreen(Modifier.weight(1f))
-            MainTab.Social -> SocialScreen(Modifier.weight(1f))
-        }
     }
+}
+
+/** Every text style [factor] times larger, font size and line height. */
+private fun Typography.scaled(factor: Float): Typography {
+    fun TextStyle.scaled() = copy(
+        fontSize = if (fontSize.isSpecified) fontSize * factor else fontSize,
+        lineHeight = if (lineHeight.isSpecified) lineHeight * factor else lineHeight,
+    )
+    return Typography(
+        displayLarge = displayLarge.scaled(), displayMedium = displayMedium.scaled(), displaySmall = displaySmall.scaled(),
+        headlineLarge = headlineLarge.scaled(), headlineMedium = headlineMedium.scaled(), headlineSmall = headlineSmall.scaled(),
+        titleLarge = titleLarge.scaled(), titleMedium = titleMedium.scaled(), titleSmall = titleSmall.scaled(),
+        bodyLarge = bodyLarge.scaled(), bodyMedium = bodyMedium.scaled(), bodySmall = bodySmall.scaled(),
+        labelLarge = labelLarge.scaled(), labelMedium = labelMedium.scaled(), labelSmall = labelSmall.scaled(),
+    )
 }
 
 /** The app's colors: light or dark as the phone's setting (the themes keep MIUI's forced dark off). */

@@ -76,8 +76,17 @@ data class PostCall(
     }
 }
 
-/** A post of the feed with its likes and its replies (oldest first), which are posts too. */
-data class SocialPost(val id: Long, val call: PostCall, val likes: Int, val replies: List<SocialPost>)
+/**
+ * A post of the feed with its likes and what answers it, oldest first: a post's replies, or a reply's
+ * comments (idena.social's two levels; a comment has none).
+ */
+data class SocialPost(val id: Long, val call: PostCall, val likedBy: List<String>, val replies: List<SocialPost>) {
+    val likes: Int
+        get() = likedBy.size
+}
+
+/** The channel of the comments under reply [replyId] on idena.social. */
+fun discussChannel(replyId: Long): String = "discuss:$replyId"
 
 /**
  * The ids of the posts: the contract numbers the successful makePost calls 1, 2, 3... and keeps each
@@ -100,40 +109,76 @@ fun postIds(posts: List<PostCall>, authors: Map<Long, String>): Map<String, Long
 }
 
 /**
- * The feed, newest first: the main-feed posts that have an id, with their replies and likes. As
- * idena.social: a post needs a text or media; a reply is shown under its post only when that post is
- * known, older and not a like; a like only counts. Comments on replies ("discuss:" channels) are not
- * shown here.
+ * The feed, newest first, as idena.social shows it (PostComponent.tsx): posts in the main channel;
+ * under each post its replies; under each reply its comments, in the channel "discuss:<reply id>"
+ * (a main-channel answer to a reply or a comment counts as a comment too). A like (a reply made of
+ * [LIKE]) only counts on what it replies to. Each post needs a text or media, an id, and a known,
+ * older parent that is not a like; posts in other channels are left out.
  */
 fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>): List<SocialPost> {
     val ids = postIds(posts, authors)
     val byId = HashMap<Long, PostCall>()
     for (post in posts) ids[post.hash]?.let { byId[it] = post }
-    val children = HashMap<Long, MutableList<Long>>()
-    val likes = HashMap<Long, Int>()
+    val answers = HashMap<Long, MutableList<Long>>()
+    val likes = HashMap<Long, MutableList<String>>()
     val topLevel = ArrayList<Long>()
-    // A post always has a greater id than the post it replies to: in id order, parents come first.
-    val accepted = HashSet<Long>()
+    // The level of each accepted post, and the reply each comment belongs to. A post always has a
+    // greater id than the post it answers: in id order, parents come first.
+    val levels = HashMap<Long, Int>()
+    val replyOf = HashMap<Long, Long>()
     for ((id, post) in byId.entries.sortedBy { it.key }) {
-        if (post.channel.isNotEmpty()) continue
         if (post.message.isEmpty() && !post.hasMedia) continue
-        if (post.replyTo.isEmpty()) {
-            accepted += id
+        val discussId = when {
+            post.channel.isEmpty() -> null
+            post.channel.startsWith("discuss:") -> post.channel.removePrefix("discuss:").toLongOrNull() ?: continue
+            else -> continue
+        }
+        val parentId = post.replyTo.toLongOrNull()
+        if (post.replyTo.isNotEmpty() && parentId == null) continue
+        if (parentId == null && discussId == null) {
+            levels[id] = POST
             topLevel += id
             continue
         }
-        val parentId = post.replyTo.toLongOrNull()?.takeIf { it in accepted } ?: continue
-        val parent = byId.getValue(parentId)
-        if (post.time <= parent.time || parent.isLike) continue
-        accepted += id
-        if (post.isLike) likes[parentId] = (likes[parentId] ?: 0) + 1 else children.getOrPut(parentId) { mutableListOf() } += id
+        // What it answers: the post, reply or comment it replies to, else the reply of its channel.
+        val targetId = parentId ?: discussId!!
+        val targetLevel = levels[targetId] ?: continue
+        val target = byId.getValue(targetId)
+        if (post.time <= target.time || target.isLike) continue
+        if (post.isLike) {
+            likes.getOrPut(targetId) { mutableListOf() } += post.author
+            levels[id] = LIKE_LEVEL
+            continue
+        }
+        // Where it is shown: a reply under its post, a comment under its reply.
+        val reply = when {
+            discussId != null -> discussId.takeIf { levels[it] == REPLY } ?: continue
+            targetLevel == POST -> null
+            targetLevel == REPLY -> targetId
+            targetLevel == COMMENT -> replyOf.getValue(targetId)
+            else -> continue
+        }
+        if (reply == null) {
+            levels[id] = REPLY
+            answers.getOrPut(targetId) { mutableListOf() } += id
+        } else {
+            if (post.time <= byId.getValue(reply).time) continue
+            levels[id] = COMMENT
+            replyOf[id] = reply
+            answers.getOrPut(reply) { mutableListOf() } += id
+        }
     }
 
     fun build(id: Long): SocialPost =
-        SocialPost(id, byId.getValue(id), likes[id] ?: 0, children[id].orEmpty().map { build(it) })
+        SocialPost(id, byId.getValue(id), likes[id].orEmpty(), answers[id].orEmpty().map { build(it) })
 
     return topLevel.asReversed().map { build(it) }
 }
+
+private const val POST = 0
+private const val REPLY = 1
+private const val COMMENT = 2
+private const val LIKE_LEVEL = 3
 
 /** The number of replies under [post], at every depth. */
 fun replyCount(post: SocialPost): Int = post.replies.sumOf { 1 + replyCount(it) }
@@ -307,7 +352,29 @@ fun jsonString(text: String): String {
     return out.append('"').toString()
 }
 
-/** The argument of a makePost call with [message] (a post; a reply when [replyTo] is set). */
-fun makePostArgument(message: String, replyTo: Long? = null): String =
-    if (replyTo == null) "{\"message\":${jsonString(message)}}"
-    else "{\"message\":${jsonString(message)},\"replyToPostId\":${jsonString(replyTo.toString())}}"
+/**
+ * The argument of a makePost call, with idena.social's keys in its order: [message], [replyTo] for a
+ * reply, a comment or a like, [channel] for a comment or a like inside a reply's discussion.
+ */
+fun makePostArgument(message: String, replyTo: Long? = null, channel: String? = null): String = buildString {
+    append("{\"message\":").append(jsonString(message))
+    replyTo?.let { append(",\"replyToPostId\":").append(jsonString(it.toString())) }
+    channel?.let { append(",\"channelId\":").append(jsonString(it)) }
+    append('}')
+}
+
+/** What a post, reply, comment or like answers on idena.social: its makePost argument's fields. */
+data class PostTarget(val replyTo: Long?, val channel: String?) {
+    companion object {
+        val NEW_POST = PostTarget(null, null)
+
+        /** A reply to post [postId], or a like of it. */
+        fun onPost(postId: Long) = PostTarget(postId, null)
+
+        /** A comment or a like on reply [replyId]. */
+        fun onReply(replyId: Long) = PostTarget(replyId, discussChannel(replyId))
+
+        /** A comment answering, or a like of, comment [commentId] under reply [replyId]. */
+        fun onComment(replyId: Long, commentId: Long) = PostTarget(commentId, discussChannel(replyId))
+    }
+}

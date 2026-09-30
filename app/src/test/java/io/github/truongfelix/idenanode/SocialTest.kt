@@ -67,21 +67,29 @@ class SocialTest {
             post("p2", b, "same block time as its post", 100, replyTo = "1", index = 1),
             post("p3", b, LIKE, 110, replyTo = "1"),
             post("p4", c, "nice", 120, replyTo = "1"),
-            post("p5", a, "thanks", 130, replyTo = "4"),
+            post("p5", a, "thanks", 130, replyTo = "4", channel = "discuss:4"),
             post("p6", c, "reply to a like", 140, replyTo = "3"),
             post("p7", a, "", 150),
-            post("p8", b, "comment on a reply", 160, channel = "discuss:4"),
+            post("p8", b, "other channel", 160, channel = "news"),
             post("p9", c, "reply to an unknown post", 170, replyTo = "99"),
             post("p10", b, "second post", 200),
+            post("p11", a, LIKE, 210, replyTo = "4", channel = "discuss:4"),
+            post("p12", b, LIKE, 220, replyTo = "5", channel = "discuss:4"),
+            post("p13", c, "answer to a comment, main channel", 230, replyTo = "5"),
+            post("p14", c, "comment in the channel of a post, not a reply", 240, channel = "discuss:1"),
         )
         val authors = posts.mapIndexed { i, p -> (i + 1).toLong() to p.author }.toMap()
         val feed = socialFeed(posts, authors)
         assertEquals("newest first", listOf(10L, 1L), feed.map { it.id })
         val first = feed[1]
         assertEquals(1, first.likes)
-        assertEquals(listOf(4L), first.replies.map { it.id })
-        assertEquals(listOf(5L), first.replies[0].replies.map { it.id })
-        assertEquals(2, replyCount(first))
+        assertEquals("the replies of post 1", listOf(4L), first.replies.map { it.id })
+        val reply = first.replies[0]
+        assertEquals("a like on the reply, in its discussion channel", 1, reply.likes)
+        assertEquals("the comments of reply 4", listOf(5L, 13L), reply.replies.map { it.id })
+        assertEquals("a like on a comment", 1, reply.replies[0].likes)
+        assertEquals("who liked the post", listOf(b), first.likedBy)
+        assertEquals(3, replyCount(first))
         assertEquals(0, replyCount(feed[0]))
     }
 
@@ -214,6 +222,11 @@ class SocialTest {
         assertEquals("a lone surrogate is escaped", "\"\\ud83d\"", jsonString("\uD83D"))
         assertEquals("{\"message\":\"see https://idena.io\"}", makePostArgument("see https://idena.io"))
         assertEquals("{\"message\":\"❤️\",\"replyToPostId\":\"12\"}", makePostArgument(LIKE, replyTo = 12))
+        // A like of comment 15 under reply 12, as idena.social writes it.
+        assertEquals(
+            "{\"message\":\"❤️\",\"replyToPostId\":\"15\",\"channelId\":\"discuss:12\"}",
+            PostTarget.onComment(12, 15).let { makePostArgument(LIKE, it.replyTo, it.channel) },
+        )
         // The argument parses back to the same post.
         val parsed = PostCall.parse("0x01", 1, 1, 0, a, hex(makePostArgument("line 1\nline \"2\"", replyTo = 7)))!!
         assertEquals("line 1\nline \"2\"", parsed.message)
