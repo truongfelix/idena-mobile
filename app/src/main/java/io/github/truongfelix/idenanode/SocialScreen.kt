@@ -400,11 +400,6 @@ private fun formatTime(seconds: Long): String =
 /** "0x1234…abcd". */
 private fun shortAddress(address: String): String = "${address.take(6)}…${address.takeLast(4)}"
 
-/** The text of a post; idena.social can keep it (or its media) on IPFS, which this screen does not read yet. */
-private fun postText(call: PostCall): String = buildString {
-    if (call.message.startsWith("ipfs://")) append("(text stored on IPFS, not shown here)") else append(call.message)
-    if (call.hasMedia) append(if (isEmpty()) "(image or video, not shown here)" else "\n(image or video, not shown here)")
-}
 
 /** "0x1234…abcd · Human · 30 Sep 2026, 10:05". */
 @Composable
@@ -438,7 +433,7 @@ private fun PostCard(
         Column(Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp)) {
             Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 PostHeader(post.call, states)
-                Text(postText(post.call), style = MaterialTheme.typography.bodyLarge, maxLines = 8, overflow = TextOverflow.Ellipsis)
+                PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = 8)
             }
             ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip)
         }
@@ -522,8 +517,11 @@ private fun ActivityCard(item: ActivityItem, onOpen: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("${shortAddress(item.actor)} $action your post  ·  ${formatTime(item.time)}", style = MaterialTheme.typography.bodyMedium)
-            Text("“${postText(item.what)}”", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            item.answer?.let { Text(postText(it), style = MaterialTheme.typography.bodyLarge, maxLines = 4, overflow = TextOverflow.Ellipsis) }
+            PostContent(item.what, MaterialTheme.typography.bodyMedium, maxLines = 2, showMedia = false)
+            item.answer?.let {
+                HorizontalDivider()
+                PostContent(it, MaterialTheme.typography.bodyLarge, maxLines = 4, showMedia = false)
+            }
         }
     }
 }
@@ -559,7 +557,7 @@ private fun ThreadView(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PostHeader(post.call, states)
-                    Text(postText(post.call), style = MaterialTheme.typography.bodyLarge)
+                    PostContent(post.call, MaterialTheme.typography.bodyLarge)
                     ActionBar(post, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
                         onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
                     }) { onTip(post) }
@@ -571,14 +569,14 @@ private fun ThreadView(
             items(post.replies, key = { it.id }) { reply ->
                 Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     PostHeader(reply.call, states)
-                    Text(postText(reply.call), style = MaterialTheme.typography.bodyLarge)
+                    PostContent(reply.call, MaterialTheme.typography.bodyLarge)
                     ActionBar(reply, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onReply(reply.id)) }, onAnswer = {
                         onAnswer(Draft("Comment", "Comment", PostTarget.onReply(reply.id), reply.call))
                     }) { onTip(reply) }
                     for (comment in reply.replies) {
                         ThreadLine {
                             PostHeader(comment.call, states)
-                            Text(postText(comment.call), style = MaterialTheme.typography.bodyLarge)
+                            PostContent(comment.call, MaterialTheme.typography.bodyLarge)
                             ActionBar(comment, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onComment(reply.id, comment.id)) }, onAnswer = {
                                 onAnswer(Draft("Comment", "Comment", PostTarget.onComment(reply.id, comment.id), comment.call))
                             }) { onTip(comment) }
@@ -622,7 +620,7 @@ private fun Editor(draft: Draft, text: String, onText: (String) -> Unit, canPost
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${shortAddress(it.author)}  ·  ${formatTime(it.time)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(postText(it), style = MaterialTheme.typography.bodyLarge)
+                    PostContent(it, MaterialTheme.typography.bodyLarge)
                 }
             }
         }

@@ -34,6 +34,28 @@ class SocialTest {
     }
 
     @Test
+    fun parseKeepsTheFirstMedia() {
+        val onIpfs = PostCall.parse("0x01", 7, 1000, 0, a, hex("""{"message":"","media":["ipfs://bafkreiabc123","x"],"mediaType":["image/png","image/gif"]}"""))!!
+        assertEquals("ipfs://bafkreiabc123", onIpfs.media)
+        assertEquals("image/png", onIpfs.mediaType)
+        val inline = PostCall.parse("0x01", 7, 1000, 0, a, hex("""{"message":"hi","media":["iVBORw0KGgo="],"mediaType":["image/png"]}"""))!!
+        assertEquals("iVBORw0KGgo=", inline.media)
+        val big = "A".repeat(PostCall.MAX_INLINE_MEDIA + 1)
+        val tooLarge = PostCall.parse("0x01", 7, 1000, 0, a, hex("""{"message":"","media":["$big"],"mediaType":["image/png"]}"""))!!
+        assertTrue("still a post with media", tooLarge.hasMedia)
+        assertEquals("but not kept", "", tooLarge.media)
+    }
+
+    @Test
+    fun onlyPlainIpfsIdsAreFetched() {
+        assertEquals("bafkreifcg3m5p24psikerh4eqi3yeyyfbkvyrzukitfi2s3o2p4wwrlzpe", ipfsCid("ipfs://bafkreifcg3m5p24psikerh4eqi3yeyyfbkvyrzukitfi2s3o2p4wwrlzpe"))
+        assertNull("it names a file: no path", ipfsCid("ipfs://../../node/datadir/keystore"))
+        assertNull(ipfsCid("ipfs://bafk rei"))
+        assertNull(ipfsCid("bafkreifcg3m5p24psikerh4eqi3yeyyfb"))
+        assertNull(ipfsCid("ipfs://"))
+    }
+
+    @Test
     fun postIdsFollowTheContractsAuthors() {
         val posts = listOf(post("h1", a, "1", 10), post("h2", b, "2", 20), post("h3", a, "3", 30))
         assertEquals(mapOf("h1" to 1L, "h2" to 2L, "h3" to 3L), postIds(posts, mapOf(1L to a, 2L to b, 3L to a)))
@@ -166,6 +188,7 @@ class SocialTest {
         val cache = SocialCache(1, 2, emptyList(), emptyMap(), 2, listOf(tip("t", a, "1", "1", "1", 2)))
         assertEquals(cache, SocialCache.fromJson(JSONObject(cache.toJson().toString())))
         assertNull("version 1 dropped the tips", SocialCache.fromJson(cache.toJson().put("version", 1)))
+        assertNull("version 2 dropped the media", SocialCache.fromJson(cache.toJson().put("version", 2)))
         assertNull("no version is version 1", SocialCache.fromJson(cache.toJson().apply { remove("version") }))
     }
 

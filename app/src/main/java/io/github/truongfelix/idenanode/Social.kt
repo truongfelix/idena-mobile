@@ -27,12 +27,17 @@ data class PostCall(
     val index: Int,
     /** The sender, lowercase. */
     val author: String,
+    /** The text, or "ipfs://<cid>" when idena.social stored it on IPFS. */
     val message: String,
     /** The id of the post it replies to, as the contract argument has it; empty for a post. */
     val replyTo: String,
     /** Empty for the main feed; "discuss:<id>" for a comment on a reply. */
     val channel: String,
     val hasMedia: Boolean,
+    /** The first media: "ipfs://<cid>" or inline base64; empty without media or when too large to keep. */
+    val media: String = "",
+    /** Its type as the post declares it (image/png, video/mp4...). */
+    val mediaType: String = "",
 ) {
     val isLike: Boolean
         get() = message == LIKE && replyTo.isNotEmpty()
@@ -40,8 +45,12 @@ data class PostCall(
     fun toJson(): JSONObject = JSONObject()
         .put("hash", hash).put("height", height).put("time", time).put("index", index).put("author", author)
         .put("message", message).put("replyTo", replyTo).put("channel", channel).put("hasMedia", hasMedia)
+        .put("media", media).put("mediaType", mediaType)
 
     companion object {
+        /** Inline media larger than this (base64 characters, about 1 MB) is not kept in the scan. */
+        const val MAX_INLINE_MEDIA = 1_400_000
+
         fun fromJson(json: JSONObject) = PostCall(
             hash = json.getString("hash"),
             height = json.getLong("height"),
@@ -52,6 +61,8 @@ data class PostCall(
             replyTo = json.optString("replyTo"),
             channel = json.optString("channel"),
             hasMedia = json.optBoolean("hasMedia"),
+            media = json.optString("media"),
+            mediaType = json.optString("mediaType"),
         )
 
         /**
@@ -62,6 +73,8 @@ data class PostCall(
             val args = runCatching { JSONObject(String(hexToBytes(argHex), Charsets.UTF_8)) }.getOrNull() ?: return null
             val media = args.optJSONArray("media")
             val mediaType = args.optJSONArray("mediaType")
+            val hasMedia = media != null && media.length() > 0 && mediaType != null && mediaType.length() > 0
+            val first = if (hasMedia) media!!.optString(0) else ""
             return PostCall(
                 hash = hash,
                 height = height,
@@ -71,11 +84,21 @@ data class PostCall(
                 message = args.optString("message"),
                 replyTo = args.optString("replyToPostId"),
                 channel = args.optString("channelId"),
-                hasMedia = media != null && media.length() > 0 && mediaType != null && mediaType.length() > 0,
+                hasMedia = hasMedia,
+                media = first.takeIf { it.startsWith("ipfs://") || it.length <= MAX_INLINE_MEDIA }.orEmpty(),
+                mediaType = if (hasMedia) mediaType!!.optString(0) else "",
             )
         }
     }
 }
+
+private val CID = Regex("^[A-Za-z0-9]{10,128}$")
+
+/**
+ * The IPFS content id of an "ipfs://<cid>" reference (a post's text or media), or null when [ref] is not
+ * one or the id is not plain letters and digits (it names a file in the app's storage).
+ */
+fun ipfsCid(ref: String): String? = ref.removePrefix("ipfs://").takeIf { ref.startsWith("ipfs://") && CID.matches(it) }
 
 /** A sendTip call as found in a block: [amount] iDNA sent, [tipAmount] of them for post [postId]'s author. */
 data class TipCall(
@@ -400,8 +423,8 @@ data class SocialCache(
     }
 
     companion object {
-        /** 2: the tips are kept too; a scan of version 1 dropped them and is done again. */
-        const val VERSION = 2
+        /** 3: the media references are kept too; a scan of an older version is done again. */
+        const val VERSION = 3
 
         /** The cache from its JSON; null when it is for another contract or an older version. */
         fun fromJson(json: JSONObject): SocialCache? {

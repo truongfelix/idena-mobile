@@ -186,3 +186,48 @@ object SocialStore {
         if (enabled) file.delete() else file.createNewFile()
     }
 }
+
+/**
+ * Texts and media idena.social keeps on IPFS, fetched only through the phone's own node (ipfs_get, which
+ * asks the node's IPFS peers) and kept in the app's files. Content no node could give is marked
+ * unavailable until asked again ([retry]); a node that does not answer marks nothing.
+ */
+object IpfsStore {
+    private fun dir(context: Context): File = File(context.filesDir, "social/ipfs").also { it.mkdirs() }
+
+    /** The content of [cid] kept on the phone, or null. [cid] comes from [ipfsCid]: letters and digits. */
+    fun cached(context: Context, cid: String): ByteArray? = File(dir(context), cid).takeIf { it.exists() }?.readBytes()
+
+    fun isUnavailable(context: Context, cid: String): Boolean = File(dir(context), "$cid.unavailable").exists()
+
+    /** Forgets that [cid] was unavailable, so that it is fetched again. */
+    fun retry(context: Context, cid: String) {
+        File(dir(context), "$cid.unavailable").delete()
+    }
+
+    /**
+     * Fetches [cid] through the node: the content, or null when the node could not find it on IPFS (then
+     * marked unavailable). Throws when the node does not answer.
+     */
+    fun fetch(context: Context, cid: String): ByteArray? {
+        val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
+        val hex = try {
+            // The node gives up by itself when no IPFS peer has the content.
+            rpc.call("ipfs_get", JSONArray().put(cid), readTimeoutMs = 120_000) as? String
+        } catch (e: IOException) {
+            // An RPC error names IPFS ("timeout while reading data from ipfs"); a closed port does not.
+            if (e.message?.contains("ipfs", ignoreCase = true) != true) throw e
+            null
+        }
+        if (hex.isNullOrEmpty() || hex == "0x") {
+            File(dir(context), "$cid.unavailable").createNewFile()
+            return null
+        }
+        val bytes = hexToBytes(hex)
+        val file = File(dir(context), cid)
+        val tmp = File(file.parentFile, "$cid.tmp")
+        tmp.writeBytes(bytes)
+        tmp.renameTo(file)
+        return bytes
+    }
+}
