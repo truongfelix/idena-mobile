@@ -3,12 +3,15 @@ package io.github.truongfelix.idenanode
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,15 +19,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -312,7 +317,6 @@ fun SocialScreen(modifier: Modifier = Modifier) {
                                 onOpen = { threadId = post.id },
                                 onLike = { preparePost("Like", LIKE, PostTarget.onPost(post.id)) },
                                 onTip = { tipping = post },
-                                onReply = { draft = Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call) },
                             )
                         }
                     }
@@ -419,7 +423,7 @@ private fun WaitNote(reason: String) {
     Text("Like and reply need the node synced. $reason", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
 }
 
-/** A post of the feed: its start, its answer count, Like and Reply; a tap on the text opens the thread. */
+/** A post of the feed: its start and its action pills; a tap on the text or on 💬 opens the thread. */
 @Composable
 private fun PostCard(
     post: SocialPost,
@@ -428,56 +432,46 @@ private fun PostCard(
     canAct: Boolean,
     onOpen: () -> Unit,
     onLike: () -> Unit,
-    onReply: () -> Unit,
     onTip: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp)) {
             Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 PostHeader(post.call, states)
                 Text(postText(post.call), style = MaterialTheme.typography.bodyLarge, maxLines = 8, overflow = TextOverflow.Ellipsis)
-                val replies = replyCount(post)
-                val counts = listOfNotNull(
-                    replies.takeIf { it > 0 }?.let { if (it == 1) "💬 1 answer" else "💬 $it answers" },
-                    post.tipTotal.takeIf { it > 0 }?.let { "🪙 $it iDNA tipped" },
-                )
-                if (counts.isNotEmpty()) Text(counts.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium)
             }
-            Actions(post, myAddress, canAct, "Reply", onLike, onReply, onTip)
+            ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip)
         }
     }
 }
 
-/** Like, answer and tip buttons; "Liked" once the identity liked it, no tip for its own posts. */
+/** A small action button, as Reddit's pills under a post. */
 @Composable
-private fun Actions(
+private fun Pill(text: String, enabled: Boolean, onClick: () -> Unit) {
+    AssistChip(onClick = onClick, enabled = enabled, label = { Text(text, style = MaterialTheme.typography.labelLarge) })
+}
+
+/**
+ * The pills under a post, reply or comment: its likes (Like; "❤️" once the identity liked it), the
+ * answer pill ([answer]), and its tips (Tip; not on one's own posts).
+ */
+@Composable
+private fun ActionBar(
     post: SocialPost,
     myAddress: String?,
     canAct: Boolean,
     answer: String,
+    answerEnabled: Boolean = canAct,
     onLike: () -> Unit,
     onAnswer: () -> Unit,
     onTip: () -> Unit,
 ) {
     val liked = myAddress != null && myAddress in post.likedBy
-    val padding = PaddingValues(horizontal = 12.dp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = onLike, enabled = canAct && !liked, modifier = Modifier.height(48.dp), contentPadding = padding) {
-            Text(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", style = MaterialTheme.typography.titleMedium)
-        }
-        OutlinedButton(onClick = onAnswer, enabled = canAct, modifier = Modifier.height(48.dp), contentPadding = padding) {
-            Text("💬 $answer", style = MaterialTheme.typography.titleMedium)
-        }
-        OutlinedButton(onClick = onTip, enabled = canAct && post.call.author != myAddress, modifier = Modifier.height(48.dp), contentPadding = padding) {
-            Text("🪙 Tip", style = MaterialTheme.typography.titleMedium)
-        }
+        Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", canAct && !liked, onLike)
+        Pill(answer, answerEnabled, onAnswer)
+        Pill(if (post.tipTotal > 0) "🪙 ${post.tipTotal}" else "🪙 Tip", canAct && post.call.author != myAddress, onTip)
     }
-}
-
-/** The tips a post received, when it has some. */
-@Composable
-private fun TipsLine(post: SocialPost) {
-    if (post.tipTotal > 0) Text("🪙 ${post.tipTotal} iDNA tipped", style = MaterialTheme.typography.bodyMedium)
 }
 
 /** The amount of a tip: whole iDNA (the contract refuses fractions), with the balance for reference. */
@@ -535,8 +529,8 @@ private fun ActivityCard(item: ActivityItem, onOpen: () -> Unit) {
 }
 
 /**
- * A post with its replies and, under each reply, its comments (idena.social's levels), each with Like
- * and answer buttons.
+ * A post with its answers, as Reddit shows a post and its comments: the replies, and under each reply
+ * its comments, indented behind a thread line (idena.social's two levels). Every item has its pills.
  */
 @Composable
 private fun ThreadView(
@@ -561,35 +555,31 @@ private fun ThreadView(
             Text("This post is not in the scanned blocks.", Modifier.padding(16.dp))
             return
         }
-        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        PostHeader(post.call, states)
-                        Text(postText(post.call), style = MaterialTheme.typography.bodyLarge)
-                        TipsLine(post)
-                        Actions(post, myAddress, canAct, "Reply", { onLike(PostTarget.onPost(post.id)) }, {
-                            onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
-                        }) { onTip(post) }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PostHeader(post.call, states)
+                    Text(postText(post.call), style = MaterialTheme.typography.bodyLarge)
+                    ActionBar(post, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
+                        onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
+                    }) { onTip(post) }
+                    HorizontalDivider()
+                    val answers = replyCount(post)
+                    Text(if (answers == 1) "1 answer" else "$answers answers", style = MaterialTheme.typography.titleSmall)
                 }
             }
-            if (post.replies.isEmpty()) item { Text("No replies yet.", style = MaterialTheme.typography.bodySmall) }
             items(post.replies, key = { it.id }) { reply ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    HorizontalDivider()
+                Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     PostHeader(reply.call, states)
                     Text(postText(reply.call), style = MaterialTheme.typography.bodyLarge)
-                    TipsLine(reply)
-                    Actions(reply, myAddress, canAct, "Comment", { onLike(PostTarget.onReply(reply.id)) }, {
+                    ActionBar(reply, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onReply(reply.id)) }, onAnswer = {
                         onAnswer(Draft("Comment", "Comment", PostTarget.onReply(reply.id), reply.call))
                     }) { onTip(reply) }
                     for (comment in reply.replies) {
-                        Column(Modifier.padding(start = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        ThreadLine {
                             PostHeader(comment.call, states)
                             Text(postText(comment.call), style = MaterialTheme.typography.bodyLarge)
-                            TipsLine(comment)
-                            Actions(comment, myAddress, canAct, "Answer", { onLike(PostTarget.onComment(reply.id, comment.id)) }, {
+                            ActionBar(comment, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onComment(reply.id, comment.id)) }, onAnswer = {
                                 onAnswer(Draft("Comment", "Comment", PostTarget.onComment(reply.id, comment.id), comment.call))
                             }) { onTip(comment) }
                         }
@@ -600,12 +590,27 @@ private fun ThreadView(
     }
 }
 
-/** The full-screen editor of a post, reply or comment. */
+/** A comment indented behind a thin vertical line, as Reddit's nested comments. */
+@Composable
+private fun ThreadLine(content: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(start = 6.dp, top = 4.dp)) {
+        Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+        Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) { content() }
+    }
+}
+
+/**
+ * The full-screen editor of a post, reply or comment: the answered message in full above a text box of
+ * a few lines; the screen scrolls.
+ */
 @Composable
 private fun Editor(draft: Draft, text: String, onText: (String) -> Unit, canPost: Boolean, onCancel: () -> Unit, onPost: () -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onCancel) { Text("Cancel") }
             Spacer(Modifier.weight(1f))
@@ -614,18 +619,20 @@ private fun Editor(draft: Draft, text: String, onText: (String) -> Unit, canPost
             Button(onClick = onPost, enabled = canPost && text.isNotBlank()) { Text("Post") }
         }
         draft.answering?.let {
-            Text(
-                "Answering ${shortAddress(it.author)}: ${postText(it)}",
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${shortAddress(it.author)}  ·  ${formatTime(it.time)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(postText(it), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
         }
         OutlinedTextField(
             value = text,
             onValueChange = onText,
-            modifier = Modifier.fillMaxWidth().weight(1f).focusRequester(focus),
-            placeholder = { Text("What's new?") },
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            placeholder = { Text(if (draft.answering == null) "What's new?" else "Your answer") },
+            minLines = 4,
+            maxLines = 10,
         )
         Text(
             "Posts are public and stay on the blockchain for good. The fee is shown before sending.",
