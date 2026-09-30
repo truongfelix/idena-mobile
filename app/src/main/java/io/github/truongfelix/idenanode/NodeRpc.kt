@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.math.BigDecimal
 import java.net.URL
 
 /** The mainnet god address (config.DefaultGodAddress); it takes part in the staking reward. */
@@ -169,6 +170,32 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             epochDays = if (start > 0 && end > start) (end - start) / 86_400.0 else 0.0,
             proposedBlockShare = if (sampled > 0) proposed.toDouble() / sampled else 1.0,
         )
+    }
+
+    /**
+     * The fee of a transaction of [type] ([SEND_TX], [REPLENISH_STAKE_TX]) sending [amount] iDNA from
+     * [from] to [to], from bcn_estimateTx, which checks it as the mempool would (balance, rules) and sends
+     * nothing. Throws with the node's reason.
+     */
+    fun estimateTx(type: Int, from: String, to: String, amount: BigDecimal): BigDecimal {
+        val result = call("bcn_estimateTx", JSONArray().put(txArgs(type, from, to, amount))) as JSONObject
+        return BigDecimal(result.optString("txFee", "0"))
+    }
+
+    /**
+     * Sends a transaction of [type] with dna_sendTransaction; the node signs it and sets its max fee (twice
+     * the fee). Returns the transaction hash.
+     */
+    fun sendTx(type: Int, from: String, to: String, amount: BigDecimal): String =
+        call("dna_sendTransaction", JSONArray().put(txArgs(type, from, to, amount))) as String
+
+    private fun txArgs(type: Int, from: String, to: String, amount: BigDecimal) = JSONObject()
+        .put("type", type).put("from", from).put("to", to).put("amount", amount.toPlainString())
+
+    /** The stake below which a validated identity is discriminated (dna_globalState); null if unset. */
+    fun discriminationThreshold(): BigDecimal? {
+        val state = call("dna_globalState") as? JSONObject ?: return null
+        return state.optString("discriminationStakeThreshold").toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
     }
 
     /** Whether the transaction is in a block: the node reports a zero block hash while it is in the mempool. */

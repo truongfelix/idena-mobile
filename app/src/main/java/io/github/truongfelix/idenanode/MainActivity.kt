@@ -218,6 +218,7 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
             state = state.copy(syncEnabled = enabled, startError = null)
         }
         AccountCard(state, network)
+        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it) { scope.launch { refresh() } } }
         state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
         // The epoch and the flips are current once the fast sync has downloaded the state.
         state.status?.takeUnless { it.accountPending }?.let { ValidationCard(it) }
@@ -556,7 +557,7 @@ private fun ValidationCard(status: NodeStatus) {
 }
 
 /** Waits until the node has the transaction in a block, asking every 10 seconds. */
-private suspend fun waitUntilMined(context: Context, hash: String) {
+internal suspend fun waitUntilMined(context: Context, hash: String) {
     while (!withContext(Dispatchers.IO) {
             runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false)
         }
@@ -737,7 +738,7 @@ private fun openWebApp(context: Context) {
 }
 
 @Composable
-private fun Field(name: String, value: String) {
+internal fun Field(name: String, value: String) {
     Row {
         Text(name, Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium)
         Text(value, style = MaterialTheme.typography.bodyMedium)
@@ -745,10 +746,10 @@ private fun Field(name: String, value: String) {
 }
 
 /** "57%": a share (stake kept, APY) as a percentage, rounded down so it never shows more than it is. */
-private fun percent(share: Double): String = "${(share * 100 + 1e-9).toLong()}%"
+internal fun percent(share: Double): String = "${(share * 100 + 1e-9).toLong()}%"
 
 /** Formats an iDNA amount from the node (a decimal string) with at most 4 decimals. */
-private fun idna(amount: String): String = try {
+internal fun idna(amount: String): String = try {
     BigDecimal(amount).setScale(4, RoundingMode.DOWN).stripTrailingZeros().toPlainString() + " iDNA"
 } catch (e: NumberFormatException) {
     amount

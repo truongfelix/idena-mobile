@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.truongfelix.idenanode"
         minSdk = 29
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.1.16"
+        versionCode = 18
+        versionName = "0.1.17"
         ndk {
             // The node library is built for 64-bit ARM only.
             abiFilters += "arm64-v8a"
@@ -57,6 +57,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // QR codes of the address (Receive), drawn on the phone.
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
     // The real org.json for the JVM tests (android.jar only has stubs).
