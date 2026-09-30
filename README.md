@@ -11,6 +11,9 @@ meant to be delegated to a pool, such as a desktop node.
 - **Node**: idena-go in the app's own process, as a foreground service while Sync is on. The screen shows
   the sync state, peers, block, speed and time left.
 - **Account**: identity state and age, mining status, stake and balance, once the node has synced.
+- **Wallet**: Receive (the address, with its QR code drawn on the phone), Send (the node's fee estimate,
+  then a confirmation) and Add stake (the stake after, how much of it the identity keeps if it misses or
+  fails the next validation, the network's minimum stake, and that stake cannot be withdrawn).
 - **Next validation**: its date, and the flips still to make, with a link to
   [app.idena.io](https://app.idena.io), where they are made through a rented shared node.
 - **Key**: import the private key exported from the Idena app or app.idena.io (encrypted, with its
