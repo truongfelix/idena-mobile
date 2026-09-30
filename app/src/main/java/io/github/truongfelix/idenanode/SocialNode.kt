@@ -9,8 +9,12 @@ import java.io.IOException
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** The most blocks one bcn_blocksWithAddress call checks (api.MaxBlocksWithAddressRange). */
-private const val FILTER_BATCH = 100_000L
+/**
+ * The blocks one bcn_blocksWithAddress call checks (at most api.MaxBlocksWithAddressRange, 100,000): on the
+ * phone it reads about 4,000 headers a second (10,000 in 2.3 s, 30,000 in 11.7 s), so a call stays short
+ * and "Scan blocks" stops quickly.
+ */
+private const val FILTER_BATCH = 10_000L
 
 /**
  * idena.social through the phone's node: the blocks come from bcn_blockAt, their bodies from ipfs_get
@@ -27,6 +31,7 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
         val heights = rpc.call(
             "bcn_blocksWithAddress",
             JSONArray().put(JSONObject().put("address", SOCIAL_CONTRACT).put("from", from).put("to", to)),
+            readTimeoutMs = 60_000,
         ) as? JSONArray ?: JSONArray()
         return (0 until heights.length()).map { heights.getLong(it) }
     }

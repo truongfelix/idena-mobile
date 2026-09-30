@@ -12,11 +12,11 @@ private const val GOD_ADDRESS = "0x4d60dc6a2cba8c3ef1ba5e1eba5c12c54cee6b61"
 /** A JSON-RPC client for the app's own node. Calls block: use them off the main thread. */
 class NodeRpc(private val port: Int, private val apiKey: String) {
 
-    fun call(method: String, params: JSONArray = JSONArray()): Any? {
+    fun call(method: String, params: JSONArray = JSONArray(), readTimeoutMs: Int = 10_000): Any? {
         val conn = URL("http://127.0.0.1:$port").openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 2_000
-            conn.readTimeout = 10_000
+            conn.readTimeout = readTimeoutMs
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")

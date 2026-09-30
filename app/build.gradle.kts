@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.truongfelix.idenanode"
         minSdk = 29
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.1.10"
+        versionCode = 12
+        versionName = "0.1.11"
         ndk {
             // The node library is built for 64-bit ARM only.
             abiFilters += "arm64-v8a"
