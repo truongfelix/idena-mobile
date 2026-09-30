@@ -9,7 +9,7 @@ go 1.26.8
 // snapshot completes it), #40 (snapshots byte-identical to official nodes), #43 (evidence read skipped
 // without shards), #44 (gossip pulls), #45, #46 (rpc tests, Windows IPC), #47 (bcn_blocksWithAddress,
 // which the Social tab uses). Back to ubiubi18/idena-go once they are merged.
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260930065427-c3c2539d5f13
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260930180313-d916c015e479
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/idena-network/iavl v0.12.3-0.20211223100228-a33b117aa31e
