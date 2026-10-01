@@ -25,13 +25,21 @@ meant to be delegated to a pool, such as a desktop node.
   when submitted. Not tried in a real ceremony yet.
 - **Practice validation**: the short and long sessions with the sample flips of the Idena web app, then
   the results with the right answers and why a flip should be reported.
-- **Social** tab: the posts of [idena.social](https://idena.social), read from the phone's own node, with
-  their replies, comments and likes. With the identity: write a post (✎), like, reply to a post, comment
-  on a reply, as idena.social writes them (contract calls: about 3.7 iDNA for the first of an epoch, about
-  1.8 after; the fee is shown before sending). A tap on a post opens its thread. While "Scan blocks" is selected, the tab reads the new blocks up to the node's, then the older
-  ones back to the contract's creation (once, kept on the phone), then follows the new blocks. Nothing
-  is scanned while the tab is hidden, the node syncs or a validation runs. Not shown yet: media, texts
-  stored on IPFS, comments on replies, messages.
+- **Social** tab: [idena.social](https://idena.social) read from the phone's own node: the feed (newest
+  posts or latest activity), threads with their replies, comments, likes and tips, who liked and tipped,
+  and images and texts stored on IPFS (fetched through the node only). A tap on an address opens its
+  profile (identity, posts, replies, comments, likes, tips, media); "My profile" shows the identity's own.
+  With the identity: write a post (✎), like, reply to a post, comment on a reply, tip, as idena.social
+  writes them; a post can carry an image (sent as WebP without the photo's metadata, at a size chosen with
+  its cost) and its text can go on IPFS. Every fee is shown before sending: contract calls about 3.7 iDNA
+  for the first of an epoch, about 1.8 after; storing on IPFS about 1 iDNA per 5 KB. The Activity lists
+  what others did on the identity's posts, with notifications inside the app (likes, comments, tips,
+  each on or off): a count on the tab and a notice. A status bar shows the scan (green up to date, orange
+  behind, red without node or peers, grey off), ⓘ its details and "Scan blocks". While "Scan blocks" is
+  on, the tab reads the new blocks up to the node's, then the older ones back to the contract's creation
+  (once, kept on the phone), then follows the new blocks; from the Node tab, only the new blocks and only
+  for the notifications. Nothing is scanned while the node syncs or a validation runs. Not done yet:
+  private messages.
 
 Planned: importing the key from its QR code.
 
