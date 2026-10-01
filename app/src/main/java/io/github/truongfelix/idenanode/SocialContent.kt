@@ -150,7 +150,7 @@ private fun PostImage(key: String, bytes: ByteArray) {
  * [bytes] as an image at most [maxSide] pixels on its longer side (the phone has little memory), or null
  * when Android cannot read it.
  */
-private fun decodeScaled(bytes: ByteArray, maxSide: Int = 1080): ImageBitmap? {
+internal fun decodeScaled(bytes: ByteArray, maxSide: Int = 1080): ImageBitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null

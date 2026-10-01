@@ -107,9 +107,12 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     val notices = remember { SnackbarHostState() }
     // The node's state, for the Node tab and the status bar of the title row (both tabs).
     val node = remember { NodeModel(context.applicationContext) }
+    // The Idena ads of the banner at the bottom (both tabs).
+    val ads = remember { AdsModel(context.applicationContext) }
     var nodeInfo by remember { mutableStateOf(false) }
     LaunchedEffect(social) { social.run(lifecycle) }
     LaunchedEffect(node) { node.run(lifecycle) }
+    LaunchedEffect(ads) { ads.run(lifecycle) }
     LaunchedEffect(tab) {
         social.visible = tab == MainTab.Social
         node.nodeTabVisible = tab == MainTab.Node
@@ -158,8 +161,9 @@ private fun MainScreen(modifier: Modifier = Modifier) {
                     MainTab.Node -> NodeScreen(node, Modifier.weight(1f))
                     MainTab.Social -> SocialScreen(social, Modifier.weight(1f))
                 }
+                AdBanner(ads.ads)
             }
-            SnackbarHost(notices, Modifier.align(Alignment.BottomCenter))
+            SnackbarHost(notices, Modifier.align(Alignment.BottomCenter).padding(bottom = AD_BANNER_HEIGHT))
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
     }
@@ -180,7 +184,7 @@ private fun Typography.scaled(factor: Float): Typography {
     )
 }
 
-/** The app's colors: light or dark as the phone's setting (the themes keep MIUI's forced dark off). */
+/** The app's colors: light or dark as the phone's setting (the themes keep the phone's forced dark off). */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(), content = content)
@@ -246,7 +250,7 @@ private fun NodeScreen(model: NodeModel, modifier: Modifier = Modifier) {
         state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
         if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
         state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
-        if (backgroundIssue(state.ignoringBatteryOptimizations, state.autostart) != null) BackgroundCard(state)
+        if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundCard(state)
         TextButton(onClick = { context.startActivity(Intent(context, CeremonyActivity::class.java)) }) {
             Text("Practice validation")
         }
@@ -441,7 +445,7 @@ private fun KeyCard(state: ScreenState, onImport: (String, String, (String) -> U
 }
 
 @SuppressLint("BatteryLife")
-/** Shown while a setting may stop the node with the screen off (battery optimization, MIUI's Autostart). */
+/** Shown while Android's battery optimization may stop the node with the screen off. */
 @Composable
 private fun BackgroundCard(state: ScreenState) {
     Card(Modifier.fillMaxWidth()) {

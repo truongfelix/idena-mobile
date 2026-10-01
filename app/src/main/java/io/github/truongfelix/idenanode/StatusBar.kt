@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -134,7 +133,7 @@ fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {
 
 /**
  * What lets the node run with the screen off, and the buttons to fix it: Android's battery optimization,
- * and on MIUI its Autostart (it refuses to restart a killed service without it) and battery saver.
+ * then the autostart and battery pages that some phones add (they may refuse to restart a stopped node).
  */
 @Composable
 fun BackgroundSettings(state: ScreenState) {
@@ -149,51 +148,53 @@ fun BackgroundSettings(state: ScreenState) {
                 )
             }) { Text("Allow background running") }
         }
-        if (isMiui(state)) {
-            Field(
-                "MIUI Autostart",
-                when (state.autostart) {
-                    true -> "on ✓"
-                    false -> "off: MIUI will not restart the node"
-                    null -> "unknown"
-                },
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { openMiuiAutostart(context) }) { Text("Autostart") }
-                OutlinedButton(onClick = { openMiuiBatterySaver(context) }) { Text("Battery saver") }
-            }
-            Text(
-                "In MIUI's battery saver choose \"No restrictions\", and lock the app in the recent apps (pull it down) " +
-                    "so that the memory cleanup at screen lock leaves it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Text(
+            "Some phones also close apps in the background: allow this app to start automatically and to run " +
+                "without battery restrictions, and lock it in the recent apps.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { openFirstOrAppSettings(context, autostartPages()) }) { Text("Autostart") }
+            OutlinedButton(onClick = { openFirstOrAppSettings(context, batteryPages(context)) }) { Text("Battery saver") }
         }
     }
 }
 
-/** Whether the phone runs MIUI: it tells its Autostart, or it is a Xiaomi. */
-fun isMiui(state: ScreenState): Boolean = state.autostart != null || Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+/** The autostart pages phone makers add to Android, tried in turn. */
+private fun autostartPages(): List<Intent> = listOf(
+    "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
+    "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+    "com.huawei.systemmanager" to "com.huawei.systemmanager.optimize.process.ProtectActivity",
+    "com.coloros.safecenter" to "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+    "com.coloros.safecenter" to "com.coloros.safecenter.startupapp.StartupAppListActivity",
+    "com.oppo.safe" to "com.oppo.safe.permission.startup.StartupAppListActivity",
+    "com.vivo.permissionmanager" to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+    "com.iqoo.secure" to "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity",
+    "com.asus.mobilemanager" to "com.asus.mobilemanager.autostart.AutoStartActivity",
+).map { (pkg, activity) -> Intent().setComponent(ComponentName(pkg, activity)) }
 
-private fun openMiuiAutostart(context: Context) = openOrAppSettings(
-    context,
-    Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
-)
-
-private fun openMiuiBatterySaver(context: Context) = openOrAppSettings(
-    context,
+/** The per-app battery pages phone makers add to Android, tried in turn. */
+private fun batteryPages(context: Context): List<Intent> = listOf(
     Intent().setComponent(ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"))
         .putExtra("package_name", context.packageName)
         .putExtra("package_label", context.applicationInfo.loadLabel(context.packageManager).toString()),
 )
 
-/** Opens [intent], else the app's page in Android's settings (MIUI's pages move between versions). */
-private fun openOrAppSettings(context: Context, intent: Intent) {
-    try {
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    } catch (e: Exception) {
-        context.startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+/**
+ * Opens the first of [pages] the phone has, else the app's page in Android's settings (where Android 12
+ * and later have the app's battery use). The makers' pages move between versions: each is tried.
+ */
+private fun openFirstOrAppSettings(context: Context, pages: List<Intent>) {
+    for (page in pages) {
+        try {
+            context.startActivity(page.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (e: Exception) {
+            // Not on this phone, or not open to other apps: try the next one.
+        }
     }
+    context.startActivity(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
 }

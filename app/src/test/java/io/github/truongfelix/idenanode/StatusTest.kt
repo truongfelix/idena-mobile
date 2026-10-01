@@ -54,11 +54,8 @@ class StatusTest {
 
     @Test
     fun aBackgroundIssueTurnsASyncedNodeOrange() {
-        assertEquals(BarState(Health.Warn, "Synced · Autostart off"), nodeBarState(running.copy(backgroundIssue = backgroundIssue(true, false))))
-        assertEquals("Synced · battery saver on", nodeBarState(running.copy(backgroundIssue = backgroundIssue(false, null))).label)
-        assertNull(backgroundIssue(true, true))
-        assertNull("not MIUI", backgroundIssue(true, null))
-        assertEquals("Autostart first", "Autostart off", backgroundIssue(false, false))
+        assertEquals(BarState(Health.Warn, "Synced · battery saver on"), nodeBarState(running.copy(backgroundIssue = backgroundIssue(false))))
+        assertNull(backgroundIssue(true))
     }
 
     @Test

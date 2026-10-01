@@ -26,8 +26,6 @@ data class ScreenState(
     val startError: String? = null,
     val network: String = "",
     val ignoringBatteryOptimizations: Boolean = true,
-    /** MIUI's Autostart for the app; null when not MIUI or unknown. */
-    val autostart: Boolean? = null,
     /** How long ago the service started the node; null when unknown. */
     val runningForMs: Long? = null,
     /** Blocks per second over the last minute while syncing; null until measured. */
@@ -62,7 +60,7 @@ class NodeModel(private val context: Context) {
                 node = view,
                 runningForMs = state.runningForMs,
                 speed = state.blocksPerSecond,
-                backgroundIssue = backgroundIssue(state.ignoringBatteryOptimizations, state.autostart),
+                backgroundIssue = backgroundIssue(state.ignoringBatteryOptimizations),
             ),
         )
 
@@ -159,7 +157,6 @@ private fun readLocal(context: Context, state: ScreenState): ScreenState {
         network = networkName(context),
         ignoringBatteryOptimizations = context.getSystemService(PowerManager::class.java)
             .isIgnoringBatteryOptimizations(context.packageName),
-        autostart = miuiAutostart(context),
         runningForMs = NodeSettings.runningForMs(context),
     )
 }
@@ -174,21 +171,3 @@ private fun networkName(context: Context): String {
         else -> "Other"
     }
 }
-
-/**
- * MIUI's Autostart for the app: true allowed, false denied (MIUI then refuses to restart the node's
- * service once it killed it), null elsewhere or when MIUI does not tell. Read through MIUI's own
- * framework (android.miui.AppOpsUtils, 0 = allowed), as Autostart checkers do.
- */
-fun miuiAutostart(context: Context): Boolean? {
-    if (notMiui) return null
-    return runCatching {
-        val method = Class.forName("android.miui.AppOpsUtils")
-            .getDeclaredMethod("getApplicationAutoStart", Context::class.java, String::class.java)
-        (method.invoke(null, context, context.packageName) as Int) == 0
-    }.onFailure { if (it is ClassNotFoundException) notMiui = true }.getOrNull()
-}
-
-/** Set once MIUI's framework is known to be missing: no need to look again. */
-@Volatile
-private var notMiui = false

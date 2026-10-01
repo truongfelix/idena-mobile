@@ -64,15 +64,9 @@ fun nodeBarState(input: NodeBarInput): BarState {
     return BarState(Health.Good, "Synced · ${if (node.peers == 1) "1 peer" else "${node.peers} peers"}")
 }
 
-/**
- * What may stop the node with the screen off, shortest first: MIUI's Autostart off ([autostart] false;
- * MIUI refuses to restart the service it killed), or Android's battery optimization on.
- */
-fun backgroundIssue(ignoringBatteryOptimizations: Boolean, autostart: Boolean?): String? = when {
-    autostart == false -> "Autostart off"
-    !ignoringBatteryOptimizations -> "battery saver on"
-    else -> null
-}
+/** What may stop the node with the screen off: Android's battery optimization on. */
+fun backgroundIssue(ignoringBatteryOptimizations: Boolean): String? =
+    if (ignoringBatteryOptimizations) null else "battery saver on"
 
 /** "about 1 h 30 min", "about 12 min", "under a minute". */
 fun duration(seconds: Double): String {
