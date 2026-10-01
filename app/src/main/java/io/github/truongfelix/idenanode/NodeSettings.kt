@@ -62,7 +62,9 @@ object NodeSettings {
     /**
      * The node configuration, applied over the mobile defaults: RPC on loopback with the app's key and
      * no browser access (no CORS), and no IPFS "server" profile, whose address filters block peers on
-     * the home network. Peer limits stay the default ones (not the low-power profile).
+     * the home network. The IPFS port stays fixed: otherwise the node moves to the next port after two
+     * minutes without IPFS peers (a Wi-Fi outage), and a port opened for it on the router no longer
+     * matches. Peer limits stay the default ones (not the low-power profile).
      */
     fun nodeConfig(context: Context): String = JSONObject()
         .put(
@@ -72,6 +74,6 @@ object NodeSettings {
                 .put("APIKey", apiKey(context))
                 .put("HTTPCors", JSONArray())
         )
-        .put("IpfsConf", JSONObject().put("Profile", ""))
+        .put("IpfsConf", JSONObject().put("Profile", "").put("StaticPort", true))
         .toString()
 }

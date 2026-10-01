@@ -12,8 +12,10 @@ meant to be delegated to a pool, such as a desktop node.
   the title row, on both tabs, shows it as a colored dot (green synced with peers; orange starting,
   looking for peers, syncing, or a background setting to fix; red no peers after 20 min, no answer or a
   wrong clock; grey sync off); ⓘ gives the block, peers, network, speed and time left. A card warns when
-  battery optimization or MIUI's Autostart may stop the node with the screen off, with buttons to the
-  settings.
+  battery optimization may stop the node with the screen off, with buttons to Android's setting and to the
+  autostart and battery pages some phones add. The node keeps its IPFS port (40405) fixed, so that a port
+  opened for it on the router keeps matching: outside nodes can then connect to the phone, which gets peers
+  within minutes instead of waiting for a free slot on the few reachable nodes.
 - **Account**: identity state and age, mining status, stake and balance, once the node has synced.
 - **Wallet**: Receive (the address, with its QR code drawn on the phone), Send (the node's fee estimate,
   then a confirmation) and Add stake (the stake after, how much of it the identity keeps if it misses or
@@ -33,7 +35,8 @@ meant to be delegated to a pool, such as a desktop node.
 - **Social** tab: [idena.social](https://idena.social) read from the phone's own node: the feed (newest
   posts or latest activity), threads with their replies, comments, likes and tips, who liked and tipped,
   and images and texts stored on IPFS (fetched through the node only). A tap on an address opens its
-  profile (identity, posts, replies, comments, likes, tips, media); "My profile" shows the identity's own.
+  profile (identity, or "Not validated"; posts, replies, comments, the likes and tips it gave, media);
+  "My profile" shows the identity's own.
   With the identity: write a post (✎), like, reply to a post, comment on a reply, tip, as idena.social
   writes them; a post can carry an image (sent as WebP without the photo's metadata, at a size chosen with
   its cost) and its text can go on IPFS. Every fee is shown before sending: contract calls about 3.7 iDNA
@@ -45,6 +48,12 @@ meant to be delegated to a pool, such as a desktop node.
   (once, kept on the phone), then follows the new blocks; from the Node tab, only the new blocks and only
   for the notifications. Nothing is scanned while the node syncs or a validation runs. Not done yet:
   private messages.
+- **Ads**: a banner at the bottom of both tabs rotates the Idena ads for this identity and a note from the
+  developers. An ad shows when coins were burnt for it over the last day, its author's profile lists it,
+  and the oracles' review vote approved it (the vote must name the ad); its audience (language, Android,
+  age, stake) must include the identity; the most burnt first, at most three. Everything comes from the
+  phone's own node (the burns, the profiles and ads on IPFS, the votes). A tap shows the ad, who paid
+  for it, and its link, opened in the browser only on request.
 
 Planned: importing the key from its QR code.
 
