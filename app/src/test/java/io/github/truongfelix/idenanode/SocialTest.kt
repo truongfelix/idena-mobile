@@ -326,17 +326,17 @@ class SocialTest {
     fun theStatusDotFollowsTheNodeAndTheScan() {
         val node = NodeView(peers = 5, syncing = false, currentBlock = 1_000, highestBlock = 1_000, validation = false)
         val done = SocialCache(low = SOCIAL_FIRST_BLOCK, high = 11_000_000, posts = emptyList(), authors = emptyMap(), authorsHeight = 11_000_000)
-        assertEquals(ScanState(ScanHealth.UpToDate, "Up to date"), scanState(node, true, 11_000_000, done))
-        assertEquals("a few blocks behind is still up to date", ScanHealth.UpToDate, scanState(node, true, 11_000_000L + UP_TO_DATE_LAG, done).health)
-        assertEquals(ScanState(ScanHealth.Behind, "4 blocks behind"), scanState(node, true, 11_000_004, done))
-        assertEquals(ScanState(ScanHealth.Down, "No peers"), scanState(node.copy(peers = 0), true, 11_000_000, done))
-        assertEquals(ScanHealth.Down, scanState(null, true, null, done).health)
-        assertEquals(ScanHealth.Behind, scanState(node.copy(syncing = true), true, 11_000_000, done).health)
-        assertEquals(ScanHealth.Off, scanState(node.copy(validation = true), true, 11_000_000, done).health)
-        assertEquals(ScanState(ScanHealth.Off, "Scan off"), scanState(node, false, 11_000_100, done))
-        assertEquals(ScanState(ScanHealth.Behind, "Starting the scan"), scanState(node, true, 11_000_000, null))
+        assertEquals(BarState(Health.Good, "Up to date"), scanState(node, true, 11_000_000, done))
+        assertEquals("a few blocks behind is still up to date", Health.Good, scanState(node, true, 11_000_000L + UP_TO_DATE_LAG, done).health)
+        assertEquals(BarState(Health.Warn, "4 blocks behind"), scanState(node, true, 11_000_004, done))
+        assertEquals(BarState(Health.Bad, "No peers"), scanState(node.copy(peers = 0), true, 11_000_000, done))
+        assertEquals(Health.Bad, scanState(null, true, null, done).health)
+        assertEquals(Health.Warn, scanState(node.copy(syncing = true), true, 11_000_000, done).health)
+        assertEquals(Health.Off, scanState(node.copy(validation = true), true, 11_000_000, done).health)
+        assertEquals(BarState(Health.Off, "Scan off"), scanState(node, false, 11_000_100, done))
+        assertEquals(BarState(Health.Warn, "Starting the scan"), scanState(node, true, 11_000_000, null))
         val half = done.copy(low = SOCIAL_FIRST_BLOCK + (11_000_000 - SOCIAL_FIRST_BLOCK) / 2)
-        assertEquals(ScanState(ScanHealth.Behind, "Reading older posts: 50%"), scanState(node, true, 11_000_000, half))
+        assertEquals(BarState(Health.Warn, "Reading older posts: 50%"), scanState(node, true, 11_000_000, half))
     }
 
     @Test

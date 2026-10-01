@@ -30,11 +30,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -42,8 +39,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -60,7 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -69,7 +63,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -272,38 +265,24 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
     if (info) ScanInfoDialog(model) { info = false }
 }
 
-/** The color of each status: green up to date, orange behind, red without node or peers, grey off. */
-@Composable
-private fun ScanHealth.color(): Color = when (this) {
-    ScanHealth.UpToDate -> Color(0xFF2E9D4A)
-    ScanHealth.Behind -> Color(0xFFF08C00)
-    ScanHealth.Down -> Color(0xFFD93025)
-    ScanHealth.Off -> MaterialTheme.colorScheme.outline
-}
-
 /**
  * The status bar at the top of the tab, always one line high so that the list under it never moves: a
- * colored dot ([ScanState]), the paid action while it runs or else the status, and ⓘ for the details
+ * colored dot ([BarState]), the paid action while it runs or else the status, and ⓘ for the details
  * (also a tap on the bar). [onBack], on a thread or a profile, adds Back before it.
  */
 @Composable
 private fun StatusBar(model: SocialModel, onBack: (() -> Unit)?, onInfo: () -> Unit) {
-    val status = model.status
-    Row(Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onInfo), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
         onBack?.let { TextButton(onClick = it) { Text("‹ Back") } }
         Spacer(Modifier.width(if (onBack == null) 2.dp else 4.dp))
-        Box(Modifier.size(12.dp).background(status.health.color(), CircleShape))
-        Spacer(Modifier.width(8.dp))
         val action = model.sendStatus
-        Text(
-            action ?: status.label,
+        StatusLine(
+            model.status,
             Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (action != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            text = action ?: model.status.label,
+            textColor = if (action != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            onInfo = onInfo,
         )
-        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Scan details") }
     }
 }
 
@@ -315,7 +294,7 @@ private fun ScanInfoDialog(model: SocialModel, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(14.dp).background(status.health.color(), CircleShape))
+                StatusDot(status.health, size = 14)
                 Spacer(Modifier.width(10.dp))
                 Text(status.label)
             }

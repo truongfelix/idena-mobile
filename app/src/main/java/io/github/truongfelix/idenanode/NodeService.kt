@@ -68,6 +68,8 @@ class NodeService : Service() {
         val dir = NodeSettings.nodeDir(this)
         dir.mkdirs()
         NodeSettings.startErrorFile(this).delete()
+        // The screens count the wait for a first peer from here.
+        runCatching { NodeSettings.startedAtFile(this).writeText(System.currentTimeMillis().toString()) }
         val error = Mobile.start(dir.absolutePath, NodeSettings.nodeConfig(this))
         if (error.isNotEmpty()) {
             Log.e(TAG, "Node start failed: $error")

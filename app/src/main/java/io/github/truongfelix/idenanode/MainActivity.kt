@@ -4,13 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
-import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -25,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -78,12 +75,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import kotlin.math.roundToLong
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -110,8 +105,15 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     val social = remember { SocialModel(context.applicationContext, scope) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val notices = remember { SnackbarHostState() }
+    // The node's state, for the Node tab and the status bar of the title row (both tabs).
+    val node = remember { NodeModel(context.applicationContext) }
+    var nodeInfo by remember { mutableStateOf(false) }
     LaunchedEffect(social) { social.run(lifecycle) }
-    LaunchedEffect(tab) { social.visible = tab == MainTab.Social }
+    LaunchedEffect(node) { node.run(lifecycle) }
+    LaunchedEffect(tab) {
+        social.visible = tab == MainTab.Social
+        node.nodeTabVisible = tab == MainTab.Node
+    }
     // Back on the Social tab, once it has nothing to close, shows the Node tab instead of leaving the app
     // (the Social tab's own Back, composed later, comes first).
     BackHandler(enabled = tab == MainTab.Social) { tab = MainTab.Node }
@@ -135,7 +137,12 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
         Box(modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                Text("Idena", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall)
+                // The title and the node's status, one line high on both tabs.
+                Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Idena", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.width(16.dp))
+                    StatusLine(node.bar, Modifier.weight(1f)) { nodeInfo = true }
+                }
                 val unread = social.unread.size
                 TabRow(selectedTabIndex = tab.ordinal) {
                     MainTab.entries.forEach {
@@ -146,14 +153,15 @@ private fun MainScreen(modifier: Modifier = Modifier) {
                         })
                     }
                 }
-                // Each tab reads the node only while it is shown, but for the Social notifications.
+                // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
                 when (tab) {
-                    MainTab.Node -> NodeScreen(Modifier.weight(1f))
+                    MainTab.Node -> NodeScreen(node, Modifier.weight(1f))
                     MainTab.Social -> SocialScreen(social, Modifier.weight(1f))
                 }
             }
             SnackbarHost(notices, Modifier.align(Alignment.BottomCenter))
         }
+        if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
     }
 }
 
@@ -178,41 +186,16 @@ fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(), content = content)
 }
 
-/** What the screen shows, refreshed every few seconds while it is visible. */
-private data class ScreenState(
-    val syncEnabled: Boolean = false,
-    val hasKey: Boolean = false,
-    val keyAddress: String? = null,
-    val status: NodeStatus? = null,
-    val startError: String? = null,
-    val network: String = "",
-    val ignoringBatteryOptimizations: Boolean = true,
-    /** Blocks per second over the last minute while syncing; null until measured. */
-    val blocksPerSecond: Double? = null,
-)
-
 @Composable
-private fun NodeScreen(modifier: Modifier = Modifier) {
+private fun NodeScreen(model: NodeModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-    var state by remember { mutableStateOf(ScreenState()) }
+    // The model reads the node every 3 s while this tab is shown.
+    val state = model.state
     var network by remember { mutableStateOf<NetworkRewards?>(null) }
-    val syncRate = remember { SyncRate() }
 
-    suspend fun refresh() {
-        val next = withContext(Dispatchers.IO) { readState(context) }
-        state = next.copy(blocksPerSecond = next.status?.takeIf { it.syncing }?.let { syncRate.update(it.currentBlock) })
-    }
-
-    LaunchedEffect(Unit) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                refresh()
-                delay(3_000)
-            }
-        }
-    }
+    suspend fun refresh() = model.refresh()
 
     // The APY's network data reads every identity: every 10 minutes, once the node is synced.
     LaunchedEffect(Unit) {
@@ -250,15 +233,20 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
             } else {
                 NodeService.stop(context)
             }
-            state = state.copy(syncEnabled = enabled, startError = null)
+            model.syncChanged(enabled)
         }
+        // The epoch and the flips are current once the fast sync has downloaded the state. Within a day of
+        // the validation, or during it, its card comes first.
+        val validation = state.status?.takeUnless { it.accountPending }
+        val validationFirst = validation != null &&
+            validationIsClose(Instant.now(), parseValidationTime(validation.nextValidation), validation.period)
+        if (validationFirst) ValidationCard(validation!!, showCountdown = true)
         AccountCard(state, network)
         state.status?.takeUnless { it.accountPending }?.let { WalletCard(it) { scope.launch { refresh() } } }
         state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
-        // The epoch and the flips are current once the fast sync has downloaded the state.
-        state.status?.takeUnless { it.accountPending }?.let { ValidationCard(it) }
+        if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
         state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
-        if (!state.ignoringBatteryOptimizations) BackgroundCard()
+        if (backgroundIssue(state.ignoringBatteryOptimizations, state.autostart) != null) BackgroundCard(state)
         TextButton(onClick = { context.startActivity(Intent(context, CeremonyActivity::class.java)) }) {
             Text("Practice validation")
         }
@@ -279,75 +267,15 @@ private fun NodeScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** The sync speed over the last minute, from the blocks the screen reads every few seconds. */
-private class SyncRate {
-    private val samples = ArrayDeque<Pair<Long, Long>>()
-
-    /** Adds the current block; returns blocks per second, or null until 10 s are measured. */
-    fun update(block: Long): Double? {
-        val now = SystemClock.elapsedRealtime()
-        // A lower block means the node started over: the old samples no longer apply.
-        if (samples.isNotEmpty() && block < samples.last().second) samples.clear()
-        samples.addLast(now to block)
-        while (samples.size > 2 && now - samples[1].first >= 60_000) samples.removeFirst()
-        val (firstTime, firstBlock) = samples.first()
-        val seconds = (now - firstTime) / 1000.0
-        return if (seconds >= 10) (block - firstBlock) / seconds else null
-    }
-}
-
-/** "about 1 h 30 min", "about 12 min", "under a minute". */
-private fun duration(seconds: Double): String {
-    val minutes = (seconds / 60).roundToLong()
-    return when {
-        minutes < 1 -> "under a minute"
-        minutes < 60 -> "about $minutes min"
-        else -> "about ${minutes / 60} h ${"%02d".format(minutes % 60)} min"
-    }
-}
-
-private fun readState(context: Context): ScreenState {
-    val hasKey = NodeSettings.hasKey(context)
-    val status = try {
-        NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).status()
-    } catch (e: Exception) {
-        null
-    }
-    val errorFile = NodeSettings.startErrorFile(context)
-    return ScreenState(
-        syncEnabled = NodeSettings.isSyncEnabled(context),
-        hasKey = hasKey,
-        // Reading the key needs the node library; only when the node does not answer.
-        keyAddress = if (status == null && hasKey) {
-            Mobile.address(NodeSettings.nodeDir(context).absolutePath).ifEmpty { null }
-        } else {
-            null
-        },
-        status = status,
-        startError = if (errorFile.exists()) errorFile.readText() else null,
-        network = networkName(context),
-        ignoringBatteryOptimizations = context.getSystemService(PowerManager::class.java)
-            .isIgnoringBatteryOptimizations(context.packageName),
-    )
-}
-
-private fun networkName(context: Context): String {
-    val cm = context.getSystemService(ConnectivityManager::class.java)
-    val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return "Offline"
-    return when {
-        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
-        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile data"
-        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
-        else -> "Other"
-    }
-}
-
+/**
+ * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
+ * never move. The block, peers, speed and network are in the title row's details (ⓘ).
+ */
 @Composable
 private fun NodeCard(state: ScreenState, onSyncChange: (Boolean) -> Unit) {
     val status = state.status
-    val format = NumberFormat.getIntegerInstance()
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Sync", style = MaterialTheme.typography.titleMedium)
@@ -361,6 +289,7 @@ private fun NodeCard(state: ScreenState, onSyncChange: (Boolean) -> Unit) {
                             else -> "Stopped"
                         },
                         style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
                     )
                 }
                 // Without a key the node would create a random one that the app cannot back up.
@@ -370,35 +299,15 @@ private fun NodeCard(state: ScreenState, onSyncChange: (Boolean) -> Unit) {
                     enabled = state.hasKey || state.syncEnabled,
                 )
             }
-            state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Field("Network", state.network)
-            if (status != null) {
-                Field("Peers", status.peers.toString())
-                val highest = maxOf(status.highestBlock, status.currentBlock)
-                Field(
-                    "Block",
-                    if (status.syncing && status.highestBlock > 0) {
-                        "${format.format(status.currentBlock)} / ${format.format(highest)}"
-                    } else {
-                        format.format(status.currentBlock)
-                    },
-                )
-                val speed = state.blocksPerSecond
-                if (status.syncing && status.highestBlock > 0 && speed != null && speed > 0) {
-                    Field("Speed", "${format.format(speed.roundToLong())} blocks/s")
-                    Field("Time left", duration((status.highestBlock - status.currentBlock).coerceAtLeast(0) / speed))
-                }
-                if (status.syncing && status.highestBlock > 0) {
+            Box(Modifier.fillMaxWidth().height(4.dp)) {
+                if (status != null && status.syncing && status.highestBlock > 0) {
                     LinearProgressIndicator(
-                        progress = { status.currentBlock.toFloat() / highest.toFloat() },
+                        progress = { status.currentBlock.toFloat() / maxOf(status.highestBlock, status.currentBlock).toFloat() },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (status.wrongTime) {
-                    Text("The phone's clock is wrong: fix the time for the node to work.",
-                        color = MaterialTheme.colorScheme.error)
-                }
             }
+            state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
@@ -532,25 +441,23 @@ private fun KeyCard(state: ScreenState, onImport: (String, String, (String) -> U
 }
 
 @SuppressLint("BatteryLife")
+/** Shown while a setting may stop the node with the screen off (battery optimization, MIUI's Autostart). */
 @Composable
-private fun BackgroundCard() {
-    val context = LocalContext.current
+private fun BackgroundCard(state: ScreenState) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Running in the background", style = MaterialTheme.typography.titleMedium)
-            Text("Android may pause the node when the screen is off. Allow the app to run in the background:")
-            Button(onClick = {
-                context.startActivity(
-                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")),
-                )
-            }) { Text("Allow background running") }
+            Text("The node may stop with the screen off", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+            BackgroundSettings(state)
         }
     }
 }
 
-/** The next validation, and the flips still to make with a link to the web app to make them. */
+/**
+ * The next validation, and the flips still to make with a link to the web app to make them; with
+ * [showCountdown] (the card comes first, within a day of it), the time left in its title.
+ */
 @Composable
-private fun ValidationCard(status: NodeStatus) {
+private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
     val context = LocalContext.current
     val start = parseValidationTime(status.nextValidation)
     val date = start?.let {
@@ -560,7 +467,12 @@ private fun ValidationCard(status: NodeStatus) {
     } ?: status.nextValidation
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Next validation", style = MaterialTheme.typography.titleMedium)
+            val title = when {
+                periodText(status.period) != null -> "Validation · now"
+                showCountdown && start != null -> "Next validation · ${countdown(Instant.now(), start)}"
+                else -> "Next validation"
+            }
+            Text(title, style = MaterialTheme.typography.titleMedium)
             val answersSent = NodeSettings.answersSentFile(context, status.epoch, short = false).exists()
             Field(
                 "My task",

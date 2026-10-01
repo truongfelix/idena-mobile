@@ -34,7 +34,10 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
 private fun readNode(rpc: NodeRpc): NodeView {
     val sync = rpc.call("bcn_syncing") as JSONObject
     val peers = (rpc.call("net_peers") as? JSONArray)?.length() ?: 0
-    return NodeView(peers, sync.optBoolean("syncing"), sync.optLong("currentBlock"), sync.optLong("highestBlock"), rpc.ceremony().period != "None")
+    return NodeView(
+        peers, sync.optBoolean("syncing"), sync.optLong("currentBlock"), sync.optLong("highestBlock"),
+        validation = rpc.ceremony().period != "None", wrongTime = sync.optBoolean("wrongTime"),
+    )
 }
 
 /** A page opened over the tab's lists; Back closes the last one. */
@@ -128,8 +131,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         private set
 
     /** The status bar's dot and line. */
-    val status: ScanState
-        get() = if (node == null && !nodeFailed) ScanState(ScanHealth.Off, "Connecting to the node…") else scanState(node, scanning, head, cache)
+    val status: BarState
+        get() = if (node == null && !nodeFailed) BarState(Health.Off, "Connecting to the node…") else scanState(node, scanning, head, cache)
     var scanning by mutableStateOf(SocialStore.isScanning(context))
         private set
     var myAddress by mutableStateOf<String?>(null)

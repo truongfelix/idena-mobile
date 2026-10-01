@@ -610,14 +610,15 @@ data class SocialCache(
     }
 }
 
-/** The node as the Social tab reads it at each scan: its peers, its sync, and whether a validation runs. */
-data class NodeView(val peers: Int, val syncing: Boolean, val currentBlock: Long, val highestBlock: Long, val validation: Boolean)
-
-/** How the Social tab stands, shown as a colored dot: up to date, behind, down (node or peers), or off. */
-enum class ScanHealth { UpToDate, Behind, Down, Off }
-
-/** The dot and the short line of the Social tab's status bar. */
-data class ScanState(val health: ScanHealth, val label: String)
+/** The node as the app reads it: its peers, its sync, whether a validation runs, and whether the phone's clock is wrong. */
+data class NodeView(
+    val peers: Int,
+    val syncing: Boolean,
+    val currentBlock: Long,
+    val highestBlock: Long,
+    val validation: Boolean,
+    val wrongTime: Boolean = false,
+)
 
 /** Blocks the scan may lag the node's head and still be up to date: a block comes about every 20 s. */
 const val UP_TO_DATE_LAG = 3
@@ -627,17 +628,17 @@ const val UP_TO_DATE_LAG = 3
  * without the node or its peers; off while the scan is off or a validation runs; behind while the node
  * syncs, the posts are more than [UP_TO_DATE_LAG] blocks behind its head, or the history is not read yet.
  */
-fun scanState(node: NodeView?, scanning: Boolean, head: Long?, cache: SocialCache?): ScanState {
-    if (node == null) return ScanState(ScanHealth.Down, "The node does not answer")
-    if (node.peers == 0) return ScanState(ScanHealth.Down, "No peers")
-    if (node.validation) return ScanState(ScanHealth.Off, "Paused during the validation")
-    if (node.syncing) return ScanState(ScanHealth.Behind, "The node is syncing")
-    if (cache == null) return if (scanning) ScanState(ScanHealth.Behind, "Starting the scan") else ScanState(ScanHealth.Off, "Scan off")
-    if (!scanning) return ScanState(ScanHealth.Off, "Scan off")
+fun scanState(node: NodeView?, scanning: Boolean, head: Long?, cache: SocialCache?): BarState {
+    if (node == null) return BarState(Health.Bad, "The node does not answer")
+    if (node.peers == 0) return BarState(Health.Bad, "No peers")
+    if (node.validation) return BarState(Health.Off, "Paused during the validation")
+    if (node.syncing) return BarState(Health.Warn, "The node is syncing")
+    if (cache == null) return if (scanning) BarState(Health.Warn, "Starting the scan") else BarState(Health.Off, "Scan off")
+    if (!scanning) return BarState(Health.Off, "Scan off")
     val behind = (head ?: cache.authorsHeight) - cache.authorsHeight
-    if (behind > UP_TO_DATE_LAG) return ScanState(ScanHealth.Behind, if (behind == 1L) "1 block behind" else "$behind blocks behind")
-    if (!cache.historyDone) return ScanState(ScanHealth.Behind, "Reading older posts: ${(cache.scannedShare * 100).toInt()}%")
-    return ScanState(ScanHealth.UpToDate, "Up to date")
+    if (behind > UP_TO_DATE_LAG) return BarState(Health.Warn, if (behind == 1L) "1 block behind" else "$behind blocks behind")
+    if (!cache.historyDone) return BarState(Health.Warn, "Reading older posts: ${(cache.scannedShare * 100).toInt()}%")
+    return BarState(Health.Good, "Up to date")
 }
 
 /** What the scan needs from the node. */

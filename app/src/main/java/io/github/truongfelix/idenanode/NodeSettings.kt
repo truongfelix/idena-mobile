@@ -24,6 +24,13 @@ object NodeSettings {
     /** The last error of a node start, written by the node process for the screen. */
     fun startErrorFile(context: Context): File = File(nodeDir(context), "start_error.txt")
 
+    /** When the service last started the node (milliseconds since 1970), written by the service. */
+    fun startedAtFile(context: Context): File = File(nodeDir(context), "started_at")
+
+    /** How long ago the service started the node; null when unknown. */
+    fun runningForMs(context: Context): Long? =
+        runCatching { System.currentTimeMillis() - startedAtFile(context).readText().trim().toLong() }.getOrNull()?.takeIf { it >= 0 }
+
     private fun apiKeyFile(context: Context) = File(nodeDir(context), "rpc_key")
     private fun syncEnabledFile(context: Context) = File(nodeDir(context), "sync_enabled")
 
