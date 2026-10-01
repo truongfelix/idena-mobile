@@ -13,11 +13,13 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +31,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,6 +40,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -97,6 +105,25 @@ private enum class MainTab(val title: String) { Node("Node"), Social("Social") }
 private fun MainScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.Node) }
+    // The Social tab's state lives while the app runs, so that its notifications work from the Node tab.
+    val scope = rememberCoroutineScope()
+    val social = remember { SocialModel(context.applicationContext, scope) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val notices = remember { SnackbarHostState() }
+    LaunchedEffect(social) { social.run(lifecycle) }
+    LaunchedEffect(tab) { social.visible = tab == MainTab.Social }
+    // Back on the Social tab, once it has nothing to close, shows the Node tab instead of leaving the app
+    // (the Social tab's own Back, composed later, comes first).
+    BackHandler(enabled = tab == MainTab.Social) { tab = MainTab.Node }
+    LaunchedEffect(social) {
+        for (notice in social.notices) {
+            val result = notices.showSnackbar(notice, actionLabel = "View", withDismissAction = true, duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) {
+                tab = MainTab.Social
+                social.showActivity()
+            }
+        }
+    }
 
     // An app update or a force stop ends the node without switching sync off: start it again. The
     // service ignores the start when the node already runs.
@@ -106,18 +133,26 @@ private fun MainScreen(modifier: Modifier = Modifier) {
 
     // The tabs' text a bit larger than Material's defaults (the validation screens keep them).
     MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
-        Column(modifier.fillMaxSize()) {
-            Text("Idena", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall)
-            TabRow(selectedTabIndex = tab.ordinal) {
-                MainTab.entries.forEach {
-                    Tab(selected = tab == it, onClick = { tab = it }, text = { Text(it.title) })
+        Box(modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                Text("Idena", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall)
+                val unread = social.unread.size
+                TabRow(selectedTabIndex = tab.ordinal) {
+                    MainTab.entries.forEach {
+                        Tab(selected = tab == it, onClick = { tab = it }, text = {
+                            if (it == MainTab.Social && unread > 0) {
+                                BadgedBox(badge = { Badge { Text("$unread") } }) { Text(it.title) }
+                            } else Text(it.title)
+                        })
+                    }
+                }
+                // Each tab reads the node only while it is shown, but for the Social notifications.
+                when (tab) {
+                    MainTab.Node -> NodeScreen(Modifier.weight(1f))
+                    MainTab.Social -> SocialScreen(social, Modifier.weight(1f))
                 }
             }
-            // Each tab reads the node only while it is shown.
-            when (tab) {
-                MainTab.Node -> NodeScreen(Modifier.weight(1f))
-                MainTab.Social -> SocialScreen(Modifier.weight(1f))
-            }
+            SnackbarHost(notices, Modifier.align(Alignment.BottomCenter))
         }
     }
 }

@@ -172,6 +172,171 @@ class SocialTest {
         assertEquals("the tip on my reply", 2L, items[0].amount)
         assertEquals("my reply was tipped", "my reply to b", items[0].what.message)
         assertEquals("every item opens post 1's thread", setOf(1L), items.map { it.threadId }.toSet())
+        assertEquals("at the answer, or at what was liked or tipped", listOf(5L, 8L, 6L, 1L, 2L), items.map { it.focusId })
+    }
+
+    @Test
+    fun aProfileListsWhatItsIdentityDid() {
+        val posts = listOf(
+            post("p1", a, "a's post", 100),
+            post("p2", b, "b's reply", 110, replyTo = "1"),
+            post("p3", a, LIKE, 120, replyTo = "2", channel = "discuss:2"),
+            post("p4", a, "a's comment on b's reply", 130, replyTo = "2", channel = "discuss:2"),
+            post("p5", c, "c's comment", 140, replyTo = "2", channel = "discuss:2"),
+            post("p6", a, "a answers c's comment", 150, replyTo = "5", channel = "discuss:2"),
+            post("p7", b, LIKE, 160, replyTo = "1"),
+            post("p8", a, "a's reply with media", 170, replyTo = "1", hasMedia = true),
+            post("p9", b, "b's post", 180),
+            post("p10", a, "a's second post", 190),
+        )
+        val authors = posts.mapIndexed { i, p -> (i + 1).toLong() to p.author }.toMap()
+        val tips = listOf(
+            tip("t1", b, "1", "3", "3", 200),
+            tip("t2", a, "9", "2", "2", 210),
+            tip("t3", c, "5", "1", "1", 220),
+        )
+        val profile = socialProfile(socialFeed(posts, authors, tips), a.uppercase().replace("0X", "0x"))
+        assertEquals(a, profile.address)
+        assertEquals("newest first", listOf(10L, 1L), profile.posts.map { it.node.id })
+        assertEquals(listOf(8L), profile.replies.map { it.node.id })
+        assertEquals("p1", profile.replies[0].parent!!.hash)
+        assertEquals(listOf(6L, 4L), profile.comments.map { it.node.id })
+        assertEquals("a comment answering a comment", "p5", profile.comments[0].parent!!.hash)
+        assertEquals("a comment on the reply", "p2", profile.comments[1].parent!!.hash)
+        assertEquals("what a liked", listOf("p2"), profile.likes.map { it.node.call.hash })
+        assertEquals("p3", profile.likes[0].like!!.hash)
+        assertEquals(listOf(8L), profile.media.map { it.node.id })
+        assertEquals("tips made and received; c's tip on c's own comment is not a's", listOf("t2", "t1"), profile.tips.map { it.tip!!.hash })
+        assertEquals(1, profile.likesReceived)
+        assertEquals(3L, profile.tipsReceived)
+        assertEquals(2L, profile.tipsGiven)
+        assertEquals("every entry opens post 1's thread or its own", setOf(1L, 10L, 9L), (profile.posts + profile.comments + profile.tips).map { it.threadId }.toSet())
+    }
+
+    @Test
+    fun aProfileWithoutPostsIsEmpty() {
+        val profile = socialProfile(socialFeed(listOf(post("p1", a, "a's post", 100)), mapOf(1L to a)), c)
+        assertTrue(profile.posts.isEmpty() && profile.replies.isEmpty() && profile.comments.isEmpty())
+        assertTrue(profile.likes.isEmpty() && profile.tips.isEmpty() && profile.media.isEmpty())
+        assertEquals(0, profile.likesReceived)
+        assertEquals(0L, profile.tipsReceived + profile.tipsGiven)
+        assertTrue("an empty feed", socialProfile(emptyList(), a).posts.isEmpty())
+    }
+
+    @Test
+    fun theProfileIdentityComesFromDnaIdentity() {
+        val human = ProfileIdentity.fromJson(JSONObject().put("state", "Human").put("age", 12).put("stake", "1234.5678"))
+        assertEquals("Human", human.status)
+        assertEquals(12, human.age)
+        assertEquals(java.math.BigDecimal("1234.5678"), human.stake)
+        // An address without an identity, as the node answers it.
+        val none = ProfileIdentity.fromJson(JSONObject().put("state", "Undefined").put("age", 0).put("stake", "0"))
+        assertEquals("Not validated", none.status)
+        assertEquals(0, none.stake.signum())
+    }
+
+    @Test
+    fun theLatestActivityPutsTheBusiestThreadFirst() {
+        val posts = listOf(
+            post("p1", a, "old post", 100),
+            post("p2", b, "newer post", 200),
+            post("p3", c, "a reply to the old post", 300, replyTo = "1"),
+            post("p4", a, "a comment under it", 400, replyTo = "3", channel = "discuss:3"),
+            post("p5", c, "newest post", 450),
+        )
+        val authors = posts.mapIndexed { i, p -> (i + 1).toLong() to p.author }.toMap()
+        val feed = socialFeed(posts, authors, listOf(tip("t1", b, "2", "1", "1", 500)))
+        assertEquals(listOf(5L, 2L, 1L), sortFeed(feed, FeedSort.Newest).map { it.id })
+        assertEquals("post 2 was tipped last, post 1 commented on before", listOf(2L, 5L, 1L), sortFeed(feed, FeedSort.Activity).map { it.id })
+        assertEquals(400L, lastActivityHeight(feed.first { it.id == 1L }))
+        assertTrue(sortFeed(emptyList(), FeedSort.Activity).isEmpty())
+    }
+
+    private fun activity(kind: ActivityKind, actor: String, height: Long, amount: Long? = null) =
+        ActivityItem(kind, actor, height, 0, height, 1, 1, post("p1", a, "my post", 100), amount = amount)
+
+    @Test
+    fun onlyNewActivityOfTheKindsOnNotifies() {
+        val items = listOf(
+            activity(ActivityKind.Tip, b, 300, amount = 5),
+            activity(ActivityKind.Comment, c, 250),
+            activity(ActivityKind.Like, b, 200),
+            activity(ActivityKind.Reply, c, 150),
+        )
+        assertEquals(listOf(300L, 250L), newActivity(items, 200, NotifyKind.entries.toSet()).map { it.height })
+        assertEquals("tips off", listOf(250L, 200L, 150L), newActivity(items, 100, setOf(NotifyKind.Likes, NotifyKind.Comments)).map { it.height })
+        assertTrue("nothing on", newActivity(items, 0, emptySet()).isEmpty())
+        assertTrue("nothing after", newActivity(items, 300, NotifyKind.entries.toSet()).isEmpty())
+    }
+
+    @Test
+    fun theNoticeSaysWhatHappened() {
+        val short = { address: String -> address.take(6) }
+        assertEquals("0xbbbb tipped you 5 iDNA", noticeText(listOf(activity(ActivityKind.Tip, b, 300, amount = 5)), short))
+        assertEquals("0xcccc commented on your post", noticeText(listOf(activity(ActivityKind.Comment, c, 300)), short))
+        assertEquals(
+            "4 new on your posts: 2 likes, 1 reply, 1 tip",
+            noticeText(
+                listOf(
+                    activity(ActivityKind.Like, b, 4), activity(ActivityKind.Tip, c, 3, amount = 1),
+                    activity(ActivityKind.Like, c, 2), activity(ActivityKind.Reply, c, 1),
+                ),
+                short,
+            ),
+        )
+    }
+
+    @Test
+    fun aPostWithAnImageIsWrittenAsIdenaSocialWritesIt() {
+        assertEquals(
+            "{\"message\":\"look\",\"media\":[\"ipfs://bafkreiabc\"],\"mediaType\":[\"image/webp\"]}",
+            makePostArgument("look", media = "ipfs://bafkreiabc", mediaType = "image/webp"),
+        )
+        assertEquals(
+            "{\"message\":\"\",\"replyToPostId\":\"7\",\"channelId\":\"discuss:7\",\"media\":[\"ipfs://bafkreiabc\"],\"mediaType\":[\"image/webp\"]}",
+            makePostArgument("", 7, "discuss:7", "ipfs://bafkreiabc", "image/webp"),
+        )
+        // The app reads it back as a post with media on IPFS.
+        val parsed = PostCall.parse("0x01", 1, 1, 0, a, hex(makePostArgument("ipfs://bafkreitext", media = "ipfs://bafkreiimg", mediaType = "image/webp")))!!
+        assertTrue(parsed.hasMedia)
+        assertEquals("ipfs://bafkreiimg", parsed.media)
+        assertEquals("image/webp", parsed.mediaType)
+        assertEquals("bafkreitext", ipfsCid(parsed.message))
+    }
+
+    @Test
+    fun theStoreToIpfsPayloadHoldsTheCidAndTheSize() {
+        val cid = "bafkreifcg3m5p24psikerh4eqi3yeyyfbkvyrzukitfi2s3o2p4wwrlzpe"
+        // Expected bytes from Python's base64.b32decode: CID v1, raw, sha2-256, 32 bytes.
+        assertEquals("0x01551220a236d9d7eb8f9214489f8482378263050aab88e68a44ca8d4b6ed3f96b457979", bytesToHex(cidBytes(cid)))
+        assertEquals(
+            "0x0a2401551220a236d9d7eb8f9214489f8482378263050aab88e68a44ca8d4b6ed3f96b45797910f0a204",
+            bytesToHex(storeToIpfsPayload(cid, 70_000)),
+        )
+        assertTrue(runCatching { cidBytes("QmYQEa2YYEcFRAnxuaVS5jBYKPQQFricdTHjtDMr3Ma2M3") }.isFailure)
+    }
+
+    @Test
+    fun storingOnIpfsCostsAFifthOfItsSizeInTransactionBytes() {
+        // 10^14 per gas (0.0001 iDNA): 10 gas per byte for 150 bytes plus a fifth of 50,000.
+        assertEquals(java.math.BigDecimal("10.15"), storeToIpfsFeeEstimate(java.math.BigDecimal("100000000000000"), 50_000).stripTrailingZeros())
+    }
+
+    @Test
+    fun theStatusDotFollowsTheNodeAndTheScan() {
+        val node = NodeView(peers = 5, syncing = false, currentBlock = 1_000, highestBlock = 1_000, validation = false)
+        val done = SocialCache(low = SOCIAL_FIRST_BLOCK, high = 11_000_000, posts = emptyList(), authors = emptyMap(), authorsHeight = 11_000_000)
+        assertEquals(ScanState(ScanHealth.UpToDate, "Up to date"), scanState(node, true, 11_000_000, done))
+        assertEquals("a few blocks behind is still up to date", ScanHealth.UpToDate, scanState(node, true, 11_000_000L + UP_TO_DATE_LAG, done).health)
+        assertEquals(ScanState(ScanHealth.Behind, "4 blocks behind"), scanState(node, true, 11_000_004, done))
+        assertEquals(ScanState(ScanHealth.Down, "No peers"), scanState(node.copy(peers = 0), true, 11_000_000, done))
+        assertEquals(ScanHealth.Down, scanState(null, true, null, done).health)
+        assertEquals(ScanHealth.Behind, scanState(node.copy(syncing = true), true, 11_000_000, done).health)
+        assertEquals(ScanHealth.Off, scanState(node.copy(validation = true), true, 11_000_000, done).health)
+        assertEquals(ScanState(ScanHealth.Off, "Scan off"), scanState(node, false, 11_000_100, done))
+        assertEquals(ScanState(ScanHealth.Behind, "Starting the scan"), scanState(node, true, 11_000_000, null))
+        val half = done.copy(low = SOCIAL_FIRST_BLOCK + (11_000_000 - SOCIAL_FIRST_BLOCK) / 2)
+        assertEquals(ScanState(ScanHealth.Behind, "Reading older posts: 50%"), scanState(node, true, 11_000_000, half))
     }
 
     @Test

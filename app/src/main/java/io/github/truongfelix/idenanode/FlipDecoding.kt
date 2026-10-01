@@ -44,6 +44,19 @@ fun hexToBytes(hex: String): ByteArray {
     }
 }
 
+/** [bytes] as "0x0a1b...". */
+fun bytesToHex(bytes: ByteArray): String {
+    val digits = "0123456789abcdef"
+    val out = CharArray(2 + bytes.size * 2)
+    out[0] = '0'
+    out[1] = 'x'
+    bytes.forEachIndexed { i, b ->
+        out[2 + 2 * i] = digits[(b.toInt() shr 4) and 0xf]
+        out[3 + 2 * i] = digits[b.toInt() and 0xf]
+    }
+    return String(out)
+}
+
 /** A minimal RLP decoder (Ethereum's recursive length prefix): byte strings and lists. */
 object Rlp {
     sealed class Item {

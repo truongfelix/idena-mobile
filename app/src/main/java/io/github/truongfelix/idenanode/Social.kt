@@ -286,11 +286,29 @@ private const val LIKE_LEVEL = 3
 /** The number of replies under [post], at every depth. */
 fun replyCount(post: SocialPost): Int = post.replies.sumOf { 1 + replyCount(it) }
 
+/** The block of the newest thing in [post]'s thread: the post, a reply, a comment, a like or a tip. */
+fun lastActivityHeight(post: SocialPost): Long = maxOf(
+    post.call.height,
+    post.likeCalls.maxOfOrNull { it.height } ?: 0,
+    post.tips.maxOfOrNull { it.height } ?: 0,
+    post.replies.maxOfOrNull { lastActivityHeight(it) } ?: 0,
+)
+
+/** How the feed is ordered, as idena.social offers it: by the newest posts, or by the latest activity. */
+enum class FeedSort { Newest, Activity }
+
+/** [feed] (newest posts first) in [sort]'s order; threads with activity in the same block keep their order. */
+fun sortFeed(feed: List<SocialPost>, sort: FeedSort): List<SocialPost> = when (sort) {
+    FeedSort.Newest -> feed
+    FeedSort.Activity -> feed.sortedByDescending { lastActivityHeight(it) }
+}
+
 enum class ActivityKind { Like, Reply, Comment, Tip }
 
 /**
  * Something another identity did on one of [me]'s posts, replies or comments: [what] is that post,
- * [answer] the reply or comment made, [amount] the tip; [threadId] is the thread to open.
+ * [answer] the reply or comment made, [amount] the tip; [threadId] is the thread to open, at [focusId]
+ * (the answer, or the post liked or tipped).
  */
 data class ActivityItem(
     val kind: ActivityKind,
@@ -299,6 +317,7 @@ data class ActivityItem(
     val index: Int,
     val time: Long,
     val threadId: Long,
+    val focusId: Long,
     val what: PostCall,
     val answer: PostCall? = null,
     val amount: Long? = null,
@@ -312,10 +331,10 @@ fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
     val items = ArrayList<ActivityItem>()
     fun likesAndTips(node: SocialPost, threadId: Long) {
         for (like in node.likeCalls) {
-            if (like.author != me) items += ActivityItem(ActivityKind.Like, like.author, like.height, like.index, like.time, threadId, node.call)
+            if (like.author != me) items += ActivityItem(ActivityKind.Like, like.author, like.height, like.index, like.time, threadId, node.id, node.call)
         }
         for (tip in node.tips) {
-            if (tip.from != me) items += ActivityItem(ActivityKind.Tip, tip.from, tip.height, tip.index, tip.time, threadId, node.call, amount = tip.validAmount)
+            if (tip.from != me) items += ActivityItem(ActivityKind.Tip, tip.from, tip.height, tip.index, tip.time, threadId, node.id, node.call, amount = tip.validAmount)
         }
     }
     for (post in feed) {
@@ -323,7 +342,7 @@ fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
             likesAndTips(post, post.id)
             for (reply in post.replies) {
                 if (reply.call.author != me) {
-                    items += ActivityItem(ActivityKind.Reply, reply.call.author, reply.call.height, reply.call.index, reply.call.time, post.id, post.call, reply.call)
+                    items += ActivityItem(ActivityKind.Reply, reply.call.author, reply.call.height, reply.call.index, reply.call.time, post.id, reply.id, post.call, reply.call)
                 }
             }
         }
@@ -334,7 +353,7 @@ fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
                     // Comments on the reply itself; those answering another comment count for that comment.
                     val onReply = comment.call.replyTo.isEmpty() || comment.call.replyTo == reply.id.toString()
                     if (onReply && comment.call.author != me) {
-                        items += ActivityItem(ActivityKind.Comment, comment.call.author, comment.call.height, comment.call.index, comment.call.time, post.id, reply.call, comment.call)
+                        items += ActivityItem(ActivityKind.Comment, comment.call.author, comment.call.height, comment.call.index, comment.call.time, post.id, comment.id, reply.call, comment.call)
                     }
                 }
             }
@@ -343,13 +362,159 @@ fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
                 likesAndTips(mine, post.id)
                 for (comment in reply.replies) {
                     if (comment.call.replyTo == mine.id.toString() && comment.call.author != me) {
-                        items += ActivityItem(ActivityKind.Comment, comment.call.author, comment.call.height, comment.call.index, comment.call.time, post.id, mine.call, comment.call)
+                        items += ActivityItem(ActivityKind.Comment, comment.call.author, comment.call.height, comment.call.index, comment.call.time, post.id, comment.id, mine.call, comment.call)
                     }
                 }
             }
         }
     }
     return items.sortedWith(compareByDescending<ActivityItem> { it.height }.thenByDescending { it.index })
+}
+
+/** What can notify the identity, each kind on or off: likes, replies and comments, tips. */
+enum class NotifyKind(val title: String) { Likes("Likes"), Comments("Comments"), Tips("Tips") }
+
+val ActivityKind.notifyKind: NotifyKind
+    get() = when (this) {
+        ActivityKind.Like -> NotifyKind.Likes
+        ActivityKind.Reply, ActivityKind.Comment -> NotifyKind.Comments
+        ActivityKind.Tip -> NotifyKind.Tips
+    }
+
+/** The [items] that are news: in a block after [seenThrough] (the scan's head when last seen), of a kind on in [enabled]. */
+fun newActivity(items: List<ActivityItem>, seenThrough: Long, enabled: Set<NotifyKind>): List<ActivityItem> =
+    items.filter { it.height > seenThrough && it.kind.notifyKind in enabled }
+
+/** What the in-app notice says of [news] (newest first): the one thing done, or how many of each kind. */
+fun noticeText(news: List<ActivityItem>, shortAddress: (String) -> String): String {
+    if (news.size == 1) {
+        val item = news[0]
+        val action = when (item.kind) {
+            ActivityKind.Like -> "liked your post"
+            ActivityKind.Reply -> "replied to your post"
+            ActivityKind.Comment -> "commented on your post"
+            ActivityKind.Tip -> "tipped you ${item.amount} iDNA"
+        }
+        return "${shortAddress(item.actor)} $action"
+    }
+    val counts = news.groupingBy { it.kind.notifyKind }.eachCount()
+    val parts = NotifyKind.entries.mapNotNull { kind ->
+        val n = counts[kind] ?: return@mapNotNull null
+        when (kind) {
+            NotifyKind.Likes -> if (n == 1) "1 like" else "$n likes"
+            NotifyKind.Comments -> if (n == 1) "1 reply" else "$n replies"
+            NotifyKind.Tips -> if (n == 1) "1 tip" else "$n tips"
+        }
+    }
+    return "${news.size} new on your posts: ${parts.joinToString(", ")}"
+}
+
+/**
+ * One entry of a profile's lists: [node] (a post, reply or comment) in the thread of post [threadId],
+ * with what it answers ([parent]: the post of a reply, the reply or comment a comment answers).
+ */
+data class ProfileItem(
+    val node: SocialPost,
+    val threadId: Long,
+    val parent: PostCall?,
+    /** In the likes: the profile's like of [node]. */
+    val like: PostCall? = null,
+    /** In the tips: a tip on [node], made or received by the profile. */
+    val tip: TipCall? = null,
+) {
+    /** The block of what the entry shows: the like, the tip, or else the post itself. */
+    val height: Long
+        get() = like?.height ?: tip?.height ?: node.call.height
+
+    val index: Int
+        get() = like?.index ?: tip?.index ?: node.call.index
+}
+
+/**
+ * What [address] did on idena.social, newest first, as idena.social's profile shows it (Profile.tsx):
+ * its posts, replies and comments, what it liked, its tips (made and received), and its posts with media.
+ */
+data class SocialProfile(
+    val address: String,
+    val posts: List<ProfileItem>,
+    val replies: List<ProfileItem>,
+    val comments: List<ProfileItem>,
+    val likes: List<ProfileItem>,
+    val tips: List<ProfileItem>,
+    val media: List<ProfileItem>,
+    /** The likes on its posts, replies and comments. */
+    val likesReceived: Int,
+    /** The iDNA tipped to it, and by it. */
+    val tipsReceived: Long,
+    val tipsGiven: Long,
+)
+
+/** The profile of [address] in [feed]. */
+fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
+    val me = address.lowercase()
+    val posts = ArrayList<ProfileItem>()
+    val replies = ArrayList<ProfileItem>()
+    val comments = ArrayList<ProfileItem>()
+    val likes = ArrayList<ProfileItem>()
+    val tips = ArrayList<ProfileItem>()
+    val media = ArrayList<ProfileItem>()
+    var likesReceived = 0
+    var tipsReceived = 0L
+    var tipsGiven = 0L
+
+    fun visit(node: SocialPost, threadId: Long, parent: PostCall?, list: MutableList<ProfileItem>) {
+        val own = node.call.author == me
+        if (own) {
+            val item = ProfileItem(node, threadId, parent)
+            list += item
+            if (node.call.hasMedia) media += item
+            likesReceived += node.likes
+        }
+        for (like in node.likeCalls) {
+            if (like.author == me) likes += ProfileItem(node, threadId, parent, like = like)
+        }
+        for (tip in node.tips) {
+            val amount = tip.validAmount ?: 0
+            if (own) tipsReceived += amount
+            if (tip.from == me) tipsGiven += amount
+            if (own || tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
+        }
+    }
+
+    for (post in feed) {
+        visit(post, post.id, null, posts)
+        for (reply in post.replies) {
+            visit(reply, post.id, post.call, replies)
+            val inReply = reply.replies.associateBy { it.id }
+            for (comment in reply.replies) {
+                // A comment answers another comment of the reply, or else the reply.
+                val answered = comment.call.replyTo.toLongOrNull()?.let { inReply[it] }?.call ?: reply.call
+                visit(comment, post.id, answered, comments)
+            }
+        }
+    }
+
+    val newestFirst = compareByDescending<ProfileItem> { it.height }.thenByDescending { it.index }
+    return SocialProfile(
+        me, posts.sortedWith(newestFirst), replies.sortedWith(newestFirst), comments.sortedWith(newestFirst),
+        likes.sortedWith(newestFirst), tips.sortedWith(newestFirst), media.sortedWith(newestFirst),
+        likesReceived, tipsReceived, tipsGiven,
+    )
+}
+
+/** What a profile shows of an identity (dna_identity), as idena.social: its state, age and stake. */
+data class ProfileIdentity(val state: String, val age: Int, val stake: BigDecimal) {
+    /** The state as idena.social names it: "Not validated" for an address without an identity. */
+    val status: String
+        get() = if (state.isEmpty() || state == "Undefined") "Not validated" else state
+
+    companion object {
+        fun fromJson(json: JSONObject) = ProfileIdentity(
+            state = json.optString("state"),
+            age = json.optInt("age"),
+            stake = json.optString("stake").toBigDecimalOrNull() ?: BigDecimal.ZERO,
+        )
+    }
 }
 
 /**
@@ -443,6 +608,36 @@ data class SocialCache(
             )
         }
     }
+}
+
+/** The node as the Social tab reads it at each scan: its peers, its sync, and whether a validation runs. */
+data class NodeView(val peers: Int, val syncing: Boolean, val currentBlock: Long, val highestBlock: Long, val validation: Boolean)
+
+/** How the Social tab stands, shown as a colored dot: up to date, behind, down (node or peers), or off. */
+enum class ScanHealth { UpToDate, Behind, Down, Off }
+
+/** The dot and the short line of the Social tab's status bar. */
+data class ScanState(val health: ScanHealth, val label: String)
+
+/** Blocks the scan may lag the node's head and still be up to date: a block comes about every 20 s. */
+const val UP_TO_DATE_LAG = 3
+
+/**
+ * The status of the Social tab from the node ([node] null when it does not answer) and the scan: down
+ * without the node or its peers; off while the scan is off or a validation runs; behind while the node
+ * syncs, the posts are more than [UP_TO_DATE_LAG] blocks behind its head, or the history is not read yet.
+ */
+fun scanState(node: NodeView?, scanning: Boolean, head: Long?, cache: SocialCache?): ScanState {
+    if (node == null) return ScanState(ScanHealth.Down, "The node does not answer")
+    if (node.peers == 0) return ScanState(ScanHealth.Down, "No peers")
+    if (node.validation) return ScanState(ScanHealth.Off, "Paused during the validation")
+    if (node.syncing) return ScanState(ScanHealth.Behind, "The node is syncing")
+    if (cache == null) return if (scanning) ScanState(ScanHealth.Behind, "Starting the scan") else ScanState(ScanHealth.Off, "Scan off")
+    if (!scanning) return ScanState(ScanHealth.Off, "Scan off")
+    val behind = (head ?: cache.authorsHeight) - cache.authorsHeight
+    if (behind > UP_TO_DATE_LAG) return ScanState(ScanHealth.Behind, if (behind == 1L) "1 block behind" else "$behind blocks behind")
+    if (!cache.historyDone) return ScanState(ScanHealth.Behind, "Reading older posts: ${(cache.scannedShare * 100).toInt()}%")
+    return ScanState(ScanHealth.UpToDate, "Up to date")
 }
 
 /** What the scan needs from the node. */
@@ -541,13 +736,81 @@ fun sendTipArgument(postId: Long, amount: Long): String =
 
 /**
  * The argument of a makePost call, with idena.social's keys in its order: [message], [replyTo] for a
- * reply, a comment or a like, [channel] for a comment or a like inside a reply's discussion.
+ * reply, a comment or a like, [channel] for a comment or a like inside a reply's discussion, and one
+ * [media] ("ipfs://<cid>") of [mediaType].
  */
-fun makePostArgument(message: String, replyTo: Long? = null, channel: String? = null): String = buildString {
+fun makePostArgument(
+    message: String,
+    replyTo: Long? = null,
+    channel: String? = null,
+    media: String? = null,
+    mediaType: String? = null,
+): String = buildString {
     append("{\"message\":").append(jsonString(message))
     replyTo?.let { append(",\"replyToPostId\":").append(jsonString(it.toString())) }
     channel?.let { append(",\"channelId\":").append(jsonString(it)) }
+    if (media != null && mediaType != null) {
+        append(",\"media\":[").append(jsonString(media)).append("],\"mediaType\":[").append(jsonString(mediaType)).append(']')
+    }
     append('}')
+}
+
+/*
+ * Files stored on IPFS, as idena.social does with the node (storeFileToIpfs in asyncUtils.ts): ipfs_add
+ * pins the file on the node, then a storeToIpfs transaction asks the network to keep it. Its fee grows
+ * with the file: idena-go counts a fifth of the file's size as transaction bytes (fee.getTxSizeForFee).
+ */
+
+/** The largest file stored at once: the node takes requests up to 2 MB, and the file goes as hex. */
+const val MAX_IPFS_FILE = 900_000
+
+/** The bytes of a CID string as ipfs_add gives it: version 1, base32 ("b" then RFC 4648 lowercase). */
+fun cidBytes(cid: String): ByteArray {
+    require(cid.length > 1 && cid[0] == 'b') { "not a version 1 CID: $cid" }
+    val alphabet = "abcdefghijklmnopqrstuvwxyz234567"
+    val out = java.io.ByteArrayOutputStream()
+    var buffer = 0
+    var bits = 0
+    for (c in cid.substring(1)) {
+        val value = alphabet.indexOf(c)
+        require(value >= 0) { "not base32: $cid" }
+        buffer = (buffer shl 5) or value
+        bits += 5
+        if (bits >= 8) {
+            bits -= 8
+            out.write((buffer shr bits) and 0xff)
+        }
+    }
+    return out.toByteArray()
+}
+
+/** The payload of a storeToIpfs transaction (ProtoStoreToIpfsAttachment: cid = 1, size = 2). */
+fun storeToIpfsPayload(cid: String, size: Int): ByteArray {
+    val bytes = cidBytes(cid)
+    val out = java.io.ByteArrayOutputStream()
+    fun varint(value: Long) {
+        var v = value
+        while (v >= 0x80) {
+            out.write(((v and 0x7f) or 0x80).toInt())
+            v = v ushr 7
+        }
+        out.write(v.toInt())
+    }
+    out.write(0x0a)
+    varint(bytes.size.toLong())
+    out.write(bytes)
+    out.write(0x10)
+    varint(size.toLong())
+    return out.toByteArray()
+}
+
+/**
+ * About what storing a file of [size] bytes costs, in iDNA, at [feePerGas] (bcn_feePerGas, in the
+ * smallest unit): ten gas per transaction byte, the transaction itself about 150 bytes with its signature.
+ */
+fun storeToIpfsFeeEstimate(feePerGas: BigDecimal, size: Int): BigDecimal {
+    val gas = (150 + (size * 0.2f).toInt()) * 10L
+    return (feePerGas * BigDecimal(gas)).movePointLeft(18)
 }
 
 /** What a post, reply, comment or like answers on idena.social: its makePost argument's fields. */

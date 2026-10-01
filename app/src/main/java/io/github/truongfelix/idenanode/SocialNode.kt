@@ -105,6 +105,10 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
     fun identityStates(addresses: List<String>): Map<String, String> =
         addresses.zip(rpc.batch("dna_identity", addresses.map { JSONArray().put(it) }))
             .associate { (address, identity) -> address to ((identity as? JSONObject)?.optString("state") ?: "") }
+
+    /** The state, age and stake of [address]'s identity. */
+    fun identity(address: String): ProfileIdentity =
+        ProfileIdentity.fromJson(rpc.call("dna_identity", JSONArray().put(address)) as JSONObject)
 }
 
 /** The fee of a post as the node estimates it, and the most it may cost (the transaction's max fee). */
@@ -150,6 +154,32 @@ class SocialPosting(private val rpc: NodeRpc) {
     fun balance(address: String): BigDecimal =
         BigDecimal((rpc.call("dna_getBalance", JSONArray().put(address)) as JSONObject).optString("balance", "0"))
 
+    /** The network's fee per gas, in the smallest unit (10^-18 iDNA). */
+    fun feePerGas(): BigDecimal = BigDecimal(rpc.call("bcn_feePerGas").toString())
+
+    /** The CID [bytes] get once added to IPFS, computed by the node without adding them. */
+    fun cid(bytes: ByteArray): String = rpc.call("ipfs_cid", JSONArray().put(bytesToHex(bytes))) as String
+
+    /**
+     * The fee of storing [size] bytes under [cid] on IPFS from [from] (a storeToIpfs transaction), from a
+     * dry run by the node, which also checks the balance. Throws with the node's reason.
+     */
+    fun estimateStore(from: String, cid: String, size: Int): BigDecimal {
+        val args = JSONObject().put("type", STORE_TO_IPFS_TX).put("from", from).put("payload", bytesToHex(storeToIpfsPayload(cid, size)))
+        val result = rpc.call("bcn_estimateTx", JSONArray().put(args)) as JSONObject
+        return BigDecimal(result.optString("txFee", "0"))
+    }
+
+    /** Adds [bytes] to the node's IPFS, pinned; returns their CID. */
+    fun add(bytes: ByteArray): String =
+        rpc.call("ipfs_add", JSONArray().put(bytesToHex(bytes)).put(true), readTimeoutMs = 180_000) as String
+
+    /**
+     * Sends the storeToIpfs transaction of [cid] (added before): the network's nodes keep the file. The node
+     * sets the nonce and a max fee of twice the fee. Returns the transaction hash.
+     */
+    fun store(cid: String): String = rpc.call("dna_storeToIpfs", JSONArray().put(JSONObject().put("cid", cid))) as String
+
     companion object {
         /** idena.social sends this amount with each post (the contract passes it on in its event). */
         const val POST_AMOUNT = "0.00001"
@@ -157,6 +187,9 @@ class SocialPosting(private val rpc: NodeRpc) {
         fun post(argument: String) = SocialCall("makePost", argument, POST_AMOUNT)
 
         fun tip(postId: Long, amount: Long) = SocialCall("sendTip", sendTipArgument(postId, amount), amount.toString())
+
+        /** The type of a storeToIpfs transaction (types.StoreToIpfsTx). */
+        private const val STORE_TO_IPFS_TX = 0x15
     }
 }
 
@@ -185,6 +218,26 @@ object SocialStore {
         val file = scanOffFile(context)
         if (enabled) file.delete() else file.createNewFile()
     }
+
+    private fun notifyOffFile(context: Context) = File(dir(context), "notify_off")
+    private fun seenFile(context: Context) = File(dir(context), "activity_seen")
+
+    /** The kinds of activity that notify: all at first; the file lists those turned off. */
+    fun notifyKinds(context: Context): Set<NotifyKind> {
+        val off = runCatching { notifyOffFile(context).readLines() }.getOrDefault(emptyList()).toSet()
+        return NotifyKind.entries.filter { it.name !in off }.toSet()
+    }
+
+    fun setNotifyKinds(context: Context, kinds: Set<NotifyKind>) {
+        notifyOffFile(context).writeText(NotifyKind.entries.filter { it !in kinds }.joinToString("\n") { it.name })
+    }
+
+    /** The block through which the Activity was seen; null before the first scan. */
+    fun seenThrough(context: Context): Long? = runCatching { seenFile(context).readText().trim().toLong() }.getOrNull()
+
+    fun setSeenThrough(context: Context, height: Long) {
+        seenFile(context).writeText(height.toString())
+    }
 }
 
 /**
@@ -199,6 +252,15 @@ object IpfsStore {
     fun cached(context: Context, cid: String): ByteArray? = File(dir(context), cid).takeIf { it.exists() }?.readBytes()
 
     fun isUnavailable(context: Context, cid: String): Boolean = File(dir(context), "$cid.unavailable").exists()
+
+    /** Keeps [bytes], just added to IPFS as [cid], so that the post shows them without asking the node. */
+    fun put(context: Context, cid: String, bytes: ByteArray) {
+        if (ipfsCid("ipfs://$cid") == null) return
+        val file = File(dir(context), cid)
+        val tmp = File(file.parentFile, "$cid.tmp")
+        tmp.writeBytes(bytes)
+        tmp.renameTo(file)
+    }
 
     /** Forgets that [cid] was unavailable, so that it is fetched again. */
     fun retry(context: Context, cid: String) {
