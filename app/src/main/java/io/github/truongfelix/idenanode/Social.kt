@@ -431,8 +431,9 @@ data class ProfileItem(
 }
 
 /**
- * What [address] did on idena.social, newest first, as idena.social's profile shows it (Profile.tsx):
- * its posts, replies and comments, what it liked, its tips (made and received), and its posts with media.
+ * What [address] did on idena.social, newest first: its posts, replies and comments, what it liked, the
+ * tips it gave, and its posts with media. The likes and tips it received count in [SocialProfile.likesReceived]
+ * and [SocialProfile.tipsReceived] only (idena.social's Profile.tsx also lists the tips received).
  */
 data class SocialProfile(
     val address: String,
@@ -477,7 +478,7 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
             val amount = tip.validAmount ?: 0
             if (own) tipsReceived += amount
             if (tip.from == me) tipsGiven += amount
-            if (own || tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
+            if (tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
         }
     }
 
@@ -502,11 +503,14 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
     )
 }
 
+/** An identity's state (dna_identity) as idena.social names it: "Not validated" for an address without one. */
+fun identityStatus(state: String): String = if (state.isEmpty() || state == "Undefined") "Not validated" else state
+
 /** What a profile shows of an identity (dna_identity), as idena.social: its state, age and stake. */
 data class ProfileIdentity(val state: String, val age: Int, val stake: BigDecimal) {
-    /** The state as idena.social names it: "Not validated" for an address without an identity. */
+    /** The state as idena.social names it ([identityStatus]). */
     val status: String
-        get() = if (state.isEmpty() || state == "Undefined") "Not validated" else state
+        get() = identityStatus(state)
 
     companion object {
         fun fromJson(json: JSONObject) = ProfileIdentity(

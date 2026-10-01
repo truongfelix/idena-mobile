@@ -83,6 +83,10 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.ui.text.style.TextOverflow
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
@@ -273,7 +277,13 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
 @Composable
 private fun StatusBar(model: SocialModel, onBack: (() -> Unit)?, onInfo: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-        onBack?.let { TextButton(onClick = it) { Text("‹ Back") } }
+        onBack?.let {
+            TextButton(onClick = it, Modifier.height(48.dp), contentPadding = PaddingValues(start = 6.dp, end = 14.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.size(26.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Back", style = MaterialTheme.typography.titleMedium)
+            }
+        }
         Spacer(Modifier.width(if (onBack == null) 2.dp else 4.dp))
         val action = model.sendStatus
         StatusLine(
@@ -417,19 +427,31 @@ private fun AnnotatedString.Builder.appendAddress(address: String, styles: TextL
     withLink(LinkAnnotation.Clickable(address, styles) { onProfile(address) }) { append(shortAddress(address)) }
 }
 
-/** "0x1234…abcd · Human · 30 Sep 2026, 10:05"; a tap on the address opens its profile. */
+/**
+ * "0x1234…abcd · Human · 30 Sep 2026, 10:05" on one line: the time never goes to the next line, the
+ * address and state are cut first. A tap on the address opens its profile.
+ */
 @Composable
 private fun PostHeader(call: PostCall, states: Map<String, String>, onProfile: (String) -> Unit) {
-    val state = states[call.author]?.takeIf { it.isNotEmpty() && it != "Undefined" }
+    // Nothing while the node is asked for the state.
+    val state = states[call.author]?.let(::identityStatus)
     val styles = addressLinkStyles()
-    Text(
-        buildAnnotatedString {
-            appendAddress(call.author, styles, onProfile)
-            listOfNotNull(state, formatTime(call.time)).forEach { append("  ·  $it") }
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    val style = MaterialTheme.typography.bodyMedium
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Row {
+        Text(
+            buildAnnotatedString {
+                appendAddress(call.author, styles, onProfile)
+                state?.let { append("  ·  $it") }
+            },
+            Modifier.weight(1f, fill = false),
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text("  ·  ${formatTime(call.time)}", style = style, color = color, maxLines = 1, softWrap = false)
+    }
 }
 
 /**
@@ -509,7 +531,7 @@ private fun WhoDialog(post: SocialPost, states: Map<String, String>, onProfile: 
     val styles = addressLinkStyles()
     fun AnnotatedString.Builder.who(address: String) {
         appendAddress(address, styles, onProfile)
-        states[address]?.takeIf { it.isNotEmpty() && it != "Undefined" }?.let { append("  ·  $it") }
+        states[address]?.let { append("  ·  ${identityStatus(it)}") }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -671,7 +693,7 @@ private fun ProfileList(
             }
         } else {
             items(items, key = { "${it.node.id}:${it.like?.hash ?: it.tip?.hash ?: ""}" }) { item ->
-                ProfileItemCard(tab, item, address, states, onProfile) { onOpen(item.threadId, item.node.id) }
+                ProfileItemCard(tab, item, states, onProfile) { onOpen(item.threadId, item.node.id) }
             }
         }
     }
@@ -720,7 +742,6 @@ private fun ProfileHeader(address: String, identity: Result<ProfileIdentity>?, p
 private fun ProfileItemCard(
     tab: ProfileTab,
     item: ProfileItem,
-    profileAddress: String,
     states: Map<String, String>,
     onProfile: (String) -> Unit,
     onOpen: () -> Unit,
@@ -762,13 +783,8 @@ private fun ProfileItemCard(
                     val tip = item.tip ?: return@Column
                     Text(
                         buildAnnotatedString {
-                            if (tip.from == profileAddress) {
-                                append("🪙 Tipped ${tip.validAmount} iDNA to ")
-                                appendAddress(call.author, styles, onProfile)
-                            } else {
-                                append("🪙 Got ${tip.validAmount} iDNA from ")
-                                appendAddress(tip.from, styles, onProfile)
-                            }
+                            append("🪙 Tipped ${tip.validAmount} iDNA to ")
+                            appendAddress(call.author, styles, onProfile)
                             append("  ·  ${formatTime(tip.time)}")
                         },
                         style = muted,

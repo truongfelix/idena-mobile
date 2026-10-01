@@ -206,7 +206,8 @@ class SocialTest {
         assertEquals("what a liked", listOf("p2"), profile.likes.map { it.node.call.hash })
         assertEquals("p3", profile.likes[0].like!!.hash)
         assertEquals(listOf(8L), profile.media.map { it.node.id })
-        assertEquals("tips made and received; c's tip on c's own comment is not a's", listOf("t2", "t1"), profile.tips.map { it.tip!!.hash })
+        assertEquals("what a liked, not the like a received (p7)", listOf("p2"), profile.likes.map { it.node.call.hash })
+        assertEquals("the tips a gave, not the one a received (t1) nor c's on c's own comment", listOf("t2"), profile.tips.map { it.tip!!.hash })
         assertEquals(1, profile.likesReceived)
         assertEquals(3L, profile.tipsReceived)
         assertEquals(2L, profile.tipsGiven)
@@ -233,6 +234,9 @@ class SocialTest {
         val none = ProfileIdentity.fromJson(JSONObject().put("state", "Undefined").put("age", 0).put("stake", "0"))
         assertEquals("Not validated", none.status)
         assertEquals(0, none.stake.signum())
+        // The same names next to the authors of posts.
+        assertEquals("Not validated", identityStatus(""))
+        assertEquals("Candidate", identityStatus("Candidate"))
     }
 
     @Test
