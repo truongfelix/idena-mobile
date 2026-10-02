@@ -238,6 +238,26 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
         return keywordsOf((0 until indexes.length()).map { indexes.getInt(it) }, all)
     }
 
+    /** The identity of the node's address (dna_identity): its flip keyword pairs and flip counts. */
+    fun identity(): JSONObject = call("dna_identity") as JSONObject
+
+    /** When flips stop: the start of the flip lottery before the next validation; null when unknown. */
+    fun flipDeadline(): java.time.Instant? {
+        val epoch = call("dna_epoch") as JSONObject
+        val intervals = call("dna_ceremonyIntervals") as JSONObject
+        val validation = runCatching { java.time.Instant.parse(epoch.optString("nextValidation")) }.getOrNull() ?: return null
+        return flipDeadline(validation, intervals.optDouble("FlipLotteryDuration", 0.0))
+    }
+
+    /** Submits a flip: the node encrypts it, keeps it on IPFS and sends the transaction. */
+    fun submitFlip(flip: FlipHex, pairId: Int): SentFlip {
+        val result = call("flip_submit", flipSubmitArgs(flip, pairId), readTimeoutMs = 60_000) as JSONObject
+        return SentFlip(result.getString("txHash"), result.optString("hash"), pairId, System.currentTimeMillis())
+    }
+
+    /** Whether the node knows transaction [hash] (in a block or waiting in its mempool). */
+    fun knowsTx(hash: String): Boolean = runCatching { call("bcn_transaction", JSONArray().put(hash)) != null }.getOrDefault(false)
+
     /** Sends the answers of a session; returns the transaction hash. */
     fun submitAnswers(short: Boolean, answers: List<SubmittedAnswer>): String {
         val list = JSONArray()

@@ -313,7 +313,7 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
 }
 
 /** The node's keyword list (keywords/keywords.json of idena-go): flip_words gives indexes into it. */
-private fun loadKeywords(context: Context): List<Keyword> {
+internal fun loadKeywords(context: Context): List<Keyword> {
     val array = JSONArray(context.assets.open("keywords.json").bufferedReader().use { it.readText() })
     return (0 until array.length()).map {
         val item = array.getJSONObject(it)

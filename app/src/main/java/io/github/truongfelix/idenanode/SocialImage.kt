@@ -30,28 +30,31 @@ private const val WEBP_QUALITY = 75
  * image itself (at least one). Throws when it cannot be read.
  */
 fun encodeImageSizes(context: Context, uri: Uri): Map<Int, ByteArray> {
-    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
-        val out = ByteArrayOutputStream()
-        val buffer = ByteArray(64 * 1024)
-        while (true) {
-            val n = input.read(buffer)
-            if (n < 0) break
-            out.write(buffer, 0, n)
-            if (out.size() > MAX_SOURCE_BYTES) throw IOException("the image is larger than ${MAX_SOURCE_BYTES / 1_000_000} MB")
-        }
-        out.toByteArray()
-    } ?: throw IOException("the image cannot be opened")
+    val bytes = readImage(context, uri)
     val source = decodeUpright(bytes, IMAGE_SIZES.last()) ?: throw IOException("Android cannot read this image")
     val longer = maxOf(source.width, source.height)
     val sizes = IMAGE_SIZES.filter { it <= longer }.ifEmpty { listOf(longer) }
     return sizes.associateWith { encodeWebp(scaled(source, it)) }
 }
 
+/** The file at [uri] (a picked or taken photo), refused above [MAX_SOURCE_BYTES]. */
+fun readImage(context: Context, uri: Uri): ByteArray = context.contentResolver.openInputStream(uri)?.use { input ->
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    while (true) {
+        val n = input.read(buffer)
+        if (n < 0) break
+        out.write(buffer, 0, n)
+        if (out.size() > MAX_SOURCE_BYTES) throw IOException("the image is larger than ${MAX_SOURCE_BYTES / 1_000_000} MB")
+    }
+    out.toByteArray()
+} ?: throw IOException("the image cannot be opened")
+
 /**
  * [bytes] decoded with a sample size that keeps its longer side at least [minSide] (the phone has
  * little memory), turned as its EXIF orientation says; null when Android cannot read it.
  */
-private fun decodeUpright(bytes: ByteArray, minSide: Int): Bitmap? {
+internal fun decodeUpright(bytes: ByteArray, minSide: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null

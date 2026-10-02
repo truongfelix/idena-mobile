@@ -491,17 +491,23 @@ private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open the validation") }
             }
-            if (status.requiredFlips > 0) {
-                val left = status.requiredFlips - status.madeFlips
-                Field("Flips", "${status.madeFlips} of ${status.requiredFlips} made" + if (left <= 0) " ✓" else "")
-                if (left > 0) {
+            if (status.requiredFlips > 0 || status.availableFlips > 0) {
+                val quota = FlipQuota(status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips)
+                val extra = if (quota.available > quota.required) " (up to ${quota.available})" else ""
+                Field("Flips", "${quota.made} of ${quota.required} made$extra" + if (quota.missing == 0) " ✓" else "")
+                if (quota.missing > 0) {
                     Text(
-                        "Make $left more flip${if (left > 1) "s" else ""} before the validation: on app.idena.io, " +
-                            "sign in with your private key, rent a shared node (Settings, Node), then create " +
-                            "the flips.",
+                        "Make ${quota.missing} more flip${if (quota.missing > 1) "s" else ""} before the flip lottery, about 2 hours " +
+                            "before the validation; without them the identity becomes ${quota.missingOutcome}.",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
-                    TextButton(onClick = { openWebApp(context) }) { Text("Create flips on app.idena.io") }
+                }
+                if (quota.canMake && status.period == "None") {
+                    Button(
+                        onClick = { context.startActivity(Intent(context, FlipActivity::class.java)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Make a flip") }
                 }
             }
         }
