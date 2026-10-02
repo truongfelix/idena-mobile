@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -37,6 +39,7 @@ private fun readNode(rpc: NodeRpc): NodeView {
     return NodeView(
         peers, sync.optBoolean("syncing"), sync.optLong("currentBlock"), sync.optLong("highestBlock"),
         validation = rpc.ceremony().period != "None", wrongTime = sync.optBoolean("wrongTime"),
+        epochStart = (rpc.call("dna_epoch") as JSONObject).optLong("startBlock").takeIf { it > 0 },
     )
 }
 
@@ -57,8 +60,8 @@ class PageState {
     var focused = false
 }
 
-/** The tab's lists: the feed, the activity on the identity's posts, and its own profile. */
-enum class SocialView { Feed, Activity, Me }
+/** The tab's lists: the feed, the activity on the identity's posts, its own profile, and the People list. */
+enum class SocialView { Feed, Activity, Me, People }
 
 /** The lists of a profile, as idena.social's profile page has them. */
 enum class ProfileTab(val title: String) {
@@ -178,6 +181,42 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var view by mutableStateOf(SocialView.Feed)
     var feedSort by mutableStateOf(FeedSort.Newest)
         private set
+
+    /** The period of a ranked sort, and whether the feed shows the posts of the people followed only. */
+    var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
+    var feedFollowing by mutableStateOf(false)
+
+    /** What the feed's search bar has; the feed shows what it finds while it has [MIN_SEARCH] characters. */
+    var searchQuery by mutableStateOf("")
+
+    /** The People list: names and marks kept on the phone ([Person]). */
+    var people by mutableStateOf(SocialStore.people(context))
+        private set
+    val names: Map<String, String>
+        get() = peopleNames(people)
+
+    /** Puts [person] in the People list (or takes it out once it has no name and no mark) and saves the list. */
+    fun setPerson(person: Person) {
+        people = people.with(person)
+        savePeople()
+    }
+
+    /** Merges an exported People list into this one ([mergePeople]) and saves it. */
+    fun importPeople(imported: Map<String, Person>): PeopleImport {
+        val result = mergePeople(people, imported)
+        people = result.people
+        savePeople()
+        return result
+    }
+
+    private fun savePeople() {
+        // One save at a time, each of the newest list.
+        scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setPeople(context, people) } } }
+    }
+    private val peopleSave = Mutex()
+
+    /** [address]'s entry of the People list, or an empty one. */
+    fun person(address: String): Person = people[address.lowercase()] ?: Person(address.lowercase())
     val pages = mutableStateListOf<SocialPage>()
     private val pageStates = HashMap<SocialPage, PageState>()
     val profileTabs = mutableStateMapOf<String, ProfileTab>()
@@ -313,7 +352,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         }
         val news = newActivity(activity, maxOf(seenThrough!!, announcedThrough), notify)
         announcedThrough = maxOf(announcedThrough, through)
-        if (news.isNotEmpty()) notices.trySend(noticeText(news, ::shortAddress))
+        if (news.isNotEmpty()) notices.trySend(noticeText(news) { displayName(it, names) })
     }
 
     /** Waits [ms], or less when a button changes, the tab is shown or hidden, or a post was made. */

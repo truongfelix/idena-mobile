@@ -238,6 +238,20 @@ object SocialStore {
     fun setSeenThrough(context: Context, height: Long) {
         seenFile(context).writeText(height.toString())
     }
+
+    private fun peopleFile(context: Context) = File(dir(context), "people.json")
+
+    /** The People list ([Person]); empty when there is none yet. */
+    fun people(context: Context): Map<String, Person> =
+        runCatching { peopleFromJson(JSONObject(peopleFile(context).readText())) }.getOrDefault(emptyMap())
+
+    /** Writes a new file and renames it over the old one, as [save]. */
+    fun setPeople(context: Context, people: Map<String, Person>) {
+        val file = peopleFile(context)
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        tmp.writeText(peopleToJson(people).toString())
+        if (!tmp.renameTo(file)) throw IOException("cannot save the People list")
+    }
 }
 
 /**

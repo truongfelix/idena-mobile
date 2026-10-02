@@ -158,7 +158,7 @@ private fun MainScreen(modifier: Modifier = Modifier) {
                 }
                 // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
                 when (tab) {
-                    MainTab.Node -> NodeScreen(node, Modifier.weight(1f))
+                    MainTab.Node -> NodeScreen(node, social.people, Modifier.weight(1f))
                     MainTab.Social -> SocialScreen(social, Modifier.weight(1f))
                 }
                 AdBanner(ads.ads)
@@ -191,7 +191,7 @@ fun AppTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun NodeScreen(model: NodeModel, modifier: Modifier = Modifier) {
+private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -246,7 +246,7 @@ private fun NodeScreen(model: NodeModel, modifier: Modifier = Modifier) {
             validationIsClose(Instant.now(), parseValidationTime(validation.nextValidation), validation.period)
         if (validationFirst) ValidationCard(validation!!, showCountdown = true)
         AccountCard(state, network)
-        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it) { scope.launch { refresh() } } }
+        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it, people) { scope.launch { refresh() } } }
         state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
         if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
         state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
