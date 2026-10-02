@@ -41,6 +41,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    lint {
+        // False positives with Kotlin 2.0 and Compose 1.7 (BOM 2024.12.01): it flags every produceState,
+        // also those that assign value first thing. Turn it back on with the next Compose update.
+        disable += "ProduceStateDoesNotAssignValue"
+    }
+
     buildFeatures {
         compose = true
     }
