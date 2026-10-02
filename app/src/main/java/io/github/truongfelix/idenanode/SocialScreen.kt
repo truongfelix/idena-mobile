@@ -87,6 +87,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.CompositionLocalProvider
+import org.json.JSONObject
+import java.io.IOException
+import androidx.compose.runtime.compositionLocalOf
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
@@ -101,6 +105,9 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
     var info by remember { mutableStateOf(false) }
+    // The person being named (the name dialog).
+    var naming by remember { mutableStateOf<Person?>(null) }
+    val context = LocalContext.current
     val feed = model.feed
     val states = model.states
     val myAddress = model.myAddress
@@ -115,6 +122,7 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
         }
     }
 
+    CompositionLocalProvider(LocalNames provides model.names) {
     Box(modifier.fillMaxSize()) {
         val current = model.draft
         val page = model.pages.lastOrNull()
@@ -150,6 +158,9 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                         myAddress = myAddress,
                         canAct = canAct,
                         historyDone = historyDone,
+                        person = model.person(page.address),
+                        onFollow = { model.setPerson(it) },
+                        onName = { naming = it },
                         listState = model.pageState(page).list,
                         tab = model.profileTabs[page.address] ?: ProfileTab.Posts,
                         onTab = { model.profileTabs[page.address] = it },
@@ -174,10 +185,12 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                             label = { Text(if (unread > 0) "Activity · $unread new" else "Activity") },
                         )
                         FilterChip(selected = model.view == SocialView.Me, onClick = { model.view = SocialView.Me }, label = { Text("My profile") })
+                        FilterChip(selected = model.view == SocialView.People, onClick = { model.view = SocialView.People }, label = { Text("People") })
                     }
                     HorizontalDivider()
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
+                        SocialView.People -> PeopleList(model, Modifier.weight(1f), onName = { naming = it })
                         SocialView.Me -> {
                             if (myAddress == null) Text("Waiting for the node's address…", style = MaterialTheme.typography.bodyMedium)
                             else ProfileList(
@@ -187,6 +200,9 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                                 myAddress = myAddress,
                                 canAct = canAct,
                                 historyDone = historyDone,
+                                person = model.person(myAddress),
+                                onFollow = { model.setPerson(it) },
+                                onName = { naming = it },
                                 listState = model.myProfileState,
                                 tab = model.profileTabs[myAddress] ?: ProfileTab.Posts,
                                 onTab = { model.profileTabs[myAddress] = it },
@@ -199,7 +215,26 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                             )
                         }
                         SocialView.Feed -> {
-                            val sorted = remember(feed, model.feedSort) { sortFeed(feed, model.feedSort) }
+                            val people = model.people
+                            val epochStart = model.node?.epochStart
+                            val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, epochStart) {
+                                val shown = if (model.feedFollowing) followingFeed(feed, people) else feed
+                                sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
+                            }
+                            val query = model.searchQuery.trim()
+                            val hits by produceState<List<SearchHit>?>(null, query, feed, people) {
+                                if (query.length < MIN_SEARCH) {
+                                    value = null
+                                    return@produceState
+                                }
+                                // Typing: search once it pauses.
+                                kotlinx.coroutines.delay(250)
+                                value = withContext(Dispatchers.IO) {
+                                    searchSocial(feed, people, query, ipfsText = { cid ->
+                                        IpfsStore.cached(context, cid)?.takeIf { it.size <= MAX_IPFS_FILE }?.toString(Charsets.UTF_8)
+                                    })
+                                }
+                            }
                             LazyColumn(
                                 Modifier.weight(1f),
                                 state = model.feedState,
@@ -207,13 +242,21 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                                 // Room for the write button over the last post.
                                 contentPadding = PaddingValues(bottom = 88.dp),
                             ) {
-                                item(key = "sort") {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(selected = model.feedSort == FeedSort.Newest, onClick = { model.sortFeedBy(FeedSort.Newest) }, label = { Text("Newest posts") })
-                                        FilterChip(selected = model.feedSort == FeedSort.Activity, onClick = { model.sortFeedBy(FeedSort.Activity) }, label = { Text("Latest activity") })
+                                item(key = "search") { SearchField(model) }
+                                val found = hits
+                                if (query.length >= MIN_SEARCH) {
+                                    when {
+                                        found == null -> item(key = "searching") { Text("Searching…", style = MaterialTheme.typography.bodySmall) }
+                                        found.isEmpty() -> item(key = "none") { Text("Nothing found in the posts read so far.", style = MaterialTheme.typography.bodySmall) }
+                                        else -> items(found, key = { hitKey(it) }) { hit ->
+                                            HitCard(hit, states, onProfile = model::openProfile, onOpen = openThread)
+                                        }
                                     }
+                                    return@LazyColumn
                                 }
+                                item(key = "sort") { FeedOptions(model) }
                                 if (feed.isEmpty()) item(key = "empty") { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
+                                else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
                                 items(sorted, key = { it.id }) { post ->
                                     PostCard(
                                         post = post,
@@ -257,7 +300,7 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
             onDismiss = { tipping = null },
             onTip = { amount ->
                 tipping = null
-                model.prepare("Tip", SocialPosting.tip(post.id, amount), "Tip $amount iDNA to ${shortAddress(post.call.author)} for this post")
+                model.prepare("Tip", SocialPosting.tip(post.id, amount), "Tip $amount iDNA to ${displayName(post.call.author, model.names)} for this post")
             },
         )
     }
@@ -266,7 +309,15 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
         WhoDialog(post, states, onProfile = { who = null; model.openProfile(it) }, onDismiss = { who = null })
     }
 
+    naming?.let { person ->
+        NameDialog(person, onDismiss = { naming = null }) { name ->
+            naming = null
+            model.setPerson(person.copy(name = name))
+        }
+    }
+
     if (info) ScanInfoDialog(model) { info = false }
+    }
 }
 
 /**
@@ -418,13 +469,19 @@ private fun formatTime(seconds: Long): String =
 
 
 
-/** How an address shows as a link to its profile. */
-@Composable
-private fun addressLinkStyles() = TextLinkStyles(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium))
+/** The names of the People list by lowercase address, shown instead of the addresses. */
+val LocalNames = compositionLocalOf<Map<String, String>> { emptyMap() }
 
-/** [address], shortened, as a link that opens its profile. */
-private fun AnnotatedString.Builder.appendAddress(address: String, styles: TextLinkStyles, onProfile: (String) -> Unit) {
-    withLink(LinkAnnotation.Clickable(address, styles) { onProfile(address) }) { append(shortAddress(address)) }
+/** How an address shows as a link to its profile: the style, and the names to show. */
+class AddressLink(val styles: TextLinkStyles, val names: Map<String, String>)
+
+@Composable
+private fun addressLinkStyles() =
+    AddressLink(TextLinkStyles(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)), LocalNames.current)
+
+/** [address], by its name or shortened ([displayName]), as a link that opens its profile. */
+private fun AnnotatedString.Builder.appendAddress(address: String, styles: AddressLink, onProfile: (String) -> Unit) {
+    withLink(LinkAnnotation.Clickable(address, styles.styles) { onProfile(address) }) { append(displayName(address, styles.names)) }
 }
 
 /**
@@ -579,7 +636,7 @@ private fun TipDialog(post: SocialPost, onDismiss: () -> Unit, onTip: (Long) -> 
     val value = amount.toLongOrNull()?.takeIf { it > 0 }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tip ${shortAddress(post.call.author)}") },
+        title = { Text("Tip ${displayName(post.call.author, LocalNames.current)}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("The tip goes to the author of this post, through the idena.social contract. Whole iDNA only.")
@@ -649,6 +706,9 @@ private fun ProfileList(
     myAddress: String?,
     canAct: Boolean,
     historyDone: Boolean,
+    person: Person,
+    onFollow: (Person) -> Unit,
+    onName: (Person) -> Unit,
     listState: LazyListState,
     tab: ProfileTab,
     onTab: (ProfileTab) -> Unit,
@@ -668,7 +728,7 @@ private fun ProfileList(
     }
     val items = profile.list(tab)
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)) {
-        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone) }
+        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -699,17 +759,38 @@ private fun ProfileList(
     }
 }
 
-/** The identity of a profile: its address in full (Copy), state, age, stake, and its likes and tips. */
+/**
+ * The identity of a profile: its name (People list) or address, the address in full (Copy), Name and
+ * Follow, state, age, stake, and its likes and tips.
+ */
 @Composable
-private fun ProfileHeader(address: String, identity: Result<ProfileIdentity>?, profile: SocialProfile, isMe: Boolean, historyDone: Boolean) {
+private fun ProfileHeader(
+    address: String,
+    identity: Result<ProfileIdentity>?,
+    profile: SocialProfile,
+    isMe: Boolean,
+    historyDone: Boolean,
+    person: Person,
+    onFollow: (Person) -> Unit,
+    onName: (Person) -> Unit,
+) {
     val clipboard = LocalClipboardManager.current
     var copied by remember(address) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (isMe) "${shortAddress(address)} (you)" else shortAddress(address), style = MaterialTheme.typography.titleMedium)
+        val title = person.name.ifEmpty { shortAddress(address) }
+        Text(if (isMe) "$title (you)" else title, style = MaterialTheme.typography.titleMedium)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill(if (copied) "Copied" else "Copy", enabled = true) {
                 clipboard.setText(AnnotatedString(address))
                 copied = true
+            }
+            Pill(if (person.name.isEmpty()) "Name" else "Rename", enabled = true) { onName(person) }
+            if (!isMe) {
+                FilterChip(
+                    selected = person.following,
+                    onClick = { onFollow(person.copy(following = !person.following)) },
+                    label = { Text(if (person.following) "Following" else "Follow") },
+                )
             }
         }
         Text(address, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -934,7 +1015,7 @@ private fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
         draft.answering?.let {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${shortAddress(it.author)}  ·  ${formatTime(it.time)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${displayName(it.author, model.names)}  ·  ${formatTime(it.time)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     PostContent(it, MaterialTheme.typography.bodyLarge)
                 }
             }
@@ -1002,4 +1083,218 @@ private fun DraftImage(bytes: ByteArray) {
             contentScale = ContentScale.Fit,
         )
     }
+}
+
+/** The feed's search bar: texts of the posts read, names of the People list, or a pasted address. */
+@Composable
+private fun SearchField(model: SocialModel) {
+    OutlinedTextField(
+        value = model.searchQuery,
+        onValueChange = { model.searchQuery = it.take(200) },
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text("Search posts and names, or paste an address") },
+        singleLine = true,
+        trailingIcon = if (model.searchQuery.isEmpty()) null else {
+            { TextButton(onClick = { model.searchQuery = "" }) { Text("✕") } }
+        },
+    )
+}
+
+/** The feed's order, its Following filter, and the period of a ranked order. */
+@Composable
+private fun FeedOptions(model: SocialModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = model.feedFollowing, onClick = { model.feedFollowing = !model.feedFollowing }, label = { Text("Following") })
+            FeedSort.entries.forEach { sort ->
+                FilterChip(selected = model.feedSort == sort, onClick = { model.sortFeedBy(sort) }, label = { Text(sort.title) })
+            }
+        }
+        if (model.feedSort.ranked) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FeedPeriod.entries.forEach { period ->
+                    FilterChip(selected = model.feedPeriod == period, onClick = { model.feedPeriod = period }, label = { Text(period.title) })
+                }
+            }
+        }
+    }
+}
+
+/** Why the feed shows nothing although posts were read. */
+private fun emptyFeedText(model: SocialModel): String {
+    val from = if (model.feedFollowing) " from the people you follow" else ""
+    return when {
+        model.feedFollowing && model.people.values.none { it.following } -> "You follow nobody yet: open a profile and select Follow."
+        model.feedSort == FeedSort.Likes -> "No liked post in this period$from."
+        model.feedSort == FeedSort.Comments -> "No post with answers in this period$from."
+        model.feedSort == FeedSort.Tips -> "No tipped post in this period$from."
+        else -> "No posts$from in the posts read so far."
+    }
+}
+
+private fun hitKey(hit: SearchHit): String = when (hit) {
+    is SearchHit.Address -> "address:${hit.address}"
+    is SearchHit.Named -> "person:${hit.person.address}"
+    is SearchHit.Text -> "text:${hit.node.id}"
+}
+
+/** One search result: a profile to open (an address, a person), or a text opening its thread at it. */
+@Composable
+private fun HitCard(
+    hit: SearchHit,
+    states: Map<String, String>,
+    onProfile: (String) -> Unit,
+    onOpen: (threadId: Long, focusId: Long?) -> Unit,
+) {
+    when (hit) {
+        is SearchHit.Address -> Card(Modifier.fillMaxWidth().clickable { onProfile(hit.address) }) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Open the profile of ${displayName(hit.address, LocalNames.current)}  ›", style = MaterialTheme.typography.titleSmall)
+                Text(hit.address, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
+        }
+        is SearchHit.Named -> PersonRow(hit.person) { onProfile(hit.person.address) }
+        is SearchHit.Text -> Card(Modifier.fillMaxWidth().clickable { onOpen(hit.threadId, hit.node.id.takeIf { it != hit.threadId }) }) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                PostHeader(hit.node.call, states, onProfile)
+                PostContent(hit.node.call, MaterialTheme.typography.bodyLarge, maxLines = 4, showMedia = false)
+            }
+        }
+    }
+}
+
+/** Someone of the People list: the name (or the address), the address, and the marks; a tap opens the profile. */
+@Composable
+private fun PersonRow(person: Person, trailing: @Composable () -> Unit = {}, onOpen: () -> Unit) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+        Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(person.name.ifEmpty { shortAddress(person.address) }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val marks = listOfNotNull(shortAddress(person.address).takeIf { person.name.isNotEmpty() }, "Following".takeIf { person.following })
+                if (marks.isNotEmpty()) {
+                    Text(marks.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            trailing()
+        }
+    }
+}
+
+/**
+ * The People list: the names given and the people followed, kept on the phone only. A tap opens the
+ * profile; Rename and Follow there or here. People are added from their profile.
+ */
+@Composable
+private fun PeopleList(model: SocialModel, modifier: Modifier, onName: (Person) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val people = remember(model.people) { sortedPeople(model.people) }
+    // What the last export or import did.
+    var note by remember { mutableStateOf<String?>(null) }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val list = model.people
+        scope.launch {
+            note = withContext(Dispatchers.IO) {
+                runCatching {
+                    val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("the file cannot be written")
+                    out.use { it.write(peopleToJson(list).toString(2).toByteArray(Charsets.UTF_8)) }
+                }.fold({ "Exported ${peopleCount(list.size)}." }, { "Export failed: ${it.message}" })
+            }
+        }
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val read = withContext(Dispatchers.IO) {
+                runCatching {
+                    val input = context.contentResolver.openInputStream(uri) ?: throw IOException("the file cannot be read")
+                    val bytes = input.use { stream ->
+                        // At most one byte more than allowed (InputStream.readNBytes needs Android 13).
+                        val out = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (out.size() <= MAX_PEOPLE_FILE) {
+                            val n = stream.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                        }
+                        out.toByteArray()
+                    }
+                    if (bytes.size > MAX_PEOPLE_FILE) throw IOException("the file is too large")
+                    val json = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull()
+                    if (json?.optJSONArray("people") == null) throw IOException("this is not an exported People list")
+                    peopleFromJson(json)
+                }
+            }
+            note = read.fold(
+                { imported ->
+                    val result = model.importPeople(imported)
+                    "Imported: ${peopleCount(result.added)} added, ${result.changed} changed."
+                },
+                { "Import failed: ${it.message}" },
+            )
+        }
+    }
+    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        item(key = "about") {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Names and follows are private: they stay on this phone and are never published. To add someone, open " +
+                        "their profile (a tap on an address, or paste the address in the feed's search) and select Name or Follow.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill("Export", enabled = people.isNotEmpty()) { exporter.launch("idena-people.json") }
+                    Pill("Import", enabled = true) { importer.launch(arrayOf("application/json", "application/octet-stream", "text/*")) }
+                }
+                Text(
+                    "Export writes the list to a file of your choice (to keep it, or to move it to another phone); whoever " +
+                        "gets the file sees your names. Import adds a file's people to this list: nothing here is removed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
+            }
+        }
+        if (people.isEmpty()) item(key = "empty") { Text("Nobody yet.", style = MaterialTheme.typography.bodyMedium) }
+        items(people, key = { it.address }) { person ->
+            PersonRow(person, trailing = {
+                TextButton(onClick = { onName(person) }) { Text("Rename") }
+                FilterChip(
+                    selected = person.following,
+                    onClick = { model.setPerson(person.copy(following = !person.following)) },
+                    label = { Text(if (person.following) "Following" else "Follow") },
+                )
+            }) { model.openProfile(person.address) }
+        }
+    }
+}
+
+/** The largest People file imported (about 10,000 people). */
+private const val MAX_PEOPLE_FILE = 2_000_000
+
+private fun peopleCount(n: Int): String = if (n == 1) "1 person" else "$n people"
+
+/** A private name for [person]'s address; an empty name removes it. */
+@Composable
+private fun NameDialog(person: Person, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by remember(person.address) { mutableStateOf(person.name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (person.name.isEmpty()) "Name ${shortAddress(person.address)}" else "Rename ${person.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Shown instead of the address in the Social tab. It stays on this phone: nobody else sees it.")
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(Person.MAX_NAME) },
+                    label = { Text("Name") },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(cleanName(name)) }) { Text(if (cleanName(name).isEmpty() && person.name.isNotEmpty()) "Remove the name" else "Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

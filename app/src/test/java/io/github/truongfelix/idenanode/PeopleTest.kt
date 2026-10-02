@@ -1,0 +1,130 @@
+package io.github.truongfelix.idenanode
+
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class PeopleTest {
+    private val a = "0xaaaa000000000000000000000000000000000001"
+    private val b = "0xbbbb000000000000000000000000000000000002"
+    private val c = "0xcccc000000000000000000000000000000000003"
+
+    private fun call(hash: String, author: String, message: String, time: Long, replyTo: String = "", channel: String = "") =
+        PostCall(hash, time, time, 0, author, message, replyTo, channel, hasMedia = false)
+
+    private fun node(id: Long, call: PostCall, likes: Int = 0, tips: Long = 0, replies: List<SocialPost> = emptyList()) = SocialPost(
+        id, call,
+        likeCalls = List(likes) { call("like$id-$it", c, LIKE, call.time + 1, replyTo = id.toString()) },
+        tips = if (tips > 0) listOf(TipCall("tip$id", call.height + 1, call.time + 1, 0, c, id.toString(), tips.toString(), tips.toString())) else emptyList(),
+        replies = replies,
+    )
+
+    @Test
+    fun aPersonWithoutNameOrMarkLeavesTheList() {
+        var people = emptyMap<String, Person>()
+        people = people.with(Person(a, name = "Alice"))
+        people = people.with(Person(b, following = true))
+        assertEquals(setOf(a, b), people.keys)
+        people = people.with(Person(a))
+        assertEquals(setOf(b), people.keys)
+    }
+
+    @Test
+    fun namesAreOneTrimmedLine() {
+        assertEquals("Alice Smith", cleanName("  Alice\n\tSmith  "))
+        assertEquals(Person.MAX_NAME, cleanName("x".repeat(100)).length)
+        assertEquals("", cleanName(" \n "))
+    }
+
+    @Test
+    fun jsonKeepsTheListAndDropsBadEntries() {
+        val people = mapOf(a to Person(a, "Alice", following = true), b to Person(b, message = true))
+        val json = peopleToJson(people)
+        json.getJSONArray("people").put(JSONObject().put("address", "not an address").put("name", "x"))
+        json.getJSONArray("people").put(JSONObject().put("address", c))
+        assertEquals(people, peopleFromJson(JSONObject(json.toString())))
+    }
+
+    @Test
+    fun namedPeopleComeFirstInNameOrder() {
+        val people = mapOf(a to Person(a, "zed"), b to Person(b, "Bob"), c to Person(c, following = true))
+        assertEquals(listOf(b, a, c), sortedPeople(people).map { it.address })
+    }
+
+    @Test
+    fun displayNameFallsBackToTheShortAddress() {
+        val names = peopleNames(mapOf(a to Person(a, "Alice"), b to Person(b, following = true)))
+        assertEquals("Alice", displayName(a.uppercase().replace("0X", "0x"), names))
+        assertEquals(shortAddress(b), displayName(b, names))
+    }
+
+    @Test
+    fun followingKeepsTheFollowedAuthors() {
+        val feed = listOf(node(2, call("p2", b, "two", 20)), node(1, call("p1", a, "one", 10)))
+        assertEquals(listOf(1L), followingFeed(feed, mapOf(a to Person(a, following = true), b to Person(b, "Bob"))).map { it.id })
+    }
+
+    @Test
+    fun rankedSortsKeepThePeriodsPostsWithSomething() {
+        val day = 24 * 3600L
+        val now = 100 * day
+        val comment = node(5, call("c5", a, "c", now - 2 * day + 2))
+        val feed = listOf(
+            node(4, call("p4", a, "new, liked twice", now - day), likes = 2),
+            node(3, call("p3", b, "new, liked once, tipped", now - 2 * day), likes = 1, tips = 7,
+                replies = listOf(node(6, call("r6", c, "r", now - 2 * day + 1), replies = listOf(comment)))),
+            node(2, call("p2", a, "nothing", now - 3 * day)),
+            node(1, call("p1", b, "old, liked 5 times", now - 30 * day), likes = 5, tips = 1),
+        )
+        assertEquals(listOf(1L, 4L, 3L), sortFeed(feed, FeedSort.Likes, FeedPeriod.All, now).map { it.id })
+        assertEquals("the 7 days leave the old post out", listOf(4L, 3L), sortFeed(feed, FeedSort.Likes, FeedPeriod.Week, now).map { it.id })
+        assertEquals("replies and comments count", listOf(3L), sortFeed(feed, FeedSort.Comments, FeedPeriod.All, now).map { it.id })
+        assertEquals(listOf(3L, 1L), sortFeed(feed, FeedSort.Tips, FeedPeriod.All, now).map { it.id })
+        // Heights are the times here: the epoch from the block of post 3.
+        assertEquals(listOf(4L, 3L), sortFeed(feed, FeedSort.Likes, FeedPeriod.Epoch, now, epochStart = now - 2 * day).map { it.id })
+        assertEquals("epoch unknown: all posts", 3, sortFeed(feed, FeedSort.Likes, FeedPeriod.Epoch, now).size)
+        assertTrue(sortFeed(emptyList(), FeedSort.Tips).isEmpty())
+    }
+
+    @Test
+    fun searchFindsTheAddressPeopleAndTexts() {
+        val comment = node(5, call("c5", c, "Hello from a comment", 30))
+        val feed = listOf(
+            node(3, call("p3", b, "ipfs://bafkreitext1234", 25)),
+            node(1, call("p1", a, "hello world", 10), replies = listOf(node(2, call("r2", b, "no match", 20), replies = listOf(comment)))),
+        )
+        val people = mapOf(a to Person(a, "Helloise"), b to Person(b, "Bob"))
+        val ipfs = mapOf("bafkreitext1234" to "hello on IPFS")
+
+        val hits = searchSocial(feed, people, "hello", ipfsText = { ipfs[it] })
+        assertEquals(SearchHit.Named(people.getValue(a)), hits[0])
+        assertEquals("newest first, the IPFS text included", listOf(5L, 3L, 1L), hits.drop(1).map { (it as SearchHit.Text).node.id })
+        assertEquals("the comment opens in its post's thread", 1L, (hits[1] as SearchHit.Text).threadId)
+
+        assertEquals("an IPFS text not fetched is not searched", listOf(5L, 1L),
+            searchSocial(feed, emptyMap(), "hello").map { (it as SearchHit.Text).node.id })
+        assertEquals(SearchHit.Address(a), searchSocial(feed, people, a.uppercase().replace("0X", "0x")).first())
+        assertEquals("an address start finds the person", listOf(SearchHit.Named(people.getValue(b))), searchSocial(feed, people, "0xbbbb"))
+        assertTrue("too short", searchSocial(feed, people, "h").isEmpty())
+    }
+
+    @Test
+    fun importMergesWithoutLosingAnything() {
+        val current = mapOf(a to Person(a, "Alice", message = true), b to Person(b, "Bob"))
+        val file = mapOf(a to Person(a, following = true), b to Person(b, "Robert"), c to Person(c, "Carol"))
+        val result = mergePeople(current, file)
+        assertEquals(1, result.added)
+        assertEquals(2, result.changed)
+        assertEquals(Person(a, "Alice", following = true, message = true), result.people[a])
+        assertEquals("the file's name wins", "Robert", result.people.getValue(b).name)
+        assertEquals("the same file again changes nothing", 0, mergePeople(result.people, file).let { it.added + it.changed })
+    }
+
+    @Test
+    fun theConfirmationNamesTheRecipient() {
+        val people = mapOf(a to Person(a, "Alice"))
+        assertEquals("Alice ($a)", recipientText(a, people))
+        assertEquals(b, recipientText(b, people))
+    }
+}

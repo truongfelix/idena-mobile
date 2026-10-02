@@ -294,13 +294,56 @@ fun lastActivityHeight(post: SocialPost): Long = maxOf(
     post.replies.maxOfOrNull { lastActivityHeight(it) } ?: 0,
 )
 
-/** How the feed is ordered, as idena.social offers it: by the newest posts, or by the latest activity. */
-enum class FeedSort { Newest, Activity }
+/**
+ * How the feed is ordered: as idena.social offers it, by the newest posts or by the latest activity; or
+ * the posts of a period ([FeedPeriod]) with the most likes, answers (replies and comments) or iDNA tipped.
+ */
+enum class FeedSort(val title: String, val ranked: Boolean = false) {
+    Newest("Newest posts"),
+    Activity("Latest activity"),
+    Likes("Most liked", ranked = true),
+    Comments("Most commented", ranked = true),
+    Tips("Most tipped", ranked = true),
+}
 
-/** [feed] (newest posts first) in [sort]'s order; threads with activity in the same block keep their order. */
-fun sortFeed(feed: List<SocialPost>, sort: FeedSort): List<SocialPost> = when (sort) {
+/** The posts a ranked sort looks at: made in the current epoch, the last 7 days, or ever. */
+enum class FeedPeriod(val title: String) { Epoch("This epoch"), Week("7 days"), All("All") }
+
+/** What a ranked sort counts on [post] itself. */
+private fun rankOf(post: SocialPost, sort: FeedSort): Long = when (sort) {
+    FeedSort.Likes -> post.likes.toLong()
+    FeedSort.Comments -> replyCount(post).toLong()
+    FeedSort.Tips -> post.tipTotal
+    else -> 0
+}
+
+/**
+ * [feed] (newest posts first) in [sort]'s order; threads with activity in the same block keep their order.
+ * A ranked sort keeps the posts of [period] that have at least one of what it counts, most first, newer
+ * first on a tie: [now] (Unix seconds) sets the 7 days, [epochStart] (the epoch's first block) the epoch,
+ * which is all posts while it is not known.
+ */
+fun sortFeed(
+    feed: List<SocialPost>,
+    sort: FeedSort,
+    period: FeedPeriod = FeedPeriod.All,
+    now: Long = 0,
+    epochStart: Long? = null,
+): List<SocialPost> = when (sort) {
     FeedSort.Newest -> feed
     FeedSort.Activity -> feed.sortedByDescending { lastActivityHeight(it) }
+    else -> feed
+        .filter {
+            when (period) {
+                FeedPeriod.Epoch -> epochStart == null || it.call.height >= epochStart
+                FeedPeriod.Week -> it.call.time >= now - 7 * 24 * 3600
+                FeedPeriod.All -> true
+            }
+        }
+        .map { it to rankOf(it, sort) }
+        .filter { it.second > 0 }
+        .sortedByDescending { it.second }
+        .map { it.first }
 }
 
 enum class ActivityKind { Like, Reply, Comment, Tip }
@@ -622,6 +665,8 @@ data class NodeView(
     val highestBlock: Long,
     val validation: Boolean,
     val wrongTime: Boolean = false,
+    /** The first block of the current epoch; null when not known. */
+    val epochStart: Long? = null,
 )
 
 /** Blocks the scan may lag the node's head and still be up to date: a block comes about every 20 s. */

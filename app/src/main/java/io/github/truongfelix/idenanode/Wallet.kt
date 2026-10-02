@@ -62,3 +62,7 @@ data class StakePreview(
 
 /** Whether the identity can receive stake: the node refuses Undefined and Killed identities. */
 fun canReceiveStake(state: String): Boolean = state != "Undefined" && state != "Killed" && state.isNotEmpty()
+
+/** The recipient as the confirmation shows it: the address in full, after its name in the People list if any. */
+fun recipientText(to: String, people: Map<String, Person>): String =
+    people[to.trim().lowercase()]?.name?.takeIf { it.isNotEmpty() }?.let { "$it ($to)" } ?: to
