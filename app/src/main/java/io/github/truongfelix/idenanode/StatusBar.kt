@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -49,6 +50,20 @@ fun Health.color(): Color = when (this) {
 @Composable
 fun StatusDot(health: Health, size: Int = 12) {
     Box(Modifier.size(size.dp).background(health.color(), CircleShape))
+}
+
+/** What each dot color means, one row per color. */
+@Composable
+fun DotLegend(vararg rows: Pair<Health, String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for ((health, text) in rows) {
+            Row(verticalAlignment = Alignment.Top) {
+                Box(Modifier.padding(top = 4.dp)) { StatusDot(health, size = 10) }
+                Spacer(Modifier.width(8.dp))
+                Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
 }
 
 /**
@@ -116,12 +131,11 @@ fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {
                 }
                 state.runningForMs?.takeIf { state.syncEnabled }?.let { Field("Started", "${duration(it / 1000.0).removePrefix("about ")} ago") }
                 state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Text(
-                    "Green: synced with peers. Orange: starting, looking for peers (often several minutes after a start), " +
-                        "syncing, or a background setting to fix. Red: no peers after ${PEER_GRACE_MS / 60_000} min, no " +
-                        "answer, or a wrong clock. Grey: sync off.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                DotLegend(
+                    Health.Good to "Synced with peers",
+                    Health.Warn to "Starting, looking for peers (often several minutes after a start), syncing, or a background setting to fix",
+                    Health.Bad to "No peers after ${PEER_GRACE_MS / 60_000} min, no answer, or a wrong clock",
+                    Health.Off to "Sync off",
                 )
                 HorizontalDivider()
                 BackgroundSettings(state)

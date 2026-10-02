@@ -549,6 +549,30 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
 /** An identity's state (dna_identity) as idena.social names it: "Not validated" for an address without one. */
 fun identityStatus(state: String): String = if (state.isEmpty() || state == "Undefined") "Not validated" else state
 
+/** What a post's header shows of its author's identity: the state and the age in epochs. */
+data class AuthorIdentity(val state: String, val age: Int) {
+    /** "Human · age 12"; the state alone without an identity or at age 0. */
+    val label: String
+        get() = identityStatus(state) + if (age > 0 && identityStatus(state) != "Not validated") "  ·  age $age" else ""
+}
+
+/**
+ * How long ago [time] was at [now] (Unix seconds), as Reddit shows it: 5s, 10min, 7h, 1d, 5mo, 2y (a month
+ * counted as 30 days, a year as 365); "now" for a time in the future (a phone clock behind the block's).
+ */
+fun timeAgo(time: Long, now: Long): String {
+    val s = now - time
+    return when {
+        s < 0 -> "now"
+        s < 60 -> "${s}s"
+        s < 3600 -> "${s / 60}min"
+        s < 86_400 -> "${s / 3600}h"
+        s < 30 * 86_400 -> "${s / 86_400}d"
+        s < 365 * 86_400 -> "${s / (30 * 86_400)}mo"
+        else -> "${s / (365 * 86_400)}y"
+    }
+}
+
 /** What a profile shows of an identity (dna_identity), as idena.social: its state, age and stake. */
 data class ProfileIdentity(val state: String, val age: Int, val stake: BigDecimal) {
     /** The state as idena.social names it ([identityStatus]). */
