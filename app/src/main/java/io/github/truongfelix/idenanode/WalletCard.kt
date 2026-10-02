@@ -225,7 +225,7 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismis
                     Text("To: $it", style = MaterialTheme.typography.bodyMedium)
                 }
                 if (named.isNotEmpty()) {
-                    TextButton(onClick = { picking = !picking }) { Text(if (picking) "Hide the People list" else "Choose from People") }
+                    TextButton(onClick = { picking = !picking }) { Text(if (picking) "Hide the contacts" else "Choose from Contacts") }
                     if (picking) {
                         named.forEach { person ->
                             TextButton(onClick = { to = person.address; picking = false }) {

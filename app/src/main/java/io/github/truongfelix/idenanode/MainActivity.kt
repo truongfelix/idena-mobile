@@ -59,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
@@ -338,7 +339,7 @@ private fun AccountCard(state: ScreenState, network: NetworkRewards?) {
                 Text("Age, stake, balance: after sync")
                 return@Column
             }
-            Field("Identity", "${status.identityState}, age ${status.age}")
+            Field("Identity", "${identityStatus(status.identityState)}, age ${status.age}", statusPalette()(status.identityState))
             Field("Mining", status.miningStatus)
             Field("Stake", idna(status.stake))
             val stake = status.stake.toDoubleOrNull() ?: 0.0
@@ -689,10 +690,10 @@ private fun openWebApp(context: Context) {
 }
 
 @Composable
-internal fun Field(name: String, value: String) {
+internal fun Field(name: String, value: String, color: Color = Color.Unspecified) {
     Row {
         Text(name, Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = color)
     }
 }
 

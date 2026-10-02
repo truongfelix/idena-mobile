@@ -127,4 +127,24 @@ class PeopleTest {
         assertEquals("Alice ($a)", recipientText(a, people))
         assertEquals(b, recipientText(b, people))
     }
+
+    @Test
+    fun timeAgoCountsAsReddit() {
+        val now = 1_000_000_000L
+        assertEquals("5s", timeAgo(now - 5, now))
+        assertEquals("10min", timeAgo(now - 10 * 60 - 59, now))
+        assertEquals("7h", timeAgo(now - 7 * 3600, now))
+        assertEquals("1d", timeAgo(now - 86_400 - 5, now))
+        assertEquals("29d", timeAgo(now - 29 * 86_400, now))
+        assertEquals("5mo", timeAgo(now - 150 * 86_400, now))
+        assertEquals("2y", timeAgo(now - 2 * 365 * 86_400, now))
+        assertEquals("a block time ahead of the phone's clock", "now", timeAgo(now + 3, now))
+    }
+
+    @Test
+    fun theAuthorShowsItsAge() {
+        assertEquals("Human  ·  age 12", AuthorIdentity("Human", 12).label)
+        assertEquals("Candidate", AuthorIdentity("Candidate", 0).label)
+        assertEquals("Not validated", AuthorIdentity("Undefined", 3).label)
+    }
 }

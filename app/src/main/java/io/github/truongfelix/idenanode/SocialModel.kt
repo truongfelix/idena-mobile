@@ -61,7 +61,7 @@ class PageState {
 }
 
 /** The tab's lists: the feed, the activity on the identity's posts, its own profile, and the People list. */
-enum class SocialView { Feed, Activity, Me, People }
+enum class SocialView { Feed, Me, Activity, People }
 
 /** The lists of a profile, as idena.social's profile page has them. */
 enum class ProfileTab(val title: String) {
@@ -114,8 +114,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var feed by mutableStateOf<List<SocialPost>>(emptyList())
         private set
 
-    /** The identity state of the authors (Human, Verified...). */
-    val states = mutableStateMapOf<String, String>()
+    /** The identity state and age of the authors (Human, Verified...), read again at each new epoch. */
+    val states = mutableStateMapOf<String, AuthorIdentity>()
+    private var statesEpochStart: Long? = null
     var head by mutableStateOf<Long?>(null)
         private set
 
@@ -295,6 +296,14 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         announcedThrough = maxOf(announcedThrough, through)
     }
 
+    /** Shows the feed: all posts, or those of the people followed ([following]), from its top when that changes. */
+    fun showFeed(following: Boolean) {
+        view = SocialView.Feed
+        if (following == feedFollowing) return
+        feedFollowing = following
+        scope.launch { feedState.scrollToItem(0) }
+    }
+
     /** Orders the feed by [sort], from its top (the place in the other order means nothing here). */
     fun sortFeedBy(sort: FeedSort) {
         if (sort == feedSort) return
@@ -325,6 +334,11 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private suspend fun show(next: SocialCache) {
         cache = next
         feed = withContext(Dispatchers.Default) { next.feed() }
+        // The ages and states change at the validation: ask again in a new epoch.
+        node?.epochStart?.let { start ->
+            if (statesEpochStart != null && statesEpochStart != start) states.clear()
+            statesEpochStart = start
+        }
         val unknown = feed.flatMap { withReplies(it) }.map { it.call.author }.distinct().filter { it !in states }
         if (unknown.isNotEmpty()) {
             withContext(Dispatchers.IO) { runCatching { NodeSocialSource(rpc(context)).identityStates(unknown) }.getOrNull() }

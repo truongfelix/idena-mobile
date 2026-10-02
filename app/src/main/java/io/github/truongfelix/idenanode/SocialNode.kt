@@ -102,9 +102,12 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
     }
 
     /** The identity state of each address (Human, Verified...), in one request. */
-    fun identityStates(addresses: List<String>): Map<String, String> =
+    fun identityStates(addresses: List<String>): Map<String, AuthorIdentity> =
         addresses.zip(rpc.batch("dna_identity", addresses.map { JSONArray().put(it) }))
-            .associate { (address, identity) -> address to ((identity as? JSONObject)?.optString("state") ?: "") }
+            .associate { (address, identity) ->
+                val json = identity as? JSONObject
+                address to AuthorIdentity(json?.optString("state") ?: "", json?.optInt("age") ?: 0)
+            }
 
     /** The state, age and stake of [address]'s identity. */
     fun identity(address: String): ProfileIdentity =
