@@ -62,12 +62,12 @@ private sealed interface BannerItem {
 }
 
 /**
- * The banner at the bottom of both tabs: the approved Idena ads for this identity in turn, and the
+ * The banner at the bottom of the Node tab: the approved Idena ads for this identity in turn, and the
  * developers' note. A tap opens the item.
  */
 @Composable
 fun AdBanner(ads: List<ChainAd>, modifier: Modifier = Modifier) {
-    val items = remember(ads) { ads.map { BannerItem.Ad(it) } + BannerItem.DevNote }
+    val items = remember(ads) { bannerItems(ads) }
     var index by remember(items) { mutableIntStateOf(0) }
     var open by remember { mutableStateOf<BannerItem?>(null) }
     LaunchedEffect(items) {
@@ -77,32 +77,60 @@ fun AdBanner(ads: List<ChainAd>, modifier: Modifier = Modifier) {
         }
     }
     Surface(modifier.fillMaxWidth().height(AD_BANNER_HEIGHT), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Crossfade(items[index % items.size], label = "ad") { item ->
-            Row(
-                Modifier.fillMaxWidth().clickable { open = item }.padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when (item) {
-                    is BannerItem.Ad -> {
-                        AdImage(item.ad.content.thumb, maxSide = 160, Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
-                        BannerText(item.ad.content.title, item.ad.content.desc, Modifier.weight(1f))
-                        Label("Ad")
-                    }
-                    BannerItem.DevNote -> {
-                        Box(
-                            Modifier.size(40.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Outlined.Build, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
-                        BannerText(DEV_NOTE_TITLE, DEV_NOTE_LINE, Modifier.weight(1f))
-                        Label("Note")
-                    }
-                }
+        Crossfade(items[index % items.size], label = "ad") { item -> BannerRow(item) { open = item } }
+    }
+    ItemDialog(open) { open = null }
+}
+
+/**
+ * The ad shown in the Social feed after each [POSTS_PER_AD] posts: the ads and the developers' note in
+ * turn, [number] being the ad's place in the feed (0 the first). A tap opens it.
+ */
+@Composable
+fun FeedAd(ads: List<ChainAd>, number: Int, modifier: Modifier = Modifier) {
+    val items = remember(ads) { bannerItems(ads) }
+    val item = items[number % items.size]
+    var open by remember { mutableStateOf(false) }
+    Surface(
+        modifier.fillMaxWidth().height(AD_BANNER_HEIGHT).clip(RoundedCornerShape(12.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) { BannerRow(item) { open = true } }
+    if (open) ItemDialog(item) { open = false }
+}
+
+private fun bannerItems(ads: List<ChainAd>): List<BannerItem> = ads.map { BannerItem.Ad(it) } + BannerItem.DevNote
+
+/** One item of the banner on one line: its image, title and line, and what it is. */
+@Composable
+private fun BannerRow(item: BannerItem, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when (item) {
+            is BannerItem.Ad -> {
+                AdImage(item.ad.content.thumb, maxSide = 160, Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
+                BannerText(item.ad.content.title, item.ad.content.desc, Modifier.weight(1f))
+                Label("Ad")
+            }
+            BannerItem.DevNote -> {
+                Box(
+                    Modifier.size(40.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Outlined.Build, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+                BannerText(DEV_NOTE_TITLE, DEV_NOTE_LINE, Modifier.weight(1f))
+                // The ads' place: anyone can publish an ad here.
+                Label("Ads")
             }
         }
     }
-    when (val item = open) {
-        is BannerItem.Ad -> AdDialog(item.ad) { open = null }
-        BannerItem.DevNote -> DevNoteDialog { open = null }
+}
+
+@Composable
+private fun ItemDialog(item: BannerItem?, onDismiss: () -> Unit) {
+    when (item) {
+        is BannerItem.Ad -> AdDialog(item.ad, onDismiss)
+        BannerItem.DevNote -> DevNoteDialog(onDismiss)
         null -> {}
     }
 }

@@ -37,7 +37,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -61,7 +60,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -71,6 +69,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withLink
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -95,20 +94,34 @@ import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.io.IOException
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
 /**
  * The Social tab: idena.social read from the phone's node ([SocialModel] scans it), and posting with the
- * node's key: the feed (newest posts or latest activity), the Activity on the identity's posts with its
- * notifications, the identity's profile, and over them threads, profiles and the editor.
+ * node's key. Home: the search bar and the feed (newest posts or latest activity, with [ads] in it).
+ * Profile: the identity's. Inbox: the notifications (likes, comments and tips on the identity's posts)
+ * and the chats (the contacts). Over them threads, profiles and the editor. The bottom bar opens the lists
+ * and the editor; the status is in the app's title row ([SocialInfoDialog]).
  */
 @Composable
-fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
+fun SocialScreen(model: SocialModel, ads: List<ChainAd>, modifier: Modifier = Modifier) {
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
-    var info by remember { mutableStateOf(false) }
     // The person being named (the name dialog).
     var naming by remember { mutableStateOf<Person?>(null) }
     val context = LocalContext.current
@@ -133,8 +146,9 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
         }
     }
     CompositionLocalProvider(LocalNames provides model.names, LocalNow provides now) {
-    Box(modifier.fillMaxSize()) {
-        val current = model.draft
+    Column(modifier.fillMaxSize()) {
+    val current = model.draft
+    Box(Modifier.weight(1f).fillMaxWidth()) {
         val page = model.pages.lastOrNull()
         val historyDone = model.cache?.historyDone == true
         // A like of a post of a list (a reply or comment is liked from its thread).
@@ -150,7 +164,7 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                     states = states,
                     myAddress = myAddress,
                     canAct = canAct,
-                    header = { StatusBar(model, onBack = model::back) { info = true } },
+                    header = { BackRow(model::back) },
                     onProfile = model::openProfile,
                     onLike = { target -> model.preparePost("Like", LIKE, target) },
                     onAnswer = { model.draft = it },
@@ -160,7 +174,7 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
             }
             page is SocialPage.Profile -> key(page) {
                 Column(Modifier.fillMaxSize()) {
-                    StatusBar(model, onBack = model::back) { info = true }
+                    BackRow(model::back)
                     ProfileList(
                         address = page.address,
                         feed = feed,
@@ -185,20 +199,19 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
             }
             else -> {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StatusBar(model, onBack = null) { info = true }
-                    val unread = model.unread.size
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = model.view == SocialView.Me, onClick = { model.view = SocialView.Me }, label = { Text("Profile") })
-                        FilterChip(
-                            selected = model.view == SocialView.Activity,
-                            onClick = { model.openActivity() },
-                            label = { Text(if (unread > 0) "Activity · $unread new" else "Activity") },
-                        )
-                        FilterChip(selected = model.view == SocialView.People, onClick = { model.view = SocialView.People }, label = { Text("Contacts") })
+                    Spacer(Modifier.height(2.dp))
+                    when (model.view) {
+                        SocialView.Feed -> {
+                            SearchField(model)
+                            FeedOptions(model)
+                            HorizontalDivider()
+                        }
+                        SocialView.Activity, SocialView.People -> {
+                            InboxOptions(model)
+                            HorizontalDivider()
+                        }
+                        SocialView.Me -> {}
                     }
-                    SearchField(model)
-                    FeedOptions(model)
-                    HorizontalDivider()
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
                         SocialView.People -> PeopleList(model, Modifier.weight(1f), onName = { naming = it })
@@ -250,8 +263,7 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                                 Modifier.weight(1f),
                                 state = model.feedState,
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                                // Room for the write button over the last post.
-                                contentPadding = PaddingValues(bottom = 88.dp),
+                                contentPadding = PaddingValues(bottom = 16.dp),
                             ) {
                                 val found = hits
                                 if (query.length >= MIN_SEARCH) {
@@ -266,7 +278,18 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                                 }
                                 if (feed.isEmpty()) item(key = "empty") { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
                                 else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
-                                items(sorted, key = { it.id }) { post ->
+                                // An ad after each POSTS_PER_AD posts.
+                                items(
+                                    feedRows(sorted.size),
+                                    key = { row -> feedAdAt(row)?.let { "ad:$it" } ?: sorted[feedPostAt(row)].id },
+                                    contentType = { row -> if (feedAdAt(row) != null) "ad" else "post" },
+                                ) { row ->
+                                    val adNumber = feedAdAt(row)
+                                    if (adNumber != null) {
+                                        FeedAd(ads, adNumber)
+                                        return@items
+                                    }
+                                    val post = sorted[feedPostAt(row)]
                                     PostCard(
                                         post = post,
                                         states = states,
@@ -283,14 +306,10 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
                         }
                     }
                 }
-                if (model.view == SocialView.Feed) {
-                    FloatingActionButton(
-                        onClick = { model.draft = Draft("Post", "New post", PostTarget.NEW_POST, null) },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                    ) { Text("✎", fontSize = 22.sp) }
-                }
             }
         }
+    }
+    if (current == null) BottomBar(model)
     }
 
     model.confirm?.let { pending ->
@@ -324,41 +343,61 @@ fun SocialScreen(model: SocialModel, modifier: Modifier = Modifier) {
             model.setPerson(person.copy(name = name))
         }
     }
-
-    if (info) ScanInfoDialog(model) { info = false }
     }
 }
+
+/** Back, at the top of a thread or a profile. */
+@Composable
+private fun BackRow(onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onBack, Modifier.height(48.dp), contentPadding = PaddingValues(start = 6.dp, end = 14.dp)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.size(26.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Back", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+/** The bottom bar's height: the app keeps its notices over it. */
+val SOCIAL_BAR_HEIGHT = 60.dp
 
 /**
- * The status bar at the top of the tab, always one line high so that the list under it never moves: a
- * colored dot ([BarState]), the paid action while it runs or else the status, and ⓘ for the details
- * (also a tap on the bar). [onBack], on a thread or a profile, adds Back before it.
+ * The bottom bar: Home (the feed), the identity's Profile, the Inbox (with what is new), each shown over
+ * the open pages, and Post (the editor). A list is marked while it shows with no page over it.
  */
 @Composable
-private fun StatusBar(model: SocialModel, onBack: (() -> Unit)?, onInfo: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-        onBack?.let {
-            TextButton(onClick = it, Modifier.height(48.dp), contentPadding = PaddingValues(start = 6.dp, end = 14.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.size(26.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Back", style = MaterialTheme.typography.titleMedium)
-            }
+private fun BottomBar(model: SocialModel) {
+    val unread = model.unread.size
+    val onList = model.pages.isEmpty()
+    Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            BarItem("Home", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
+            val inInbox = model.view == SocialView.Activity || model.view == SocialView.People
+            BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread) { model.showList(model.inboxView) }
+            BarItem("Post", Icons.Filled.Edit, selected = false) { model.draft = Draft("Post", "New post", PostTarget.NEW_POST, null) }
         }
-        Spacer(Modifier.width(if (onBack == null) 2.dp else 4.dp))
-        val action = model.sendStatus
-        StatusLine(
-            model.status,
-            Modifier.weight(1f),
-            text = action ?: model.status.label,
-            textColor = if (action != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            onInfo = onInfo,
-        )
     }
 }
 
-/** The details behind the status bar: the node, the blocks read, the history, the last action, and "Scan blocks". */
 @Composable
-private fun ScanInfoDialog(model: SocialModel, onDismiss: () -> Unit) {
+private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
+    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        Modifier.weight(1f).fillMaxHeight().clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) {
+            Icon(icon, contentDescription = null, tint = color)
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null)
+    }
+}
+
+/** The details behind the Social status (title row): the node, the blocks read, the history, the last action, and "Scan blocks". */
+@Composable
+fun SocialInfoDialog(model: SocialModel, onDismiss: () -> Unit) {
     val status = model.status
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -430,13 +469,23 @@ private fun ActivityList(model: SocialModel, modifier: Modifier, onOpen: (Activi
     val newAfter = model.highlightAfter
     LazyColumn(modifier, state = model.activityState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Notify me of", style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NotifyKind.entries.forEach { kind ->
-                        FilterChip(selected = kind in model.notify, onClick = { model.setNotifyOn(kind, kind !in model.notify) }, label = { Text(kind.title) })
-                    }
+            // What to be notified of; the bell says what the chips are for.
+            var about by remember { mutableStateOf(false) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                NotifyKind.entries.forEach { kind ->
+                    FilterChip(selected = kind in model.notify, onClick = { model.setNotifyOn(kind, kind !in model.notify) }, label = { Text(kind.title) })
                 }
+                IconButton(onClick = { about = true }) {
+                    Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (about) {
+                AlertDialog(
+                    onDismissRequest = { about = false },
+                    title = { Text("Notifications") },
+                    text = { Text("A notice comes for each new like, comment or tip on your posts of the kinds selected. All of them are listed here.") },
+                    confirmButton = { TextButton(onClick = { about = false }) { Text("Close") } },
+                )
             }
         }
         if (items.isEmpty()) item { Text("No likes, answers or tips on your posts yet.", style = MaterialTheme.typography.bodyMedium) }
@@ -501,31 +550,44 @@ private fun AnnotatedString.Builder.appendAddress(address: String, styles: Addre
 }
 
 /**
- * "0x1234…abcd · Human · 30 Sep 2026, 10:05" on one line: the time never goes to the next line, the
- * address and state are cut first. A tap on the address opens its profile.
+ * The author of a post, reply or comment on two lines next to their avatar ([avatar] high): the name (or
+ * the short address) with how long ago at the top right, then the state and age in the state's color. A tap on the avatar
+ * or the name opens the profile.
  */
 @Composable
-private fun PostHeader(call: PostCall, states: Map<String, AuthorIdentity>, onProfile: (String) -> Unit) {
-    // Nothing while the node is asked for the state.
+private fun PostHeader(call: PostCall, states: Map<String, AuthorIdentity>, onProfile: (String) -> Unit, avatar: Dp = 36.dp) {
+    // No state while the node is asked for it.
     val identity = states[call.author]
     val styles = addressLinkStyles()
     val palette = statusPalette()
-    val style = MaterialTheme.typography.bodyMedium
     val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Row {
-        Text(
-            buildAnnotatedString {
-                appendAddress(call.author, styles, onProfile)
-                identity?.let { appendStatus(it, palette) }
-            },
-            Modifier.weight(1f),
-            style = style,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(ago(call.time), style = style, color = color, maxLines = 1, softWrap = false)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Avatar(call.author, avatar, Modifier.clickable { onProfile(call.author) })
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            // The time stays at the top right; the name is cut first.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    buildAnnotatedString { appendAddress(call.author, styles, onProfile) },
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
+            }
+            identity?.let {
+                Text(
+                    it.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette(it.state),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -687,13 +749,17 @@ private fun ActivityCard(item: ActivityItem, isNew: Boolean, onProfile: (String)
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             val styles = addressLinkStyles()
             if (isNew) Text("● New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(
-                buildAnnotatedString {
-                    appendAddress(item.actor, styles, onProfile)
-                    append(" $action your post  ·  ${ago(item.time)}")
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(item.actor, 32.dp, Modifier.clickable { onProfile(item.actor) })
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    buildAnnotatedString {
+                        appendAddress(item.actor, styles, onProfile)
+                        append(" $action your post  ·  ${ago(item.time)}")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             PostContent(item.what, MaterialTheme.typography.bodyMedium, maxLines = 2, showMedia = false)
             item.answer?.let {
                 HorizontalDivider()
@@ -779,8 +845,9 @@ private fun ProfileList(
 }
 
 /**
- * The identity of a profile: its name (contact list) or address, the address in full (Copy), Name and
- * Follow, state, age, stake, and its likes and tips.
+ * The identity of a profile, compact: the avatar; then the name (or the short address) with ✎ and Follow,
+ * the short address with copy, the state, age and stake in the state's color; under them the likes and
+ * the tips, received and given.
  */
 @Composable
 private fun ProfileHeader(
@@ -793,48 +860,63 @@ private fun ProfileHeader(
     onFollow: (Person) -> Unit,
     onName: (Person) -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
-    var copied by remember(address) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        val title = person.name.ifEmpty { shortAddress(address) }
-        Text(if (isMe) "$title (you)" else title, style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill(if (copied) "Copied" else "Copy", enabled = true) {
-                clipboard.setText(AnnotatedString(address))
-                copied = true
-            }
-            Pill(if (person.name.isEmpty()) "Name" else "Rename", enabled = true) { onName(person) }
-            if (!isMe) {
-                FilterChip(
-                    selected = person.following,
-                    onClick = { onFollow(person.copy(following = !person.following)) },
-                    label = { Text(if (person.following) "Following" else "Follow") },
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(address, 64.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val title = person.name.ifEmpty { shortAddress(address) }
+                    Text(
+                        if (isMe) "$title (you)" else title,
+                        Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    // Without a name the title is the short address: copy it there.
+                    if (person.name.isEmpty()) CopyAddressButton(address)
+                    SmallIconButton(Icons.Filled.Edit, if (person.name.isEmpty()) "Name" else "Rename", muted) { onName(person) }
+                    Spacer(Modifier.weight(1f))
+                    if (!isMe) {
+                        FilterChip(
+                            selected = person.following,
+                            onClick = { onFollow(person.copy(following = !person.following)) },
+                            label = { Text(if (person.following) "Following" else "Follow") },
+                        )
+                    }
+                }
+                if (person.name.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(shortAddress(address), style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, color = muted)
+                        CopyAddressButton(address)
+                    }
+                }
+                val palette = statusPalette()
+                Text(
+                    identity?.fold(
+                        {
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) {
+                                    append("${it.status} · age ${it.age} · stake ${blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))} iDNA")
+                                }
+                            }
+                        },
+                        { AnnotatedString("Identity: the node did not answer (${it.message}).") },
+                    ) ?: AnnotatedString("Identity: asking the node…"),
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
-        Text(address, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val palette = statusPalette()
-        Text(
-            identity?.fold(
-                {
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) { append("${it.status}  ·  age ${it.age}") }
-                        append("  ·  stake ${blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))} iDNA")
-                    }
-                },
-                { AnnotatedString("Identity: the node did not answer (${it.message}).") },
-            ) ?: AnnotatedString("Identity: asking the node…"),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            "$LIKE ${profile.likesReceived} received  ·  🪙 ${profile.tipsReceived} iDNA received, ${profile.tipsGiven} given",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        val counts = MaterialTheme.typography.bodyMedium
+        Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
+        Text("🪙 ${blockNumber.format(profile.tipsReceived)} received · ${blockNumber.format(profile.tipsGiven)} given iDNA", style = counts)
         if (!historyDone) {
             Text(
                 "From the blocks scanned so far: older posts appear as the history scan goes on.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = muted,
             )
         }
     }
@@ -968,7 +1050,7 @@ private fun ThreadView(
                     WhoLine(reply) { onWho(reply) }
                     for (comment in reply.replies) {
                         ThreadLine(focused = comment.id == focusId) {
-                            PostHeader(comment.call, states, onProfile)
+                            PostHeader(comment.call, states, onProfile, avatar = 28.dp)
                             PostContent(comment.call, MaterialTheme.typography.bodyLarge)
                             ActionBar(comment, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onComment(reply.id, comment.id)) }, onAnswer = {
                                 onAnswer(Draft("Comment", "Comment", PostTarget.onComment(reply.id, comment.id), comment.call))
@@ -1113,44 +1195,65 @@ private fun DraftImage(bytes: ByteArray) {
 /** The feed's search bar, a rounded bar: texts of the posts read, contact names, or a pasted address. */
 @Composable
 private fun SearchField(model: SocialModel) {
-    TextField(
+    val colors = MaterialTheme.colorScheme
+    BasicTextField(
         value = model.searchQuery,
         onValueChange = {
             model.searchQuery = it.take(200)
             // The results show in the feed.
             if (model.view != SocialView.Feed) model.showFeed(following = model.feedFollowing)
         },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        placeholder = { Text("Search Chats") },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = if (model.searchQuery.isEmpty()) null else {
-            { TextButton(onClick = { model.searchQuery = "" }) { Text("✕") } }
-        },
+        modifier = Modifier.fillMaxWidth().height(40.dp),
         singleLine = true,
-        shape = RoundedCornerShape(28.dp),
-        colors = TextFieldDefaults.colors(
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-        ),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface),
+        cursorBrush = SolidColor(colors.primary),
+        decorationBox = { field ->
+            Row(
+                Modifier.fillMaxSize().background(colors.surfaceContainerHighest, RoundedCornerShape(20.dp)).padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null, Modifier.size(20.dp), tint = colors.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) {
+                    if (model.searchQuery.isEmpty()) Text("Search", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                    field()
+                }
+                if (model.searchQuery.isNotEmpty()) {
+                    TextButton(onClick = { model.searchQuery = "" }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("✕") }
+                } else Spacer(Modifier.width(12.dp))
+            }
+        },
     )
 }
 
-/** Feed and Following (all posts, or the people followed), then, on the feed, its order and the period of a ranked order as menus. */
+/** Home's lists: Feed and Following (all posts, or the people followed), then the order and the period of a ranked order as menus. */
 @Composable
 private fun FeedOptions(model: SocialModel) {
-    val inFeed = model.view == SocialView.Feed
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(selected = inFeed && !model.feedFollowing, onClick = { model.showFeed(following = false) }, label = { Text("Feed") })
-        FilterChip(selected = inFeed && model.feedFollowing, onClick = { model.showFeed(following = true) }, label = { Text("Following") })
-        if (inFeed && model.searchQuery.trim().length < MIN_SEARCH) {
+        FilterChip(selected = !model.feedFollowing, onClick = { model.showFeed(following = false) }, label = { Text("Feed") })
+        FilterChip(selected = model.feedFollowing, onClick = { model.showFeed(following = true) }, label = { Text("Following") })
+        if (model.searchQuery.trim().length < MIN_SEARCH) {
             MenuChip(model.feedSort.title, FeedSort.entries, { it.title }, model::sortFeedBy)
             if (model.feedSort.ranked) MenuChip(model.feedPeriod.title, FeedPeriod.entries, { it.title }) { model.feedPeriod = it }
         }
+    }
+}
+
+/** The Inbox's lists: Notifications (likes, comments and tips on the identity's posts, with what is new) and Contacts. */
+@Composable
+private fun InboxOptions(model: SocialModel) {
+    val unread = model.unread.size
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FilterChip(
+            selected = model.view == SocialView.Activity,
+            onClick = { model.showList(SocialView.Activity) },
+            label = { Text(if (unread > 0) "Notifications · $unread new" else "Notifications") },
+        )
+        FilterChip(selected = model.view == SocialView.People, onClick = { model.showList(SocialView.People) }, label = { Text("Contacts") })
     }
 }
 
@@ -1199,9 +1302,13 @@ private fun HitCard(
 ) {
     when (hit) {
         is SearchHit.Address -> Card(Modifier.fillMaxWidth().clickable { onProfile(hit.address) }) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Open the profile of ${displayName(hit.address, LocalNames.current)}  ›", style = MaterialTheme.typography.titleSmall)
-                Text(hit.address, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Avatar(hit.address, 40.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Open the profile of ${displayName(hit.address, LocalNames.current)}  ›", style = MaterialTheme.typography.titleSmall)
+                    Text(shortAddress(hit.address), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                }
             }
         }
         is SearchHit.Named -> PersonRow(hit.person) { onProfile(hit.person.address) }
@@ -1214,16 +1321,18 @@ private fun HitCard(
     }
 }
 
-/** A contact: the name (or the address), the address, and the marks; a tap opens the profile. */
+/** A contact: the avatar, the name (or the short address), the short address under a name; a tap opens the profile. */
 @Composable
 private fun PersonRow(person: Person, trailing: @Composable () -> Unit = {}, onOpen: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(person.address, 40.dp)
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(person.name.ifEmpty { shortAddress(person.address) }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val marks = listOfNotNull(shortAddress(person.address).takeIf { person.name.isNotEmpty() }, "Following".takeIf { person.following })
-                if (marks.isNotEmpty()) {
-                    Text(marks.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Following shows on the row's chip.
+                if (person.name.isNotEmpty()) {
+                    Text(shortAddress(person.address), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             trailing()
@@ -1232,8 +1341,8 @@ private fun PersonRow(person: Person, trailing: @Composable () -> Unit = {}, onO
 }
 
 /**
- * The Contacts: the names given and the people followed, kept on the phone only. A tap opens the
- * profile; Rename and Follow there or here. Contacts are added from their profile.
+ * The Inbox's Contacts: the names given and the people followed, kept on the phone only.
+ * A tap opens the profile; ✎ (name) and Follow there or here. Contacts are added from their profile.
  */
 @Composable
 private fun PeopleList(model: SocialModel, modifier: Modifier, onName: (Person) -> Unit) {
@@ -1251,7 +1360,7 @@ private fun PeopleList(model: SocialModel, modifier: Modifier, onName: (Person) 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         "Names and follows are private: they stay on this phone and are never published. To add someone, open " +
-                            "their profile (a tap on an address, or paste the address in the feed's search) and select Name or Follow.",
+                            "their profile (a tap on an address, or paste the address in the feed's search) and tap ✎ (name) or Follow.",
                     )
                     Text(
                         "Export writes the list to a file of your choice (to keep it, or to move it to another phone); whoever " +
@@ -1321,7 +1430,7 @@ private fun PeopleList(model: SocialModel, modifier: Modifier, onName: (Person) 
         if (people.isEmpty()) item(key = "empty") { Text("No contacts yet.", style = MaterialTheme.typography.bodyMedium) }
         items(people, key = { it.address }) { person ->
             PersonRow(person, trailing = {
-                TextButton(onClick = { onName(person) }) { Text("Rename") }
+                IconButton(onClick = { onName(person) }) { Icon(Icons.Filled.Edit, contentDescription = "Rename") }
                 FilterChip(
                     selected = person.following,
                     onClick = { model.setPerson(person.copy(following = !person.following)) },
@@ -1349,7 +1458,7 @@ private fun NameDialog(person: Person, onDismiss: () -> Unit, onSave: (String) -
                 Text("Shown instead of the address in the Social tab. It stays on this phone: nobody else sees it.")
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it.take(Person.MAX_NAME) },
+                    onValueChange = { name = it.takeWhole(Person.MAX_NAME) },
                     label = { Text("Name") },
                     singleLine = true,
                 )

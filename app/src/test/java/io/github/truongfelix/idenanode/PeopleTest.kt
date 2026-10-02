@@ -34,6 +34,9 @@ class PeopleTest {
     fun namesAreOneTrimmedLine() {
         assertEquals("Alice Smith", cleanName("  Alice\n\tSmith  "))
         assertEquals(Person.MAX_NAME, cleanName("x".repeat(100)).length)
+        // An emoji (2 UTF-16 units) across the limit is dropped whole, never cut in half.
+        assertEquals("x".repeat(Person.MAX_NAME - 1), cleanName("x".repeat(Person.MAX_NAME - 1) + "😀"))
+        assertEquals("ok 😀", cleanName("ok 😀"))
         assertEquals("", cleanName(" \n "))
     }
 
