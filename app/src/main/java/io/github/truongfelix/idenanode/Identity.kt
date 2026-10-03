@@ -62,7 +62,7 @@ fun currentTask(
     "AfterLongSession" -> "Wait for the validation end"
     else -> when {
         state == "Invite" -> "Accept the invitation"
-        state == "Undefined" -> "Activate an invitation (on app.idena.io)"
+        state == "Undefined" -> "Activate an invitation code"
         state in validatedStates -> {
             val requiredLeft = requiredFlips - publishedFlips
             val optional = availableFlips - maxOf(requiredFlips, publishedFlips)

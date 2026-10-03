@@ -311,8 +311,9 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
         val validationFirst = validation != null &&
             validationIsClose(Instant.now(), parseValidationTime(validation.nextValidation), validation.period)
         if (validationFirst) ValidationCard(validation!!, showCountdown = true)
-        AccountCard(state)
+        AccountCard(state) { scope.launch { refresh() } }
         state.status?.takeUnless { it.accountPending }?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
+        state.status?.takeIf { !it.accountPending && showInvitations(it) }?.let { InvitationsCard(it, people) { scope.launch { refresh() } } }
         state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
         if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
         if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundCard(state)
@@ -385,7 +386,7 @@ private fun NodeCard(state: ScreenState, mining: @Composable () -> Unit, onSyncC
 
 /** The account: its avatar (drawn from the address), the address with copy, the identity and its age. */
 @Composable
-private fun AccountCard(state: ScreenState) {
+private fun AccountCard(state: ScreenState, onChanged: () -> Unit) {
     val status = state.status
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -411,6 +412,7 @@ private fun AccountCard(state: ScreenState) {
                 }
             }
             AddressLine(address)
+            if (status != null && !status.accountPending && status.identityState == "Undefined") ActivateCodeSection(status, onChanged)
             if (status != null && !status.accountPending && status.syncing) {
                 Text(
                     "Values are those of the synced block; they are current once the sync is done.",
