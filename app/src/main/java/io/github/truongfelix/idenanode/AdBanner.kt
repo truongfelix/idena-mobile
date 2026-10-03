@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -205,43 +206,92 @@ private fun AdDialog(ad: ChainAd, onDismiss: () -> Unit) {
 const val DEV_NOTE_TITLE = "A note from the devs"
 const val DEV_NOTE_LINE = "You run an optimised, more secure Idena node. Tap to read."
 
-/** The code behind the app, as GitHub repositories and what each one is. */
-private val REPOSITORIES = listOf(
-    "ubiubi18/idena-go" to "the node",
+/** The package this app belongs to, as GitHub repositories and what each one is. */
+private val PACKAGE = listOf(
+    "truongfelix/idena-go" to "the node: optimised, more secure",
+    "truongfelix/idena-desktop" to "the desktop app",
     "truongfelix/idena-mobile" to "this app",
-    "N3CR0M4NC3R-dev/idena.social" to "the social network",
 )
 
-/** The developers' note: what this node is, where its code is, and the vote asked for. */
+/** The original Idena code, which the package builds on. */
+private val LEGACY = "idena-network" to "the original Idena code (legacy, no longer maintained)"
+
+/** Contributors, direct and indirect, and what of theirs the package builds on. */
+private val CONTRIBUTORS = listOf(
+    "ubiubi18" to "the idena-go and idena-desktop forks this package started from, and reviews of its pull requests",
+    "N3CR0M4NC3R-dev/idena.social" to "idena.social, the social network of the Social tab",
+)
+
+/**
+ * The developers' note: a community package, not the original team's; who makes it and its repositories,
+ * the original code, the contributors, a personal statement on mining and reported flips, and the avatars' credits.
+ */
 @Composable
 private fun DevNoteDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(DEV_NOTE_TITLE) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "You are using an optimised, more secure version of the Idena node. The official idena-go is no " +
-                        "longer maintained: this one is.",
+                    "Community work: this package is not made by the original Idena team.",
+                    fontWeight = FontWeight.Bold,
                 )
-                Text("Like the project? Read the code:")
-                REPOSITORIES.forEach { (repository, what) ->
-                    Column(Modifier.fillMaxWidth().clickable { openInBrowser(context, "https://github.com/$repository") }) {
-                        Text(repository, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
-                        Text(what, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Text("Want to help Idena? Vote for this version at the next hard fork.", fontWeight = FontWeight.Bold)
+                Text("This app is part of the Idena community package by truongfelix, on the same chain as the original:")
+                PACKAGE.forEach { (path, what) -> GitHubLink(path, what) }
+                Text("Built on the original Idena code:", style = MaterialTheme.typography.bodyMedium)
+                GitHubLink(LEGACY.first, LEGACY.second)
+                Text("With thanks for their direct and indirect contributions:", style = MaterialTheme.typography.bodyMedium)
+                CONTRIBUTORS.forEach { (path, what) -> GitHubLink(path, what) }
+                HorizontalDivider()
                 Text(
-                    "Your node casts the vote while it mines.",
+                    "Today, an identity that cannot solve flips is penalised in mining, while an identity whose flips " +
+                        "are reported is not. We believe this is unfair, and unstable for the future of the network.",
+                )
+                Text(
+                    "If you think an identity that keeps making flips that get reported should be penalised, its mining " +
+                        "rate reduced in proportion to its reported flips out of its total flips over the last 10 epochs, " +
+                        "please speak out on Telegram, Discord and idena.social.",
+                    fontWeight = FontWeight.Bold,
+                )
+                COMMUNITY.forEach { (name, url) -> Link(name, url) }
+                HorizontalDivider()
+                Text(
+                    "Robot avatars: RoboHash (MIT), robots by Zikri Kader (CC-BY 4.0), drawn on this phone.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = muted,
                 )
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
+}
+
+/** Where the community talks (idena.social is the Social tab). */
+private val COMMUNITY = listOf(
+    "Telegram" to "https://t.me/IdenaAnnouncements",
+    "Discord" to "https://discord.com/invite/idena-community-634481767352369162",
+)
+
+/** [name] as a link to [url], with the address under it. */
+@Composable
+private fun Link(name: String, url: String) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().clickable { openInBrowser(context, url) }) {
+        Text(name, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+        Text(url.removePrefix("https://"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** A GitHub account or repository ([path]) as a link, with [what] it is under it. */
+@Composable
+private fun GitHubLink(path: String, what: String) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().clickable { openInBrowser(context, "https://github.com/$path") }) {
+        Text(path, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+        Text(what, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 /** Opens [url] in the browser; nothing happens if the phone has no browser. */
