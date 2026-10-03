@@ -92,8 +92,11 @@ class FlipActivity : ComponentActivity() {
 
 private enum class FlipStep(val title: String) { Words("Words"), Frames("Pictures"), Shuffle("Shuffle"), Submit("Submit") }
 
-/** What the node says of the identity's flips: the counts, the keyword pairs and when flips stop. */
-private class FlipNodeState(val quota: FlipQuota, val pairs: List<KeywordPair>, val deadline: Instant?)
+/**
+ * What the node says of the identity's flips: the counts, the keyword pairs, when flips stop, the epoch
+ * and whether the node is synced (flips are sent only then).
+ */
+private class FlipNodeState(val quota: FlipQuota, val pairs: List<KeywordPair>, val deadline: Instant?, val epoch: Int, val synced: Boolean)
 
 private fun readFlipState(context: Context): FlipNodeState {
     val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
@@ -104,7 +107,13 @@ private fun readFlipState(context: Context): FlipNodeState {
         identity.optInt("availableFlips"),
         identity.optInt("madeFlips"),
     )
-    return FlipNodeState(quota, keywordPairs(identity), runCatching { rpc.flipDeadline() }.getOrNull())
+    return FlipNodeState(
+        quota,
+        keywordPairs(identity),
+        runCatching { rpc.flipDeadline() }.getOrNull(),
+        rpc.ceremony().epoch,
+        runCatching { rpc.synced() }.getOrDefault(false),
+    )
 }
 
 @Composable
@@ -138,29 +147,29 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         scope.launch(Dispatchers.IO) { runCatching { FlipDraftStore.save(context, next, ticket) } }
     }
 
-    // Until the node counts the flip sent, it is asked every 10 s; a flip it no longer knows after a long
-    // time was dropped (and may be made again).
-    LaunchedEffect(sent) {
+    // Until the node counts the flip sent, it is asked every 10 s ([checkSent]): a flip from another epoch,
+    // or not counted after a long time, is forgotten (and may be made again).
+    LaunchedEffect(sent, node) {
         val waiting = sent ?: return@LaunchedEffect
+        val read = node?.getOrNull() ?: return@LaunchedEffect
+        val check = checkSent(waiting, read.epoch, read.pairs, System.currentTimeMillis())
+        if (check != SentFlipCheck.Wait) {
+            withContext(Dispatchers.IO) { FlipDraftStore.setSent(context, null) }
+            sent = null
+            if (check == SentFlipCheck.TimedOut) {
+                message = "The flip sent at ${dateFormat.format(Instant.ofEpochMilli(waiting.sentAt))} was not counted by the node; you can make it again."
+            }
+            return@LaunchedEffect
+        }
+        val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
         while (true) {
-            val counted = node?.getOrNull()?.let { isCounted(waiting, it.pairs) } == true
-            if (counted) {
-                FlipDraftStore.setSent(context, null)
-                sent = null
-                return@LaunchedEffect
-            }
-            val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
-            val (mined, known) = withContext(Dispatchers.IO) {
-                runCatching { rpc.isMined(waiting.txHash) }.getOrDefault(false) to rpc.knowsTx(waiting.txHash)
-            }
-            if (mined) reads++
-            if (!known && System.currentTimeMillis() - waiting.sentAt > SENT_FLIP_TIMEOUT_MS) {
-                FlipDraftStore.setSent(context, null)
-                sent = null
-                message = "The flip sent at ${dateFormat.format(Instant.ofEpochMilli(waiting.sentAt))} never got into a block; you can make it again."
-                return@LaunchedEffect
-            }
             kotlinx.coroutines.delay(10_000)
+            // Once in a block the node counts it: the identity is read again, which runs this check again.
+            val mined = withContext(Dispatchers.IO) { runCatching { rpc.isMined(waiting.txHash) }.getOrDefault(false) }
+            if (mined || System.currentTimeMillis() - waiting.sentAt > SENT_FLIP_TIMEOUT_MS) {
+                reads++
+                return@LaunchedEffect
+            }
         }
     }
 
@@ -187,10 +196,10 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         }
         val read = state!!.getOrThrow()
         // The flip sent counts at once, before the node counts it (see [SentFlip]).
-        val (quota, pairs) = countSent(read.quota, read.pairs, sent)
-        val nodeState = FlipNodeState(quota, pairs, read.deadline)
+        val (quota, pairs) = countSent(read.quota, read.pairs, sent, read.epoch)
+        val nodeState = FlipNodeState(quota, pairs, read.deadline, read.epoch, read.synced)
         QuotaLine(nodeState)
-        sent?.takeUnless { isCounted(it, read.pairs) }?.let {
+        sent?.takeIf { checkSent(it, read.epoch, read.pairs, System.currentTimeMillis()) == SentFlipCheck.Wait }?.let {
             Text("Your last flip is sent and waits for a block (${it.hash.take(12)}…).", style = MaterialTheme.typography.bodySmall)
         }
         if (!nodeState.quota.canMake) {
@@ -216,6 +225,14 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         StepRow(step)
         HorizontalDivider()
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        if (!nodeState.synced && step == FlipStep.Submit) {
+            Text("The node is not synced: the flip can be sent once it is.", color = MaterialTheme.colorScheme.error)
+            // Reads the node again until it is synced.
+            LaunchedEffect(read) {
+                kotlinx.coroutines.delay(10_000)
+                reads++
+            }
+        }
         Box(Modifier.weight(1f)) {
             when (step) {
                 FlipStep.Words -> WordsStep(words, otherPairs = free.size - 1, onOther = {
@@ -255,11 +272,11 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                         ShuffleStep(current, protected.orEmpty(), ::update, onNext = { step = FlipStep.Submit })
                         return@Box
                     }
-                    SubmitStep(current, words, protected.orEmpty(), nodeState.deadline, enabled = !sending && sent == null) {
+                    SubmitStep(current, words, protected.orEmpty(), nodeState.deadline, enabled = !sending && sent == null && nodeState.synced) {
                     val frames = protected ?: return@SubmitStep
                     val shuffled = current.shuffled?.takeIf { isValidShuffle(it, current.adversarial) } ?: return@SubmitStep
                     // One send at a time, and none while the last one is not counted.
-                    if (sending || sent != null || !nodeState.quota.canMake || pairs.none { it.id == current.pairId && !it.used }) return@SubmitStep
+                    if (sending || sent != null || !nodeState.synced || !nodeState.quota.canMake || pairs.none { it.id == current.pairId && !it.used }) return@SubmitStep
                     sending = true
                     working = "Sending the flip to the node…"
                     scope.launch {
@@ -267,7 +284,7 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             runCatching {
                                 val hex = encodeFlip(frames, shuffled, kotlin.random.Random(java.security.SecureRandom().nextLong()))
                                 check(hex.size <= MAX_FLIP_HEX) { "the flip is too large" }
-                                NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).submitFlip(hex, current.pairId)
+                                NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).submitFlip(hex, current.pairId, nodeState.epoch)
                             }
                         }
                         working = null
