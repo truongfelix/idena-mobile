@@ -5,7 +5,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 . scripts/env.sh
-BINDING_REPO=https://github.com/ubiubi18/idena-wasm-binding
+BINDING_REPO=https://github.com/truongfelix/idena-wasm-binding
 BINDING_REV=01ccca5cc3c94917725964541954a9f20e3412e9
 [ -f build/libidena_wasm_android_arm64.a ] || { echo "run scripts/build-wasm-android.sh first"; exit 1; }
 

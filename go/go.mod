@@ -2,20 +2,19 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.8
 
-// The node: branch mobile-node of truongfelix/idena-go, ubiubi18/idena-go master (ab49b92, with #32) with
-// all our open pull requests merged: #33-#36 (validation and epoch performance, validator and switch
-// lookups, database compaction at start only when it pays off), #39, #41, #42 (fast sync: keeps going
-// when old transactions can't be read, restores the consensus config, keeps the headers when no
-// snapshot completes it), #40 (snapshots byte-identical to official nodes), #43 (evidence read skipped
-// without shards), #44 (gossip pulls), #45, #46 (rpc tests, Windows IPC), #47 (bcn_blocksWithAddress,
-// which the Social tab uses). Back to ubiubi18/idena-go once they are merged.
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20260930180313-d916c015e479
+// The node: master of truongfelix/idena-go (3de458e, 2026-10-02): ubiubi18/idena-go ef2107e with our
+// pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for the Social tab and #50 the
+// consensus version on mobile) and truongfelix #1-#5 (--dbwritebuffer, read-only consensus-version read,
+// OpenTelemetry 1.45.0, push tracker, own dependency forks).
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20261002135652-3de458e82e60
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/idena-network/iavl v0.12.3-0.20211223100228-a33b117aa31e
 
+replace github.com/libp2p/go-libp2p-kad-dht => github.com/truongfelix/go-libp2p-kad-dht v0.41.1-0.20260924080750-83f1403bcb17
+
 // The wasm binding pinned by idena-go with Android support, prepared by scripts/build-node-aar.sh from
-// ubiubi18/idena-wasm-binding 01ccca5 + wasm-binding-android.patch + the Android library.
+// truongfelix/idena-wasm-binding 01ccca5 + wasm-binding-android.patch + the Android library.
 replace github.com/idena-network/idena-wasm-binding => ../build/wasm-binding
 
 require (
