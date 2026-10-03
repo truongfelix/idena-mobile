@@ -189,3 +189,49 @@ object FlipDraftStore {
         if (on) file.createNewFile() else file.delete()
     }
 }
+
+/**
+ * The flips this phone sent ([MadeFlip]), one folder each under files/flips/made/: meta.json and the four
+ * protected frames in story order. Only the current epoch's are kept.
+ */
+object MadeFlipStore {
+    private fun root(context: Context) = File(context.filesDir, "flips/made")
+
+    /** Keeps [flip] with its [frames]; written to a new folder, then renamed. */
+    @Synchronized
+    fun add(context: Context, flip: MadeFlip, frames: List<ByteArray>) {
+        val root = root(context).also { it.mkdirs() }
+        val temp = File(root, "${flip.cid}.new").also { it.deleteRecursively(); it.mkdirs() }
+        frames.forEachIndexed { i, bytes -> File(temp, "frame$i.jpg").writeBytes(bytes) }
+        File(temp, "meta.json").writeText(flip.toJson().toString())
+        val target = File(root, flip.cid)
+        target.deleteRecursively()
+        check(temp.renameTo(target)) { "cannot keep the flip" }
+    }
+
+    /** The flips of [epoch]; the folders of other epochs are deleted. */
+    @Synchronized
+    fun list(context: Context, epoch: Int): List<MadeFlip> {
+        val dirs = root(context).listFiles { f -> f.isDirectory } ?: return emptyList()
+        return dirs.mapNotNull { dir ->
+            val flip = runCatching { MadeFlip.fromJson(JSONObject(File(dir, "meta.json").readText())) }.getOrNull()
+            if (flip == null || flip.epoch != epoch) {
+                dir.deleteRecursively()
+                null
+            } else {
+                flip
+            }
+        }
+    }
+
+    /** The frames of flip [cid] in story order, or null when they are not all there. */
+    fun frames(context: Context, cid: String): List<ByteArray>? = runCatching {
+        (0 until FLIP_FRAMES).map { File(root(context), "$cid/frame$it.jpg").readBytes() }
+    }.getOrNull()
+
+    @Synchronized
+    fun remove(context: Context, cid: String) {
+        File(root(context), cid).deleteRecursively()
+    }
+}
+

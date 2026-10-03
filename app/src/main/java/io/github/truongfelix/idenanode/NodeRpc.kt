@@ -255,6 +255,17 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
         return SentFlip(result.getString("txHash"), result.optString("hash"), pairId, System.currentTimeMillis(), epoch)
     }
 
+    /** The fee of deleting flip [cid] (bcn_estimateTx of a DeleteFlipTx); throws with the node's reason. */
+    fun estimateDeleteFlip(from: String, cid: String): java.math.BigDecimal {
+        val args = JSONObject().put("type", DELETE_FLIP_TX).put("from", from).put("amount", "0")
+            .put("payload", bytesToHex(deleteFlipPayload(cid)))
+        val result = call("bcn_estimateTx", JSONArray().put(args)) as JSONObject
+        return java.math.BigDecimal(result.optString("txFee", "0"))
+    }
+
+    /** Deletes flip [cid] (flip_delete); returns the transaction hash. */
+    fun deleteFlip(cid: String): String = call("flip_delete", JSONArray().put(cid)) as String
+
     /**
      * Whether the node is synced: a flip made on a node behind the chain uses the epoch, the keys and the
      * nonce of the past, and never counts.
