@@ -66,33 +66,6 @@ fun DotLegend(vararg rows: Pair<Health, String>) {
     }
 }
 
-/**
- * A one-line status: the dot of [state], [text] (its label unless given) cut to one line so that the bar
- * never changes height, and ⓘ for the details ([onInfo], also a tap on the line).
- */
-@Composable
-fun StatusLine(
-    state: BarState,
-    modifier: Modifier = Modifier,
-    text: String = state.label,
-    textColor: Color = MaterialTheme.colorScheme.onSurface,
-    onInfo: () -> Unit,
-) {
-    Row(modifier.clickable(onClick = onInfo), verticalAlignment = Alignment.CenterVertically) {
-        StatusDot(state.health)
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text,
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = textColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
-    }
-}
-
 /** The details behind the node's status bar: sync, network, blocks, peers, speed, start, and the background. */
 @Composable
 fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {

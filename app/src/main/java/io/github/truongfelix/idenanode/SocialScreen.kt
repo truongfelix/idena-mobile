@@ -1,5 +1,24 @@
 package io.github.truongfelix.idenanode
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.border
 import android.content.Context
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
@@ -118,7 +137,7 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
  * and the editor; the status is in the app's title row ([SocialInfoDialog]).
  */
 @Composable
-fun SocialScreen(model: SocialModel, ads: List<ChainAd>, modifier: Modifier = Modifier) {
+fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () -> Unit, modifier: Modifier = Modifier) {
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
@@ -148,8 +167,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, modifier: Modifier = Mo
     CompositionLocalProvider(LocalNames provides model.names, LocalNow provides now) {
     Column(modifier.fillMaxSize()) {
     val current = model.draft
+    val page = model.pages.lastOrNull()
+    // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
+    if (current != null || page != null || model.view != SocialView.Feed) topBar()
     Box(Modifier.weight(1f).fillMaxWidth()) {
-        val page = model.pages.lastOrNull()
         val historyDone = model.cache?.historyDone == true
         // A like of a post of a list (a reply or comment is liked from its thread).
         val likePost = { post: SocialPost -> model.preparePost("Like", LIKE, PostTarget.onPost(post.id)) }
@@ -157,8 +178,11 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, modifier: Modifier = Mo
         when {
             current != null -> Editor(model, current, canPost = canAct)
             page is SocialPage.Thread -> key(page) {
+                // 2 posts of each 5 in a row, at random, show an ad under the post, above the answers.
+                val rank = remember(feed, page.postId) { feed.map { it.id }.sorted().binarySearch(page.postId) }
                 ThreadView(
                     post = feed.firstOrNull { it.id == page.postId },
+                    ad = if (threadShowsAd(rank, model.adSalt)) ({ FeedAd(ads, rank, Modifier.padding(vertical = 8.dp)) }) else null,
                     focusId = page.focusId,
                     pageState = model.pageState(page),
                     states = states,
@@ -197,15 +221,115 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, modifier: Modifier = Mo
                     )
                 }
             }
-            else -> {
-                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Spacer(Modifier.height(2.dp))
-                    when (model.view) {
-                        SocialView.Feed -> {
+            model.view == SocialView.Feed -> {
+                val people = model.people
+                val epochStart = model.node?.epochStart
+                val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, epochStart) {
+                    val shown = if (model.feedFollowing) followingFeed(feed, people) else feed
+                    sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
+                }
+                val query = model.searchQuery.trim()
+                val hits by produceState<List<SearchHit>?>(null, query, feed, people) {
+                    if (query.length < MIN_SEARCH) {
+                        value = null
+                        return@produceState
+                    }
+                    // Typing: search once it pauses.
+                    kotlinx.coroutines.delay(250)
+                    value = withContext(Dispatchers.IO) {
+                        searchSocial(feed, people, query, ipfsText = { cid ->
+                            IpfsStore.cached(context, cid)?.takeIf { it.size <= MAX_IPFS_FILE }?.toString(Charsets.UTF_8)
+                        })
+                    }
+                }
+                // The title row, the search and the options float over the feed and slide with the scroll,
+                // as Reddit's: they never push the posts. Back at the top they are all there.
+                var headerHeight by remember { mutableIntStateOf(0) }
+                var headerOffset by remember { mutableFloatStateOf(0f) }
+                val slide = remember(model) {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                            headerOffset = (headerOffset - available.y).coerceIn(0f, headerHeight.toFloat())
+                            return Offset.Zero
+                        }
+                    }
+                }
+                LaunchedEffect(model.feedState) {
+                    snapshotFlow { model.feedState.firstVisibleItemIndex == 0 && model.feedState.firstVisibleItemScrollOffset == 0 }
+                        .collect { atTop -> if (atTop) headerOffset = 0f }
+                }
+                val headerDp = with(LocalDensity.current) { headerHeight.toDp() }
+                Box(Modifier.fillMaxSize().clipToBounds()) {
+                    LazyColumn(
+                        Modifier.fillMaxSize().nestedScroll(slide).padding(horizontal = 16.dp),
+                        state = model.feedState,
+                        contentPadding = PaddingValues(top = headerDp, bottom = 16.dp),
+                    ) {
+                        val found = hits
+                        if (query.length >= MIN_SEARCH) {
+                            when {
+                                found == null -> item(key = "searching") { Text("Searching…", style = MaterialTheme.typography.bodySmall) }
+                                found.isEmpty() -> item(key = "none") { Text("Nothing found in the posts read so far.", style = MaterialTheme.typography.bodySmall) }
+                                else -> items(found, key = { hitKey(it) }) { hit ->
+                                    HitCard(hit, states, onProfile = model::openProfile, onOpen = openThread)
+                                }
+                            }
+                            return@LazyColumn
+                        }
+                        if (feed.isEmpty()) item(key = "empty") { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
+                        else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
+                        // An ad after each POSTS_PER_AD posts.
+                        items(
+                            feedRows(sorted.size),
+                            key = { row -> feedAdAt(row)?.let { "ad:$it" } ?: sorted[feedPostAt(row)].id },
+                            contentType = { row -> if (feedAdAt(row) != null) "ad" else "post" },
+                        ) { row ->
+                            val adNumber = feedAdAt(row)
+                            // A thin line between the rows, as Reddit's feed.
+                            Column {
+                                if (row > 0) HorizontalDivider()
+                                if (adNumber != null) {
+                                    FeedAd(ads, adNumber, Modifier.padding(vertical = 8.dp))
+                                } else {
+                                    val post = sorted[feedPostAt(row)]
+                                    PostCard(
+                                        post = post,
+                                        states = states,
+                                        myAddress = myAddress,
+                                        canAct = canAct,
+                                        onOpen = { openThread(post.id, null) },
+                                        onProfile = model::openProfile,
+                                        onLike = { likePost(post) },
+                                        onTip = { tipping = post },
+                                        onWho = { who = post },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { headerHeight = it.height }
+                            .offset { IntOffset(0, -headerOffset.roundToInt()) }
+                            .background(MaterialTheme.colorScheme.surface),
+                    ) {
+                        topBar()
+                        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Spacer(Modifier.height(2.dp))
                             SearchField(model)
                             FeedOptions(model)
                             HorizontalDivider()
                         }
+                    }
+                }
+            }
+
+            else -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Spacer(Modifier.height(2.dp))
+                    when (model.view) {
+                        SocialView.Feed -> {}
                         SocialView.Activity, SocialView.People -> {
                             InboxOptions(model)
                             HorizontalDivider()
@@ -238,72 +362,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, modifier: Modifier = Mo
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        SocialView.Feed -> {
-                            val people = model.people
-                            val epochStart = model.node?.epochStart
-                            val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, epochStart) {
-                                val shown = if (model.feedFollowing) followingFeed(feed, people) else feed
-                                sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
-                            }
-                            val query = model.searchQuery.trim()
-                            val hits by produceState<List<SearchHit>?>(null, query, feed, people) {
-                                if (query.length < MIN_SEARCH) {
-                                    value = null
-                                    return@produceState
-                                }
-                                // Typing: search once it pauses.
-                                kotlinx.coroutines.delay(250)
-                                value = withContext(Dispatchers.IO) {
-                                    searchSocial(feed, people, query, ipfsText = { cid ->
-                                        IpfsStore.cached(context, cid)?.takeIf { it.size <= MAX_IPFS_FILE }?.toString(Charsets.UTF_8)
-                                    })
-                                }
-                            }
-                            LazyColumn(
-                                Modifier.weight(1f),
-                                state = model.feedState,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(bottom = 16.dp),
-                            ) {
-                                val found = hits
-                                if (query.length >= MIN_SEARCH) {
-                                    when {
-                                        found == null -> item(key = "searching") { Text("Searching…", style = MaterialTheme.typography.bodySmall) }
-                                        found.isEmpty() -> item(key = "none") { Text("Nothing found in the posts read so far.", style = MaterialTheme.typography.bodySmall) }
-                                        else -> items(found, key = { hitKey(it) }) { hit ->
-                                            HitCard(hit, states, onProfile = model::openProfile, onOpen = openThread)
-                                        }
-                                    }
-                                    return@LazyColumn
-                                }
-                                if (feed.isEmpty()) item(key = "empty") { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
-                                else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
-                                // An ad after each POSTS_PER_AD posts.
-                                items(
-                                    feedRows(sorted.size),
-                                    key = { row -> feedAdAt(row)?.let { "ad:$it" } ?: sorted[feedPostAt(row)].id },
-                                    contentType = { row -> if (feedAdAt(row) != null) "ad" else "post" },
-                                ) { row ->
-                                    val adNumber = feedAdAt(row)
-                                    if (adNumber != null) {
-                                        FeedAd(ads, adNumber)
-                                        return@items
-                                    }
-                                    val post = sorted[feedPostAt(row)]
-                                    PostCard(
-                                        post = post,
-                                        states = states,
-                                        myAddress = myAddress,
-                                        canAct = canAct,
-                                        onOpen = { openThread(post.id, null) },
-                                        onProfile = model::openProfile,
-                                        onLike = { likePost(post) },
-                                        onTip = { tipping = post },
-                                        onWho = { who = post },
-                                    )
-                                }
-                            }
-                        }
+                        SocialView.Feed -> {}
                     }
                 }
             }
@@ -405,7 +464,7 @@ fun SocialInfoDialog(model: SocialModel, onDismiss: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(status.health, size = 14)
                 Spacer(Modifier.width(10.dp))
-                Text(status.label)
+                Text(socialBarLabel(status, model.node?.peers))
             }
         },
         text = {
@@ -555,12 +614,45 @@ private fun AnnotatedString.Builder.appendAddress(address: String, styles: Addre
  * or the name opens the profile.
  */
 @Composable
-private fun PostHeader(call: PostCall, states: Map<String, AuthorIdentity>, onProfile: (String) -> Unit, avatar: Dp = 36.dp) {
+private fun PostHeader(
+    call: PostCall,
+    states: Map<String, AuthorIdentity>,
+    onProfile: (String) -> Unit,
+    avatar: Dp = 36.dp,
+    compact: Boolean = false,
+) {
     // No state while the node is asked for it.
     val identity = states[call.author]
     val styles = addressLinkStyles()
     val palette = statusPalette()
     val color = MaterialTheme.colorScheme.onSurfaceVariant
+    if (compact) {
+        // The feed's one line, as Reddit's: avatar, name, state, time; the name is cut first.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(call.author, 24.dp, Modifier.clickable { onProfile(call.author) })
+            Spacer(Modifier.width(8.dp))
+            Text(
+                buildAnnotatedString { appendAddress(call.author, styles, onProfile) },
+                Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            identity?.let {
+                Text(
+                    "  ·  " + identityStatus(it.state),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette(it.state),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            Text("  ·  " + ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
+        }
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Avatar(call.author, avatar, Modifier.clickable { onProfile(call.author) })
         Spacer(Modifier.width(10.dp))
@@ -607,22 +699,34 @@ private fun PostCard(
     onTip: () -> Unit,
     onWho: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp)) {
-            Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                PostHeader(post.call, states, onProfile)
-                PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = 8)
-            }
-            ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip)
-            WhoLine(post, onWho)
+    // Flat, as Reddit's feed: the list draws a thin line between posts.
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PostHeader(post.call, states, onProfile, compact = true)
+            PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES, mediaMaxHeight = 220.dp)
         }
+        ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip, onWho = onWho)
     }
 }
 
-/** A small action button, as Reddit's pills under a post. */
+/** The lines of a post's text in the feed; the thread shows all of it. */
+const val FEED_TEXT_LINES = 3
+
+/** A small action button, as Reddit's pills under a post (lower than Material's chips). */
 @Composable
-private fun Pill(text: String, enabled: Boolean, onClick: () -> Unit) {
-    AssistChip(onClick = onClick, enabled = enabled, label = { Text(text, style = MaterialTheme.typography.labelLarge) })
+private fun Pill(text: String, enabled: Boolean, description: String? = null, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(50)
+    Box(
+        Modifier
+            .clip(shape)
+            .border(1.dp, colors.outlineVariant, shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.45f))
+    }
 }
 
 /**
@@ -639,27 +743,17 @@ private fun ActionBar(
     onLike: () -> Unit,
     onAnswer: () -> Unit,
     onTip: () -> Unit,
+    onWho: () -> Unit,
 ) {
     val liked = myAddress != null && myAddress in post.likedBy
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", canAct && !liked, onLike)
-        Pill(answer, answerEnabled, onAnswer)
-        Pill(if (post.tipTotal > 0) "🪙 ${post.tipTotal}" else "🪙 Tip", canAct && post.call.author != myAddress, onTip)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", canAct && !liked, onClick = onLike)
+        Pill(answer, answerEnabled, onClick = onAnswer)
+        Pill(if (post.tipTotal > 0) "🪙 ${post.tipTotal}" else "🪙 Tip", canAct && post.call.author != myAddress, onClick = onTip)
+        Spacer(Modifier.weight(1f))
+        // Who liked and tipped, in place of the line "Liked by · tipped by" under the pills.
+        if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = "Who liked and tipped", onClick = onWho)
     }
-}
-
-/** "Liked by 3 · tipped by 2 ›" under a post with likes or tips; a tap lists who. */
-@Composable
-private fun WhoLine(post: SocialPost, onWho: () -> Unit) {
-    val tippers = post.tips.map { it.from }.distinct().size
-    if (post.likes == 0 && tippers == 0) return
-    val parts = listOfNotNull(post.likes.takeIf { it > 0 }?.let { "liked by $it" }, tippers.takeIf { it > 0 }?.let { "tipped by $it" })
-    Text(
-        parts.joinToString(" · ").replaceFirstChar { it.uppercase() } + "  ›",
-        Modifier.clickable(onClick = onWho).padding(top = 2.dp, bottom = 6.dp, end = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-    )
 }
 
 /** Who liked and who tipped [post], newest first, as idena.social's likes and tips lists; a tap on an address opens its profile. */
@@ -995,12 +1089,13 @@ private fun ProfileItemCard(
 
 /**
  * A post with its answers, as Reddit shows a post and its comments: the replies, and under each reply
- * its comments, indented behind a thread line (idena.social's two levels). Every item has its pills.
+ * its comments nested by what they answer ([commentTree]), each level foldable. Every item has its pills.
  * Opened at [focusId] (from a profile or the Activity), the thread scrolls to it once and marks it.
  */
 @Composable
 private fun ThreadView(
     post: SocialPost?,
+    ad: (@Composable () -> Unit)?,
     focusId: Long?,
     pageState: PageState,
     states: Map<String, AuthorIdentity>,
@@ -1033,43 +1128,114 @@ private fun ThreadView(
                     PostContent(post.call, MaterialTheme.typography.bodyLarge)
                     ActionBar(post, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
                         onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
-                    }) { onTip(post) }
-                    WhoLine(post) { onWho(post) }
+                    }, onTip = { onTip(post) }, onWho = { onWho(post) })
+                    ad?.invoke()
                     HorizontalDivider()
                     val answers = replyCount(post)
                     Text(if (answers == 1) "1 answer" else "$answers answers", style = MaterialTheme.typography.titleSmall)
                 }
             }
             items(post.replies, key = { it.id }) { reply ->
-                Column(Modifier.padding(top = 8.dp).focused(reply.id == focusId), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    PostHeader(reply.call, states, onProfile)
-                    PostContent(reply.call, MaterialTheme.typography.bodyLarge)
-                    ActionBar(reply, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onReply(reply.id)) }, onAnswer = {
-                        onAnswer(Draft("Comment", "Comment", PostTarget.onReply(reply.id), reply.call))
-                    }) { onTip(reply) }
-                    WhoLine(reply) { onWho(reply) }
-                    for (comment in reply.replies) {
-                        ThreadLine(focused = comment.id == focusId) {
-                            PostHeader(comment.call, states, onProfile, avatar = 28.dp)
-                            PostContent(comment.call, MaterialTheme.typography.bodyLarge)
-                            ActionBar(comment, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onComment(reply.id, comment.id)) }, onAnswer = {
-                                onAnswer(Draft("Comment", "Comment", PostTarget.onComment(reply.id, comment.id), comment.call))
-                            }) { onTip(comment) }
-                            WhoLine(comment) { onWho(comment) }
-                        }
-                    }
-                }
+                val tree = remember(reply) { commentTree(reply.id, reply.replies) }
+                val thread = ThreadContext(states, myAddress, canAct, focusId, pageState.collapsed, onProfile, onLike, onAnswer, onTip, onWho)
+                ThreadItem(reply, tree, depth = 0, replyId = reply.id, thread = thread)
             }
         }
     }
 }
 
-/** A comment indented behind a thin vertical line, as Reddit's nested comments. */
+/** What every reply and comment of a thread shares: who is shown how, what is folded, and the actions. */
+private class ThreadContext(
+    val states: Map<String, AuthorIdentity>,
+    val myAddress: String?,
+    val canAct: Boolean,
+    val focusId: Long?,
+    val collapsed: MutableMap<Long, Boolean>,
+    val onProfile: (String) -> Unit,
+    val onLike: (PostTarget) -> Unit,
+    val onAnswer: (Draft) -> Unit,
+    val onTip: (SocialPost) -> Unit,
+    val onWho: (SocialPost) -> Unit,
+)
+
+/** The width of the rail left of a reply or comment; a tap on it folds it. */
+private val RAIL = 18.dp
+
+/** Deeper answers are not indented further (the screen is narrow). */
+private const val MAX_INDENT = 6
+
+/**
+ * A reply ([depth] 0) or a comment with its answers, behind its own rail, as Reddit nests comments: a
+ * comment at depth n has n + 1 rails on its left. A tap on its rail (or its header) folds it and everything
+ * under it to one line ("name · 4d · text…"); a tap on that line unfolds it. Each level folds on its own,
+ * like the rungs of a ladder.
+ */
 @Composable
-private fun ThreadLine(focused: Boolean = false, content: @Composable () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(start = 6.dp, top = 4.dp)) {
-        Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-        Column(Modifier.padding(start = 12.dp).focused(focused), verticalArrangement = Arrangement.spacedBy(2.dp)) { content() }
+private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int, replyId: Long, thread: ThreadContext) {
+    val folded = thread.collapsed[item.id] == true
+    val toggle = { if (folded) thread.collapsed.remove(item.id) else thread.collapsed[item.id] = true }
+    val isReply = depth == 0
+    val line = MaterialTheme.colorScheme.outlineVariant
+    val railPx = with(LocalDensity.current) { RAIL.toPx() }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = if (isReply) 8.dp else 4.dp)
+            .then(
+                if (depth >= MAX_INDENT) Modifier
+                else Modifier
+                    // Its rail: a thin line along it and its answers; a tap on it folds or unfolds it.
+                    .drawBehind { drawLine(line, Offset(railPx / 2, 0f), Offset(railPx / 2, size.height), strokeWidth = 2.dp.toPx()) }
+                    .pointerInput(item.id, folded) { detectTapGestures { if (it.x < railPx) toggle() } }
+                    .padding(start = RAIL),
+            ),
+    ) {
+        if (folded) {
+            FoldedLine(item, hidden = children.sumOf { 1 + it.descendants }, onProfile = thread.onProfile, onUnfold = { toggle() })
+            return@Column
+        }
+        Column(Modifier.focused(item.id == thread.focusId), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Box(Modifier.fillMaxWidth().clickable { toggle() }) {
+                PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp)
+            }
+            PostContent(item.call, MaterialTheme.typography.bodyLarge)
+            val target = if (isReply) PostTarget.onReply(item.id) else PostTarget.onComment(replyId, item.id)
+            ActionBar(
+                item, thread.myAddress, thread.canAct, "💬 Reply",
+                onLike = { thread.onLike(target) },
+                onAnswer = { thread.onAnswer(Draft("Comment", "Comment", target, item.call)) },
+                onTip = { thread.onTip(item) },
+                onWho = { thread.onWho(item) },
+            )
+        }
+        children.forEach { node -> key(node.comment.id) { ThreadItem(node.comment, node.children, depth + 1, replyId, thread) } }
+    }
+}
+
+/** A folded reply or comment: its author, its time, the start of its text and how many answers it hides. */
+@Composable
+private fun FoldedLine(item: SocialPost, hidden: Int, onProfile: (String) -> Unit, onUnfold: () -> Unit) {
+    val styles = addressLinkStyles()
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val preview = when {
+        ipfsCid(item.call.message) != null -> "Text on IPFS"
+        item.call.message.isEmpty() && item.call.hasMedia -> "🖼 Media"
+        else -> item.call.message.replace(Regex("\\s+"), " ").trim()
+    }
+    Row(Modifier.fillMaxWidth().clickable(onClick = onUnfold).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(item.call.author, 24.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            buildAnnotatedString { appendAddress(item.call.author, styles, onProfile) },
+            Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text("  ·  ${ago(item.call.time)}  ·  ", style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, softWrap = false)
+        Text(preview, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (hidden > 0) Text("  +$hidden", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 
