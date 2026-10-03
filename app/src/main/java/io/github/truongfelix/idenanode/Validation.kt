@@ -31,23 +31,33 @@ data class CeremonyTimes(val start: Instant, val shortSessionSeconds: Double, va
 }
 
 /**
- * The short-session flips to show: the regular (not extra) flips in the node's order. Once [useExtras],
- * each regular flip that has not loaded is replaced by the next extra flip that has, as the desktop app
- * does 35 s into the session.
+ * The extra flips that replace the regular flips that did not load, from 35 s into the short session as
+ * in the desktop app: each regular flip not loaded and not replaced yet gets the next loaded extra flip
+ * not used yet. A replacement is kept for the rest of the session, also if the regular flip loads later:
+ * the validator may have answered the extra flip already.
  */
-fun shortSessionFlips(hashes: List<FlipHash>, loaded: Set<String>, useExtras: Boolean): List<String> {
-    val regular = hashes.filter { !it.extra }.map { it.hash }
-    if (!useExtras) return regular
-    val extras = hashes.filter { it.extra && it.hash in loaded }.map { it.hash }.iterator()
-    return regular.map { hash -> if (hash in loaded || !extras.hasNext()) hash else extras.next() }
+fun replaceWithExtras(hashes: List<FlipHash>, loaded: Set<String>, replaced: Map<String, String>): Map<String, String> {
+    val extras = hashes.filter { it.extra && it.hash in loaded && it.hash !in replaced.values }.map { it.hash }.iterator()
+    val result = replaced.toMutableMap()
+    for (hash in hashes.filter { !it.extra }.map { it.hash }) {
+        if (hash !in loaded && hash !in result && extras.hasNext()) result[hash] = extras.next()
+    }
+    return result
 }
+
+/** The short-session flips to show: the regular (not extra) flips in the node's order, as [replaced]. */
+fun shortSessionFlips(hashes: List<FlipHash>, replaced: Map<String, String>): List<String> =
+    hashes.filter { !it.extra }.map { replaced[it.hash] ?: it.hash }
 
 /** An answer as flip_submitShortAnswers and flip_submitLongAnswers take it. */
 data class SubmittedAnswer(val hash: String, val answer: Int, val grade: Int)
 
-/** The short-session answers: the story of each flip shown (0 if none). */
-fun shortSessionAnswers(shown: List<String>, answers: Answers): List<SubmittedAnswer> =
-    shown.map { SubmittedAnswer(it, answers.choice(it).value, 0) }
+/**
+ * The short-session answers: the story of every short-session flip, extra flips included (0 if none),
+ * as the desktop app sends them: an answer stays even if its flip is no longer shown.
+ */
+fun shortSessionAnswers(hashes: List<String>, answers: Answers): List<SubmittedAnswer> =
+    hashes.map { SubmittedAnswer(it, answers.choice(it).value, 0) }
 
 /** The long-session answers: the story and the keyword check of every long-session flip. */
 fun longSessionAnswers(hashes: List<String>, answers: Answers): List<SubmittedAnswer> =
@@ -58,3 +68,11 @@ fun keywordsOf(indexes: List<Int>, all: List<Keyword>): List<Keyword> = indexes.
 
 /** An error that means the answers are already with the node (a second submit of the same answers). */
 fun isAlreadySent(error: String?): Boolean = error?.contains("already exists") == true
+
+/**
+ * Whether the answers are in blocks: the long answers, and the short answers the node reveals once the
+ * long ones are sent (their hash went in the short session). Until then the node must run; after, the
+ * app may close. [txs] are the identity's transactions in blocks (bcn_transactions): type and epoch.
+ */
+fun answersInBlocks(txs: List<Pair<String, Int>>, epoch: Int): Boolean =
+    listOf("submitShortAnswers", "submitLongAnswers").all { type -> txs.any { it.first == type && it.second == epoch } }

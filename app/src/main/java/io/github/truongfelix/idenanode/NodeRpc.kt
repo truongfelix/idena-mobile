@@ -238,6 +238,37 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
         return keywordsOf((0 until indexes.length()).map { indexes.getInt(it) }, all)
     }
 
+    /** The identity of the node's address (dna_identity): its flip keyword pairs and flip counts. */
+    fun identity(): JSONObject = call("dna_identity") as JSONObject
+
+    /** When flips stop: the start of the flip lottery before the next validation; null when unknown. */
+    fun flipDeadline(): java.time.Instant? {
+        val epoch = call("dna_epoch") as JSONObject
+        val intervals = call("dna_ceremonyIntervals") as JSONObject
+        val validation = parseValidationTime(epoch.optString("nextValidation")) ?: return null
+        return flipDeadline(validation, intervals.optDouble("FlipLotteryDuration", 0.0))
+    }
+
+    /** Submits a flip: the node encrypts it, keeps it on IPFS and sends the transaction. */
+    fun submitFlip(flip: FlipHex, pairId: Int, epoch: Int): SentFlip {
+        val result = call("flip_submit", flipSubmitArgs(flip, pairId), readTimeoutMs = 60_000) as JSONObject
+        return SentFlip(result.getString("txHash"), result.optString("hash"), pairId, System.currentTimeMillis(), epoch)
+    }
+
+    /**
+     * Whether the node is synced: a flip made on a node behind the chain uses the epoch, the keys and the
+     * nonce of the past, and never counts.
+     */
+    fun synced(): Boolean = !(call("bcn_syncing") as JSONObject).optBoolean("syncing", true)
+
+    /** The identity's last transactions in blocks (bcn_transactions): their type and epoch. */
+    fun ownTransactions(count: Int = 30): List<Pair<String, Int>> {
+        val address = call("dna_getCoinbaseAddr") as String
+        val result = call("bcn_transactions", JSONArray().put(JSONObject().put("address", address).put("count", count))) as? JSONObject
+        val list = result?.optJSONArray("transactions") ?: return emptyList()
+        return (0 until list.length()).map { list.getJSONObject(it).let { tx -> tx.optString("type") to tx.optInt("epoch", -1) } }
+    }
+
     /** Sends the answers of a session; returns the transaction hash. */
     fun submitAnswers(short: Boolean, answers: List<SubmittedAnswer>): String {
         val list = JSONArray()

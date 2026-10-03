@@ -25,13 +25,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -108,9 +107,10 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     val notices = remember { SnackbarHostState() }
     // The node's state, for the Node tab and the status bar of the title row (both tabs).
     val node = remember { NodeModel(context.applicationContext) }
-    // The Idena ads of the banner at the bottom (both tabs).
+    // The Idena ads: the banner at the bottom of the Node tab, in the Social feed.
     val ads = remember { AdsModel(context.applicationContext) }
     var nodeInfo by remember { mutableStateOf(false) }
+    var socialInfo by remember { mutableStateOf(false) }
     LaunchedEffect(social) { social.run(lifecycle) }
     LaunchedEffect(node) { node.run(lifecycle) }
     LaunchedEffect(ads) { ads.run(lifecycle) }
@@ -141,11 +141,23 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
         Box(modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                // The title and the node's status, one line high on both tabs.
+                // The title and the status, one line high: the node's on the Node tab; on the Social tab the
+                // scan's with the node's peers, or the paid action while it runs.
                 Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Idena", style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.width(16.dp))
-                    StatusLine(node.bar, Modifier.weight(1f)) { nodeInfo = true }
+                    when (tab) {
+                        MainTab.Node -> StatusLine(node.bar, Modifier.weight(1f)) { nodeInfo = true }
+                        MainTab.Social -> {
+                            val action = social.sendStatus
+                            StatusLine(
+                                social.status,
+                                Modifier.weight(1f),
+                                text = action ?: socialBarLabel(social.status, social.node?.peers),
+                                textColor = if (action != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            ) { socialInfo = true }
+                        }
+                    }
                 }
                 val unread = social.unread.size
                 TabRow(selectedTabIndex = tab.ordinal) {
@@ -160,13 +172,17 @@ private fun MainScreen(modifier: Modifier = Modifier) {
                 // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
                 when (tab) {
                     MainTab.Node -> NodeScreen(node, social.people, Modifier.weight(1f))
-                    MainTab.Social -> SocialScreen(social, Modifier.weight(1f))
+                    MainTab.Social -> SocialScreen(social, ads.ads, Modifier.weight(1f))
                 }
-                AdBanner(ads.ads)
+                if (tab == MainTab.Node) AdBanner(ads.ads)
             }
-            SnackbarHost(notices, Modifier.align(Alignment.BottomCenter).padding(bottom = AD_BANNER_HEIGHT))
+            SnackbarHost(
+                notices,
+                Modifier.align(Alignment.BottomCenter).padding(bottom = if (tab == MainTab.Node) AD_BANNER_HEIGHT else SOCIAL_BAR_HEIGHT),
+            )
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
+        if (socialInfo) SocialInfoDialog(social) { socialInfo = false }
     }
 }
 
@@ -229,7 +245,10 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        NodeCard(state) { enabled ->
+        NodeCard(
+            state,
+            mining = { state.status?.takeUnless { it.accountPending }?.let { MiningSection(it) { scope.launch { refresh() } } } },
+        ) { enabled ->
             if (enabled) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -246,11 +265,10 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
         val validationFirst = validation != null &&
             validationIsClose(Instant.now(), parseValidationTime(validation.nextValidation), validation.period)
         if (validationFirst) ValidationCard(validation!!, showCountdown = true)
-        AccountCard(state, network)
-        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it, people) { scope.launch { refresh() } } }
+        AccountCard(state)
+        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
         state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
         if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
-        state.status?.takeUnless { it.accountPending }?.let { MiningCard(it) { scope.launch { refresh() } } }
         if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundCard(state)
         TextButton(onClick = { context.startActivity(Intent(context, CeremonyActivity::class.java)) }) {
             Text("Practice validation")
@@ -274,10 +292,11 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
 
 /**
  * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
- * never move. The block, peers, speed and network are in the title row's details (ⓘ).
+ * never move; then [mining] (the identity's mining, once the node has the account). The block, peers,
+ * speed and network are in the title row's details (ⓘ).
  */
 @Composable
-private fun NodeCard(state: ScreenState, onSyncChange: (Boolean) -> Unit) {
+private fun NodeCard(state: ScreenState, mining: @Composable () -> Unit, onSyncChange: (Boolean) -> Unit) {
     val status = state.status
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -313,12 +332,14 @@ private fun NodeCard(state: ScreenState, onSyncChange: (Boolean) -> Unit) {
                 }
             }
             state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            mining()
         }
     }
 }
 
+/** The account: its avatar (drawn from the address), the address with copy, the identity and its age. */
 @Composable
-private fun AccountCard(state: ScreenState, network: NetworkRewards?) {
+private fun AccountCard(state: ScreenState) {
     val status = state.status
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -328,37 +349,23 @@ private fun AccountCard(state: ScreenState, network: NetworkRewards?) {
                 Text("No key yet: import one below.")
                 return@Column
             }
-            SelectionContainer {
-                Text(address, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(address, 56.dp)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    when {
+                        status == null -> Text("Switch sync on to read the identity from the node.", style = MaterialTheme.typography.bodyMedium)
+                        status.accountPending -> Text("Identity and age: after sync", style = MaterialTheme.typography.bodyMedium)
+                        else -> {
+                            val color = statusPalette()(status.identityState)
+                            Field("Identity", identityStatus(status.identityState), color)
+                            Field("Age", if (status.age == 1) "1 epoch" else "${status.age} epochs", color)
+                        }
+                    }
+                }
             }
-            if (status == null) {
-                Text("Switch sync on to read the account from the node.")
-                return@Column
-            }
-            if (status.accountPending) {
-                Text("Age, stake, balance: after sync")
-                return@Column
-            }
-            Field("Identity", "${identityStatus(status.identityState)}, age ${status.age}", statusPalette()(status.identityState))
-            Field("Mining", status.miningStatus)
-            Field("Stake", idna(status.stake))
-            val stake = status.stake.toDoubleOrNull() ?: 0.0
-            val locked = status.lockedStake.toDoubleOrNull() ?: 0.0
-            if (locked > 0) Field("Locked", idna(status.lockedStake))
-            val miss = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Miss)
-            val fail = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Fail)
-            if (miss != null && fail != null) {
-                Field("Protection", "${percent(miss)} if missed, ${percent(fail)} if failed")
-            }
-            network?.let { apy(stake, it) }?.let {
-                Field("APY", "${percent(it.yearly)} (staking + mining)")
-                Text(
-                    "If the identity validates and mines itself; flip and invitation rewards are not counted.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Field("Balance", idna(status.balance))
-            if (status.syncing) {
+            AddressLine(address)
+            if (status != null && !status.accountPending && status.syncing) {
                 Text(
                     "Values are those of the synced block; they are current once the sync is done.",
                     style = MaterialTheme.typography.bodySmall,
@@ -491,17 +498,23 @@ private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open the validation") }
             }
-            if (status.requiredFlips > 0) {
-                val left = status.requiredFlips - status.madeFlips
-                Field("Flips", "${status.madeFlips} of ${status.requiredFlips} made" + if (left <= 0) " ✓" else "")
-                if (left > 0) {
+            if (status.requiredFlips > 0 || status.availableFlips > 0) {
+                val quota = FlipQuota(status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips)
+                val extra = if (quota.available > quota.required) " (up to ${quota.available})" else ""
+                Field("Flips", "${quota.made} of ${quota.required} made$extra" + if (quota.missing == 0) " ✓" else "")
+                if (quota.missing > 0) {
                     Text(
-                        "Make $left more flip${if (left > 1) "s" else ""} before the validation: on app.idena.io, " +
-                            "sign in with your private key, rent a shared node (Settings, Node), then create " +
-                            "the flips.",
+                        "Make ${quota.missing} more flip${if (quota.missing > 1) "s" else ""} before the flip lottery, 5 minutes " +
+                            "before the validation; without them the identity becomes ${quota.missingOutcome}.",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
-                    TextButton(onClick = { openWebApp(context) }) { Text("Create flips on app.idena.io") }
+                }
+                if (quota.canMake && status.period == "None") {
+                    Button(
+                        onClick = { context.startActivity(Intent(context, FlipActivity::class.java)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Make a flip") }
                 }
             }
         }
@@ -590,12 +603,12 @@ private enum class MiningChange(val title: String, val text: String) {
 }
 
 /**
- * Mining: with this phone's node, delegated to a pool, or none. Offers the changes the node would accept
+ * Mining, in the Sync card: with this phone's node, delegated to a pool, or none. Offers the changes the node would accept
  * now (see [MiningActions]) and follows the transaction until it is in a block. The node applies online
  * and delegation changes every 50 blocks (about 17 minutes).
  */
 @Composable
-private fun MiningCard(status: NodeStatus, onChanged: () -> Unit) {
+private fun MiningSection(status: NodeStatus, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val actions = MiningActions.of(
@@ -633,10 +646,24 @@ private fun MiningCard(status: NodeStatus, onChanged: () -> Unit) {
         }
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Mining", style = MaterialTheme.typography.titleMedium)
+    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Mining", style = MaterialTheme.typography.titleMedium)
+        run {
             Field("Status", status.miningStatus)
+            // Mining on this phone: the switch sends the change (after its dialog); delegation below.
+            val miningHere = status.online && status.delegatee == null
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Mine on this phone", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                Switch(
+                    checked = miningHere,
+                    onCheckedChange = { on -> change = if (on) MiningChange.Start else MiningChange.Stop },
+                    enabled = pendingTx == null && (actions.canStartMining || actions.canStopMining),
+                )
+            }
+            if (status.period == "None" && status.delegatee == null && !status.isPool && status.identityState !in validatedStates) {
+                Text("Mining needs a validated identity (Newbie, Verified or Human).", style = MaterialTheme.typography.bodySmall)
+            }
             if (status.penaltySeconds > 0) {
                 Field("Penalty", "${duration(status.penaltySeconds.toDouble())} left")
             }
@@ -645,8 +672,6 @@ private fun MiningCard(status: NodeStatus, onChanged: () -> Unit) {
             when {
                 status.period != "None" -> Text("Mining changes wait until the validation is over.", style = MaterialTheme.typography.bodySmall)
                 pendingTx == null -> {
-                    if (actions.canStartMining) OutlinedButton(onClick = { change = MiningChange.Start }) { Text(MiningChange.Start.title) }
-                    if (actions.canStopMining) OutlinedButton(onClick = { change = MiningChange.Stop }) { Text(MiningChange.Stop.title) }
                     if (actions.canDelegate) OutlinedButton(onClick = { change = MiningChange.Delegate }) { Text(MiningChange.Delegate.title) }
                     if (actions.canUndelegate) OutlinedButton(onClick = { change = MiningChange.Undelegate }) { Text(MiningChange.Undelegate.title) }
                     if (status.delegatee != null && !actions.canUndelegate) {

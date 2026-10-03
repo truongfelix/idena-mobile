@@ -67,6 +67,34 @@ object Rlp {
         fun list(): kotlin.collections.List<Item> = (this as? List)?.items ?: throw IllegalArgumentException("bytes, not a list")
     }
 
+    /** [value] as an RLP byte string. */
+    fun encodeBytes(value: ByteArray): ByteArray =
+        if (value.size == 1 && (value[0].toInt() and 0xff) < 0x80) value else header(0x80, value.size) + value
+
+    /** An RLP list of the encoded [items]. */
+    fun encodeList(items: kotlin.collections.List<ByteArray>): ByteArray {
+        val body = java.io.ByteArrayOutputStream()
+        items.forEach { body.write(it) }
+        return header(0xc0, body.size()) + body.toByteArray()
+    }
+
+    /** [value] (0 to 255) as an RLP integer: 0 is the empty string. */
+    fun encodeInt(value: Int): ByteArray {
+        require(value in 0..255) { "only small integers" }
+        return encodeBytes(if (value == 0) ByteArray(0) else byteArrayOf(value.toByte()))
+    }
+
+    private fun header(offset: Int, size: Int): ByteArray {
+        if (size <= 55) return byteArrayOf((offset + size).toByte())
+        var lengthBytes = ByteArray(0)
+        var n = size
+        while (n > 0) {
+            lengthBytes = byteArrayOf((n and 0xff).toByte()) + lengthBytes
+            n = n ushr 8
+        }
+        return byteArrayOf((offset + 55 + lengthBytes.size).toByte()) + lengthBytes
+    }
+
     /** Decodes one item that spans all of [data]. */
     fun decode(data: ByteArray): Item {
         val (item, end) = decodeAt(data, 0, data.size)

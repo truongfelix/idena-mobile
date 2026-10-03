@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The photo taken for a flip picture: the camera app writes it here, the app reads it once. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

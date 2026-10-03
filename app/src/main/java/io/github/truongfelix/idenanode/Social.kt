@@ -714,6 +714,25 @@ fun scanState(node: NodeView?, scanning: Boolean, head: Long?, cache: SocialCach
     return BarState(Health.Good, "Up to date")
 }
 
+/** The Social status in the title row: [state]'s label, then the node's peers while it has some. */
+fun socialBarLabel(state: BarState, peers: Int?): String = when {
+    peers == null || peers <= 0 -> state.label
+    peers == 1 -> "${state.label} · 1 peer"
+    else -> "${state.label} · $peers peers"
+}
+
+/** Posts between two ads in the feed. */
+const val POSTS_PER_AD = 5
+
+/** The feed's rows for [posts] posts: an ad after each [POSTS_PER_AD] posts, none after a shorter end. */
+fun feedRows(posts: Int): Int = posts + posts / POSTS_PER_AD
+
+/** At feed row [row]: the ad's number (0, 1, …) when the row is an ad, else null. */
+fun feedAdAt(row: Int): Int? = if (row % (POSTS_PER_AD + 1) == POSTS_PER_AD) row / (POSTS_PER_AD + 1) else null
+
+/** At feed row [row], when it is not an ad: the post's index. */
+fun feedPostAt(row: Int): Int = row / (POSTS_PER_AD + 1) * POSTS_PER_AD + row % (POSTS_PER_AD + 1)
+
 /** What the scan needs from the node. */
 interface SocialSource {
     /** The most blocks [calls] takes at once. */

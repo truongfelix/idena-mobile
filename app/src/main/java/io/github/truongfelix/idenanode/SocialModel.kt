@@ -269,9 +269,13 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         SocialStore.setNotifyKinds(context, notify)
     }
 
+    /** The Inbox's list last shown: the notifications ([SocialView.Activity]) or the chats ([SocialView.People]). */
+    var inboxView by mutableStateOf(SocialView.Activity)
+
     /** Shows the Activity: what is new now stays marked while it is open, and counts as seen. */
     fun openActivity() {
         view = SocialView.Activity
+        inboxView = SocialView.Activity
         highlightAfter = seenThrough
         markSeen()
     }
@@ -282,6 +286,14 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         pageStates.clear()
         draft = null
         openActivity()
+    }
+
+    /** Shows the list [list] from the bottom bar, closing the open pages; the Activity counts as seen. */
+    fun showList(list: SocialView) {
+        pages.clear()
+        pageStates.clear()
+        if (list == SocialView.People) inboxView = list
+        if (list == SocialView.Activity) openActivity() else view = list
     }
 
     private val viewingActivity: Boolean

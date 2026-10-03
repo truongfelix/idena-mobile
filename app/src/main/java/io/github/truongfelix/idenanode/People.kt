@@ -35,7 +35,13 @@ data class Person(
 
 /** [text] as a name: one line, no control characters, trimmed, at most [Person.MAX_NAME] characters. */
 fun cleanName(text: String): String =
-    text.map { if (it.isISOControl()) ' ' else it }.joinToString("").trim().replace(Regex("\\s+"), " ").take(Person.MAX_NAME).trim()
+    text.map { if (it.isISOControl()) ' ' else it }.joinToString("").trim().replace(Regex("\\s+"), " ").takeWhole(Person.MAX_NAME).trim()
+
+/** The first [n] UTF-16 units of the text, one less when the last would split an emoji (a surrogate pair). */
+fun String.takeWhole(n: Int): String {
+    val cut = take(n)
+    return if (cut.length == n && cut.isNotEmpty() && cut.last().isHighSurrogate()) cut.dropLast(1) else cut
+}
 
 /** The People list by address, with [person] put in (or taken out once it has no name and no mark). */
 fun Map<String, Person>.with(person: Person): Map<String, Person> =

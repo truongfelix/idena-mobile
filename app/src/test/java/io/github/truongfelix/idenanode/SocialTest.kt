@@ -344,6 +344,26 @@ class SocialTest {
     }
 
     @Test
+    fun socialBarLabelAddsThePeers() {
+        assertEquals("Up to date · 18 peers", socialBarLabel(BarState(Health.Good, "Up to date"), 18))
+        assertEquals("Up to date · 1 peer", socialBarLabel(BarState(Health.Good, "Up to date"), 1))
+        assertEquals("No peers", socialBarLabel(BarState(Health.Bad, "No peers"), 0))
+        assertEquals("The node does not answer", socialBarLabel(BarState(Health.Bad, "The node does not answer"), null))
+    }
+
+    @Test
+    fun feedHasAnAdAfterEachFivePosts() {
+        assertEquals(5, POSTS_PER_AD)
+        assertEquals(0, feedRows(0))
+        assertEquals(4, feedRows(4))
+        assertEquals(6, feedRows(5))
+        assertEquals(14, feedRows(12))
+        // 12 posts: rows 0-4 posts 0-4, row 5 ad 0, rows 6-10 posts 5-9, row 11 ad 1, rows 12-13 posts 10-11.
+        val rows = (0 until feedRows(12)).map { row -> feedAdAt(row)?.let { "ad$it" } ?: "p${feedPostAt(row)}" }
+        assertEquals((0..4).map { "p$it" } + "ad0" + (5..9).map { "p$it" } + "ad1" + (10..11).map { "p$it" }, rows)
+    }
+
+    @Test
     fun theTipArgumentIsWrittenAsIdenaSocialWritesIt() {
         assertEquals("{\"postId\":\"102\",\"tipAmount\":\"5\"}", sendTipArgument(102, 5))
         val parsed = TipCall.parse("0x01", 1, 1, 0, "0xAB", "5", hex(sendTipArgument(102, 5)))!!

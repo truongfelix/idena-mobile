@@ -143,12 +143,7 @@ private fun ValidationScreen(onClose: () -> Unit, modifier: Modifier = Modifier)
             is CeremonyStep.Waiting -> Waiting(current.times, shortFlips)
             is CeremonyStep.ShortSession -> RealSession(current.times, epoch, short = true, shortFlips) { checks++ }
             is CeremonyStep.LongSession -> RealSession(current.times, epoch, short = false, longFlips) { checks++ }
-            is CeremonyStep.Done -> Info(
-                "Answers sent",
-                "The validation ends at ${dateTime(current.times.longEnd)}. Its result shows on the main screen " +
-                    "a few minutes later, as the identity status.",
-                onClose,
-            )
+            is CeremonyStep.Done -> Done(current.times, epoch, onClose)
         }
     }
 }
@@ -158,6 +153,38 @@ private fun Info(title: String, text: String, onClose: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, style = MaterialTheme.typography.headlineSmall)
         Text(text)
+        OutlinedButton(onClick = onClose) { Text("Close") }
+    }
+}
+
+/**
+ * After the long answers: the node still sends the short answers (their hash went in the short session)
+ * once the long ones are sent. Both in blocks, the app may close; until then the node must run.
+ */
+@Composable
+private fun Done(times: CeremonyTimes, epoch: Int, onClose: () -> Unit) {
+    val context = LocalContext.current
+    var inBlocks by remember { mutableStateOf(false) }
+    LaunchedEffect(epoch) {
+        while (!inBlocks) {
+            inBlocks = withContext(Dispatchers.IO) {
+                runCatching { answersInBlocks(rpc(context).ownTransactions(), epoch) }.getOrDefault(false)
+            }
+            if (!inBlocks) delay(5_000)
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Answers sent", style = MaterialTheme.typography.headlineSmall)
+        if (inBlocks) {
+            Text("Your short and long answers are in blocks: you can close the app.")
+        } else {
+            Text("The node is putting your answers in blocks. Keep the app open until this screen says it is done.")
+            CircularProgressIndicator()
+        }
+        Text(
+            "The validation ends at ${dateTime(times.longEnd)}. Its result shows on the main screen a few minutes " +
+                "later, as the identity status.",
+        )
         OutlinedButton(onClick = onClose) { Text("Close") }
     }
 }
@@ -186,7 +213,7 @@ private fun Waiting(times: CeremonyTimes, flips: SessionFlips) {
 private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips: SessionFlips, onSent: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val state = flips.watch(active = true)
+    val state = flips.watch(active = true, extrasFrom = if (short) times.extraFlipsFrom else null)
     var sending by remember { mutableStateOf(false) }
     var sendError by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<List<SubmittedAnswer>?>(null) }
@@ -196,34 +223,37 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
     val submitAt = remember(sessionEnd) { elapsedAt(if (short) times.shortSubmit else times.longSubmit) }
     val totalMs = Duration.between(sessionStart, sessionEnd).toMillis()
 
+    /** Sends the answers, again every 2 s while the node refuses them and the session lasts. */
     fun send(answers: List<SubmittedAnswer>) {
+        if (sending) return
         pending = answers
         sending = true
         sendError = null
         scope.launch {
-            val error = withContext(Dispatchers.IO) {
-                runCatching { rpc(context).submitAnswers(short, answers) }.exceptionOrNull()?.message
+            while (true) {
+                val error = withContext(Dispatchers.IO) {
+                    runCatching { rpc(context).submitAnswers(short, answers) }.exceptionOrNull()?.message
+                }
+                if (error == null || isAlreadySent(error)) {
+                    withContext(Dispatchers.IO) { NodeSettings.answersSentFile(context, epoch, short).createNewFile() }
+                    onSent()
+                    return@launch
+                }
+                sendError = error
+                if (Instant.now() >= sessionEnd) break
+                delay(2_000)
             }
             sending = false
-            if (error == null || isAlreadySent(error)) {
-                NodeSettings.answersSentFile(context, epoch, short).createNewFile()
-                onSent()
-            } else {
-                sendError = error
-            }
         }
     }
 
-    val shown = if (short) {
-        shortSessionFlips(state.hashes, state.loaded, useExtras = Instant.now() >= times.extraFlipsFrom)
-    } else {
-        state.hashes.map { it.hash }
-    }
+    val shown = if (short) shortSessionFlips(state.hashes, state.replaced) else state.hashes.map { it.hash }
     val title = if (short) "Short session" else "Long session"
     when {
         sending || pending != null && sendError == null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall)
             Text("Sending the answers…")
+            sendError?.let { Text("The node did not take them yet ($it): trying again.", color = MaterialTheme.colorScheme.error) }
             CircularProgressIndicator()
         }
         sendError != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -243,7 +273,7 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
             submitAt = submitAt,
             withKeywords = !short,
         ) { answers ->
-            send(if (short) shortSessionAnswers(shown, answers) else longSessionAnswers(shown, answers))
+            send(if (short) shortSessionAnswers(state.hashes.map { it.hash }, answers) else longSessionAnswers(shown, answers))
         }
     }
 }
@@ -262,11 +292,21 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
     @Volatile
     private var lastHashes: List<FlipHash> = emptyList()
 
-    class State(val hashes: List<FlipHash>, val loaded: Set<String>, val error: String?, private val of: (String) -> Flip) {
+    /** The regular flips replaced by extra flips ([replaceWithExtras]), kept for the session. */
+    @Volatile
+    private var replaced: Map<String, String> = emptyMap()
+
+    class State(
+        val hashes: List<FlipHash>,
+        val loaded: Set<String>,
+        val replaced: Map<String, String>,
+        val error: String?,
+        private val of: (String) -> Flip,
+    ) {
         fun flip(hash: String): Flip = of(hash)
     }
 
-    private fun state(hashes: List<FlipHash>, error: String?) = State(hashes, flips.keys.toSet(), error) { hash ->
+    private fun state(hashes: List<FlipHash>, error: String?) = State(hashes, flips.keys.toSet(), replaced, error) { hash ->
         val flip = flips[hash]
         val flipWords = words[hash]
         when {
@@ -276,8 +316,11 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
         }
     }
 
-    /** Asks the node for the flips again and loads those that became ready. Blocks: not on the main thread. */
-    fun refresh(): State {
+    /**
+     * Asks the node for the flips again and loads those that became ready; from [extrasFrom], extra flips
+     * replace the flips that did not load. Blocks: not on the main thread.
+     */
+    fun refresh(extrasFrom: Instant?): State {
         val hashes = try {
             rpc.flipHashes(short)
         } catch (e: Exception) {
@@ -292,16 +335,17 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
                 runCatching { rpc.flipKeywords(hash, all) }.onSuccess { if (it.isNotEmpty()) words[hash] = it }
             }
         }
+        if (extrasFrom != null && Instant.now() >= extrasFrom) replaced = replaceWithExtras(hashes, flips.keys, replaced)
         return state(hashes, null)
     }
 
     /** Keeps the state current while [active]: every 2 s while flips are missing, else every 10 s. */
     @Composable
-    fun watch(active: Boolean): State {
+    fun watch(active: Boolean, extrasFrom: Instant? = null): State {
         var state by remember { mutableStateOf(state(lastHashes, null)) }
-        LaunchedEffect(this, active) {
+        LaunchedEffect(this, active, extrasFrom) {
             while (active) {
-                state = withContext(Dispatchers.IO) { refresh() }
+                state = withContext(Dispatchers.IO) { refresh(extrasFrom) }
                 val complete = state.hashes.isNotEmpty() && state.hashes.all {
                     it.hash in state.loaded && (keywords == null || words.containsKey(it.hash))
                 }
@@ -313,7 +357,7 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
 }
 
 /** The node's keyword list (keywords/keywords.json of idena-go): flip_words gives indexes into it. */
-private fun loadKeywords(context: Context): List<Keyword> {
+internal fun loadKeywords(context: Context): List<Keyword> {
     val array = JSONArray(context.assets.open("keywords.json").bufferedReader().use { it.readText() })
     return (0 until array.length()).map {
         val item = array.getJSONObject(it)
