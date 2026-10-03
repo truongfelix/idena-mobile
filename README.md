@@ -8,54 +8,62 @@ meant to be delegated to a pool, such as a desktop node.
 
 ## What it does
 
-- **Node**: idena-go in the app's own process, as a foreground service while Sync is on. A status line in
-  the title row, on both tabs, shows it as a colored dot (green synced with peers; orange starting,
-  looking for peers, syncing, or a background setting to fix; red no peers after 20 min, no answer or a
-  wrong clock; grey sync off); ⓘ gives the block, peers, network, speed and time left. A card warns when
+- **Title row**: "Idena", the Node | Social switch, and the status as a colored dot with the peer count
+  (green synced with peers; orange starting, looking for peers, syncing, or a background setting to fix;
+  red no peers after 20 min, no answer or a wrong clock; grey sync off); ⓘ gives the details.
+- **Node**: idena-go in the app's own process, as a foreground service while Sync is on. A card warns when
   battery optimization may stop the node with the screen off, with buttons to Android's setting and to the
   autostart and battery pages some phones add. The node keeps its IPFS port (40405) fixed, so that a port
-  opened for it on the router keeps matching: outside nodes can then connect to the phone, which gets peers
-  within minutes instead of waiting for a free slot on the few reachable nodes.
-- **Account**: identity state and age, mining status, stake and balance, once the node has synced.
-- **Wallet**: Receive (the address, with its QR code drawn on the phone), Send (the node's fee estimate,
-  then a confirmation) and Add stake (the stake after, how much of it the identity keeps if it misses or
-  fails the next validation, the network's minimum stake, and that stake cannot be withdrawn).
-- **Next validation**: its date (within a day of it, the card comes first with a countdown), and the
-  flips still to make, with a link to
-  [app.idena.io](https://app.idena.io), where they are made through a rented shared node.
+  opened for it on the router keeps matching: outside nodes can then connect to the phone.
+- **Account**: identity state and age, the address with its robot avatar; for an address without an
+  identity, an **invitation code** field (activation, no fee).
+- **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee
+  estimate, then a confirmation), Add stake (the stake after, how much of it the identity keeps if it
+  misses or fails the next validation, the network's minimum stake, that stake cannot be withdrawn), and
+  mining: on this phone or delegated to a pool.
+- **Invitations** (Verified and Human identities, or with invitations sent): invitations left; invite
+  someone to a code given privately (copy or QR; the app keeps it until the next validation) or to an
+  address; the invitations of the epoch with their status (not activated, candidate, validated, cancelled);
+  cancel one (fee shown first); spoil a code shared publicly.
+- **Next validation**: its date (within a day of it the card comes first with a countdown), the task, and
+  the flips: how many are made and what missing ones cost.
+- **My flips**: the flips of the epoch, each with its four pictures, words and state, shown as validators
+  will see it on a tap; delete one (fee shown first: the node counts a delete as about 120 KB). **Make a
+  flip**: an unused keyword pair, four pictures (camera, gallery, or an opt-in DuckDuckGo image search), an
+  anti-AI frame in a random place, the shuffled story, then the node encrypts and publishes it. Flips are
+  sent only while the node is synced, and until the flip lottery (5 minutes before the validation).
 - **Key**: import the private key exported from the Idena app or app.idena.io (encrypted, with its
   password). Sync stays off until a key is imported. The app keeps the key on the phone and out of
   Android backups.
-- **Validation**: during the ceremony, the main screen opens it. It waits for the short session (the flips
-  load meanwhile), shows the node's flips, then the long session with the keyword check (approve, report
-  up to a third of the flips, one best flip). Answers go to the node 10 s before each session ends, or
-  when submitted. Not tried in a real ceremony yet.
+- **Validation**: the "Open the validation" button from the flip lottery on. It waits for the short session
+  (the flips load meanwhile), shows the node's flips (extra flips replace the ones that did not load, as on
+  the desktop), then the long session with the keyword check (approve, report up to a third of the flips,
+  one best flip). Answers go to the node 10 s before each session ends, or when submitted, and are sent
+  again if the node refuses them while the session lasts. After the long answers, the screen says when
+  they are in blocks: from then on the app may close.
 - **Practice validation**: the short and long sessions with the sample flips of the Idena web app, then
   the results with the right answers and why a flip should be reported.
-- **Social** tab: [idena.social](https://idena.social) read from the phone's own node: the feed (newest
-  posts or latest activity), threads with their replies, comments, likes and tips, who liked and tipped,
-  and images and texts stored on IPFS (fetched through the node only). A tap on an address opens its
-  profile (identity, or "Not validated"; posts, replies, comments, the likes and tips it gave, media);
-  "My profile" shows the identity's own.
-  With the identity: write a post (✎), like, reply to a post, comment on a reply, tip, as idena.social
-  writes them; a post can carry an image (sent as WebP without the photo's metadata, at a size chosen with
-  its cost) and its text can go on IPFS. Every fee is shown before sending: contract calls about 3.7 iDNA
-  for the first of an epoch, about 1.8 after; storing on IPFS about 1 iDNA per 5 KB. The Activity lists
-  what others did on the identity's posts, with notifications inside the app (likes, comments, tips,
-  each on or off): a count on the tab and a notice. A status bar shows the scan (green up to date, orange
-  behind, red without node or peers, grey off), ⓘ its details and "Scan blocks". While "Scan blocks" is
-  on, the tab reads the new blocks up to the node's, then the older ones back to the contract's creation
-  (once, kept on the phone), then follows the new blocks; from the Node tab, only the new blocks and only
-  for the notifications. Nothing is scanned while the node syncs or a validation runs. Not done yet:
-  private messages.
-- **Ads**: a banner at the bottom of both tabs rotates the Idena ads for this identity and a note from the
-  developers. An ad shows when coins were burnt for it over the last day, its author's profile lists it,
-  and the oracles' review vote approved it (the vote must name the ad); its audience (language, Android,
-  age, stake) must include the identity; the most burnt first, at most three. Everything comes from the
-  phone's own node (the burns, the profiles and ads on IPFS, the votes). A tap shows the ad, who paid
-  for it, and its link, opened in the browser only on request.
+- **Social** tab: [idena.social](https://idena.social) read from the phone's own node, laid out like
+  Reddit. The feed: one line per author (avatar, name, state, time), three lines of text, pictures kept
+  small, pills ♡ 💬 🪙 and 👁 (who liked and tipped); sorts (newest, latest activity, most liked, commented
+  or tipped over a period), a Following filter and a search. The title row, search and options slide away
+  while the feed scrolls down. A thread shows the post, then its replies and comments nested by what they
+  answer; a tap on a comment's rail (or header) folds it with everything under it. Profiles (identity, or
+  "Not validated"; posts, replies, comments, likes and tips given, media), Contacts (private names, Follow,
+  export and import), the Inbox (notifications of likes, comments and tips on the identity's posts).
+  With the identity: post (an image as WebP without the photo's metadata, the text on IPFS if chosen),
+  like, reply, comment, tip, as idena.social writes them; every fee is shown before sending. "Scan blocks"
+  reads the new blocks, then the older ones back to the contract's creation (once, kept on the phone);
+  nothing is scanned while the node syncs or a validation runs. Not done yet: private messages.
+- **Ads**: Idena ads for this identity and a note from the developers: a banner on the Node tab, a card
+  after each 5 posts of the feed, and under 2 of each 5 posts opened (picked at random). An ad shows when
+  coins were burnt for it over the last day, its author's profile lists it, and the oracles' review vote
+  approved it; its audience (language, Android, age, stake) must include the identity. Everything comes
+  from the phone's own node. A tap shows the ad, who paid for it, and its link, opened only on request.
 
-Planned: importing the key from its QR code.
+The app talks only to its own node; the one exception is the opt-in DuckDuckGo image search for flips.
+
+Planned: importing the key from its QR code, private messages, the router port opened by the app (UPnP).
 
 ## Phone requirements
 
