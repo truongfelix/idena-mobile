@@ -54,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,7 +85,15 @@ class FlipActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AppTheme {
-                Scaffold { padding -> FlipScreen(onClose = { finish() }, modifier = Modifier.padding(padding)) }
+                Scaffold { padding ->
+                    // The list of the epoch's flips; "Make a flip" opens the making steps, which come back to it.
+                    var making by rememberSaveable { mutableStateOf(false) }
+                    if (making) {
+                        FlipScreen(onClose = { making = false }, onSent = { making = false }, modifier = Modifier.padding(padding))
+                    } else {
+                        MyFlipsScreen(onMake = { making = true }, onClose = { finish() }, modifier = Modifier.padding(padding))
+                    }
+                }
             }
         }
     }
@@ -117,7 +126,7 @@ private fun readFlipState(context: Context): FlipNodeState {
 }
 
 @Composable
-private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
+private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keywords = remember { loadKeywords(context) }
@@ -284,7 +293,13 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             runCatching {
                                 val hex = encodeFlip(frames, shuffled, kotlin.random.Random(java.security.SecureRandom().nextLong()))
                                 check(hex.size <= MAX_FLIP_HEX) { "the flip is too large" }
-                                NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).submitFlip(hex, current.pairId, nodeState.epoch)
+                                val sentFlip = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).submitFlip(hex, current.pairId, nodeState.epoch)
+                                // The copy the list of flips shows (the node cannot show it); the flip is sent anyway.
+                                runCatching {
+                                    val made = MadeFlip(sentFlip.hash, sentFlip.txHash, current.pairId, pair.words, shuffled, nodeState.epoch, sentFlip.sentAt)
+                                    MadeFlipStore.add(context, made, frames)
+                                }
+                                sentFlip
                             }
                         }
                         working = null
@@ -298,6 +313,7 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             protectedFor = null
                             step = FlipStep.Words
                             message = "Flip submitted (${flip.hash.take(12)}…). The node keeps it on IPFS and sends it at the validation."
+                            onSent()
                             reads++
                         }.onFailure { message = "The node refused the flip: ${flipRefusal(it.message.orEmpty())}" }
                         sending = false
@@ -318,7 +334,7 @@ private fun FlipScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-private val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
+internal val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
 
 /** "1 of 3 made · send before 9 Oct, 15:00", and what missing flips cost. */
 @Composable
@@ -384,7 +400,7 @@ private fun rememberBitmap(bytes: ByteArray?): ImageBitmap? {
 }
 
 @Composable
-private fun FrameImage(bytes: ByteArray?, modifier: Modifier, selected: Boolean = false, label: String? = null) {
+internal fun FrameImage(bytes: ByteArray?, modifier: Modifier, selected: Boolean = false, label: String? = null) {
     val bitmap = rememberBitmap(bytes)
     Box(
         modifier

@@ -238,7 +238,7 @@ private fun SessionHeader(title: String, remainingMs: Long, totalMs: Long) {
 
 /** The four images of a story, top to bottom; a flip still loading shows as such and cannot be picked. */
 @Composable
-private fun Story(flip: Flip, order: List<Int>, selected: Boolean, modifier: Modifier, onClick: (() -> Unit)?) {
+internal fun Story(flip: Flip, order: List<Int>, selected: Boolean, modifier: Modifier, onClick: (() -> Unit)?) {
     val shape = RoundedCornerShape(8.dp)
     val colors = MaterialTheme.colorScheme
     Column(

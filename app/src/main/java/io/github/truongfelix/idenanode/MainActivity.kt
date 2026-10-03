@@ -558,11 +558,11 @@ private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-                if (quota.canMake && status.period == "None") {
+                if ((quota.canMake || quota.made > 0) && status.period == "None") {
                     Button(
                         onClick = { context.startActivity(Intent(context, FlipActivity::class.java)) },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Make a flip") }
+                    ) { Text(if (quota.made > 0) "My flips" else "Make a flip") }
                 }
             }
         }
