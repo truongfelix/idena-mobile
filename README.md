@@ -96,13 +96,10 @@ deletes the chain and the imported key.
 - `app/`: the Android app (Kotlin, Jetpack Compose).
 - `go/`: the Go module bound with gomobile: package `mobile` starts the node, imports the key and decodes
   the contract calls of a block body (for idena.social: the node keeps no index of other accounts'
-  transactions, so the app reads the blocks and recovers the senders). It pins
-  idena-go to the `mobile-node` branch of truongfelix/idena-go: the ubiubi18 master with the open pull
-  requests [#35](https://github.com/ubiubi18/idena-go/pull/35),
-  [#36](https://github.com/ubiubi18/idena-go/pull/36) (without it, the node rewrites its whole database at
-  each start), [#39](https://github.com/ubiubi18/idena-go/pull/39) (fast sync on phones) and
-  [#47](https://github.com/ubiubi18/idena-go/pull/47) (`bcn_blocksWithAddress`, which the Social tab uses to
-  find the blocks of idena.social from their headers), until they are merged.
+  transactions, so the app reads the blocks and recovers the senders). It pins idena-go to the master of
+  [truongfelix/idena-go](https://github.com/truongfelix/idena-go), with its dependency forks (wasm binding,
+  kad-dht); `scripts/build-wasm-android.sh` builds the contract runtime from
+  [truongfelix/idena-wasm](https://github.com/truongfelix/idena-wasm) (Wasmer from truongfelix/wasmer).
 - `go/wasm-binding-android.patch`: Android support for the wasm binding (a link file and build tags),
   applied by `scripts/build-node-aar.sh`.
 - The node on the phone: RPC on 127.0.0.1 only, with a random key and no browser access; the IPFS
@@ -112,8 +109,8 @@ deletes the chain and the imported key.
 ## Credits and license
 
 - The node is [idena-go](https://github.com/idena-network/idena-go) with the smart contract runtime
-  [idena-wasm](https://github.com/idena-network/idena-wasm), as maintained in the
-  [ubiubi18](https://github.com/ubiubi18) fork.
+  [idena-wasm](https://github.com/idena-network/idena-wasm), as maintained in the truongfelix forks,
+  which started from the [ubiubi18](https://github.com/ubiubi18) forks.
 - The practice flips are the sample validation of the Idena web app (app.idena.io), bundled with the
   Idena team's agreement.
 - The keyword list (`app/src/main/assets/keywords.json`) is idena-go's `keywords/keywords.json`. The flip
