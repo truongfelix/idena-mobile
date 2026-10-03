@@ -1,5 +1,19 @@
 package io.github.truongfelix.idenanode
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedVisibility
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -42,8 +56,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
@@ -141,33 +153,31 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
         Box(modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                // The title and the status, one line high: the node's on the Node tab; on the Social tab the
-                // scan's with the node's peers, or the paid action while it runs.
-                Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Idena", style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.width(16.dp))
-                    when (tab) {
-                        MainTab.Node -> StatusLine(node.bar, Modifier.weight(1f)) { nodeInfo = true }
-                        MainTab.Social -> {
-                            val action = social.sendStatus
-                            StatusLine(
-                                social.status,
-                                Modifier.weight(1f),
-                                text = action ?: socialBarLabel(social.status, social.node?.peers),
-                                textColor = if (action != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            ) { socialInfo = true }
-                        }
+                // One row: the title, the Node | Social switch and the status (a dot; ⓘ has the details): the node's
+                // on the Node tab, the scan's on the Social tab. It slides away while the feed scrolls down.
+                val unread = social.unread.size
+                AnimatedVisibility(!(tab == MainTab.Social && social.barsHidden), enter = expandVertically(), exit = shrinkVertically()) {
+                    Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Idena", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.width(14.dp))
+                        TabSwitch(tab, unread) { tab = it }
+                        Spacer(Modifier.weight(1f))
+                        val health = if (tab == MainTab.Node) node.bar.health else social.status.health
+                        val onInfo = { if (tab == MainTab.Node) nodeInfo = true else socialInfo = true }
+                        Box(Modifier.clickable(onClick = onInfo).padding(8.dp)) { StatusDot(health) }
+                        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
                     }
                 }
-                val unread = social.unread.size
-                TabRow(selectedTabIndex = tab.ordinal) {
-                    MainTab.entries.forEach {
-                        Tab(selected = tab == it, onClick = { tab = it }, text = {
-                            if (it == MainTab.Social && unread > 0) {
-                                BadgedBox(badge = { Badge { Text("$unread") } }) { Text(it.title) }
-                            } else Text(it.title)
-                        })
-                    }
+                // The paid action of the Social tab while it runs (sending, waiting for its block).
+                social.sendStatus?.takeIf { tab == MainTab.Social }?.let {
+                    Text(
+                        it,
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
                 when (tab) {
@@ -183,6 +193,35 @@ private fun MainScreen(modifier: Modifier = Modifier) {
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
         if (socialInfo) SocialInfoDialog(social) { socialInfo = false }
+    }
+}
+
+/** Node | Social as two pills in the title row; a badge counts the Social notifications not seen. */
+@Composable
+private fun TabSwitch(tab: MainTab, unread: Int, onSelect: (MainTab) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(50)
+    Row(Modifier.clip(shape).border(1.dp, colors.outlineVariant, shape)) {
+        MainTab.entries.forEach {
+            val selected = tab == it
+            Box(
+                Modifier
+                    .clip(shape)
+                    .background(if (selected) colors.secondaryContainer else Color.Transparent)
+                    .clickable { onSelect(it) }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            ) {
+                val label = @Composable {
+                    Text(
+                        it.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
+                    )
+                }
+                if (it == MainTab.Social && unread > 0) BadgedBox(badge = { Badge { Text("$unread") } }) { label() } else label()
+            }
+        }
     }
 }
 
