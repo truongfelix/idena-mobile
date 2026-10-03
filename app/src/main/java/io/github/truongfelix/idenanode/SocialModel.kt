@@ -58,6 +58,9 @@ class PageState {
 
     /** Whether a thread was already scrolled to its focus (not again when coming back to it). */
     var focused = false
+
+    /** The replies and comments of a thread folded to one line (with everything under them). */
+    val collapsed = androidx.compose.runtime.mutableStateMapOf<Long, Boolean>()
 }
 
 /** The tab's lists: the feed, the activity on the identity's posts, its own profile, and the People list. */
@@ -186,6 +189,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The period of a ranked sort, and whether the feed shows the posts of the people followed only. */
     var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
     var feedFollowing by mutableStateOf(false)
+
+    /** The random picks of the posts whose thread shows an ad ([threadShowsAd]), new at each app start. */
+    val adSalt = kotlin.random.Random.nextLong()
 
     /** What the feed's search bar has; the feed shows what it finds while it has [MIN_SEARCH] characters. */
     var searchQuery by mutableStateOf("")

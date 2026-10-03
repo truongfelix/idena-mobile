@@ -103,8 +103,37 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             epoch = epoch.optInt("epoch"),
             delegationEpoch = identity.optInt("delegationEpoch"),
             penaltySeconds = identity.optLong("penaltySeconds"),
+            invites = identity.optInt("invites"),
+            invitees = parseInvitees(identity.optJSONArray("invitees")),
         )
     }
+
+    /** The identity state of [address] (dna_identity): Undefined for an address without one. */
+    fun identityState(address: String): String =
+        (call("dna_identity", JSONArray().put(address)) as JSONObject).optString("state", "Undefined")
+
+    /**
+     * Sends an invitation (dna_sendInvite, no fee): to [to], or without it to a new key the node makes;
+     * returns the transaction, the receiver and the code (the new key, null when [to] is given).
+     */
+    fun sendInvite(to: String?): SentInviteTx {
+        val args = JSONObject().put("amount", "0")
+        to?.let { args.put("to", it) }
+        val result = call("dna_sendInvite", JSONArray().put(args)) as JSONObject
+        return SentInviteTx(
+            result.getString("hash").lowercase(),
+            result.getString("receiver").lowercase(),
+            result.optString("key").takeIf { it.isNotEmpty() },
+        )
+    }
+
+    /** Activates invitation [code] for the node's address (dna_activateInvite, no fee); returns the transaction. */
+    fun activateInvite(code: String): String =
+        call("dna_activateInvite", JSONArray().put(JSONObject().put("key", code))) as String
+
+    /** Spoils invitation [code]: activated to a new random address (no fee); returns the transaction. */
+    fun spoilInvite(code: String): String =
+        (call("dna_activateInviteToRandAddr", JSONArray().put(JSONObject().put("key", code))) as JSONObject).getString("hash")
 
     /** Mining transactions of the node's identity; each returns the transaction hash. */
     fun startMining(): String = call("dna_becomeOnline", JSONArray().put(JSONObject())) as String
@@ -292,6 +321,20 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
     }
 }
 
+/** A sent invitation: its transaction, its receiver and its code (null for an invitation to an address). */
+data class SentInviteTx(val hash: String, val receiver: String, val code: String?)
+
+/** The identity's activated invitees (dna_identity invitees: TxHash, Address). */
+internal fun parseInvitees(array: JSONArray?): List<Invitee> {
+    if (array == null) return emptyList()
+    return (0 until array.length()).mapNotNull { i ->
+        val item = array.optJSONObject(i) ?: return@mapNotNull null
+        val tx = item.optString("TxHash").ifEmpty { item.optString("txHash") }
+        val address = item.optString("Address").ifEmpty { item.optString("address") }
+        if (tx.isEmpty() || !isAddress(address)) null else Invitee(tx.lowercase(), address.lowercase())
+    }
+}
+
 data class CeremonyState(
     val epoch: Int,
     /** None, FlipLottery, ShortSession, LongSession or AfterLongSession. */
@@ -332,6 +375,9 @@ data class NodeStatus(
     val delegationEpoch: Int,
     /** A mining penalty still running; no delegation until it ends. */
     val penaltySeconds: Long,
+    /** The invitations the identity may still send this epoch, and its activated invitees. */
+    val invites: Int = 0,
+    val invitees: List<Invitee> = emptyList(),
 ) {
     /** Whether the identity, stake and balance are still those of an old state (fast sync running). */
     val accountPending: Boolean

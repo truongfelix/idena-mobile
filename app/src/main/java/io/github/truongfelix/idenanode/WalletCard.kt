@@ -201,7 +201,7 @@ private fun ReceiveDialog(address: String, onDismiss: () -> Unit) {
 }
 
 /** [text] as a QR code image, one pixel per module (drawn without smoothing). */
-private fun qrCode(text: String): ImageBitmap {
+internal fun qrCode(text: String): ImageBitmap {
     val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 2))
     val pixels = IntArray(matrix.width * matrix.height) { i ->
         if (matrix.get(i % matrix.width, i / matrix.width)) android.graphics.Color.BLACK else android.graphics.Color.WHITE
