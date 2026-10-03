@@ -261,6 +261,14 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
      */
     fun synced(): Boolean = !(call("bcn_syncing") as JSONObject).optBoolean("syncing", true)
 
+    /** The identity's last transactions in blocks (bcn_transactions): their type and epoch. */
+    fun ownTransactions(count: Int = 30): List<Pair<String, Int>> {
+        val address = call("dna_getCoinbaseAddr") as String
+        val result = call("bcn_transactions", JSONArray().put(JSONObject().put("address", address).put("count", count))) as? JSONObject
+        val list = result?.optJSONArray("transactions") ?: return emptyList()
+        return (0 until list.length()).map { list.getJSONObject(it).let { tx -> tx.optString("type") to tx.optInt("epoch", -1) } }
+    }
+
     /** Sends the answers of a session; returns the transaction hash. */
     fun submitAnswers(short: Boolean, answers: List<SubmittedAnswer>): String {
         val list = JSONArray()

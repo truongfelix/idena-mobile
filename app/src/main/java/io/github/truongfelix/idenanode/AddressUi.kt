@@ -1,6 +1,13 @@
 package io.github.truongfelix.idenanode
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -38,7 +45,7 @@ import androidx.compose.ui.unit.dp
 const val IDENTICON_SIZE = 5
 
 /**
- * The default avatar of [address], drawn on the phone (no avatar service): the cells to fill, taken from
+ * The pattern avatar of [address], when its robot cannot be drawn: the cells to fill, taken from
  * the address's hex digits and mirrored so that the picture is symmetric, and its hue (0-359).
  */
 fun identicon(address: String): Pair<BooleanArray, Int> {
@@ -58,14 +65,34 @@ fun identicon(address: String): Pair<BooleanArray, Int> {
     return cells to hue
 }
 
-/** The default avatar of [address] ([identicon]) in a rounded square of [size]. */
+/**
+ * The avatar of [address] in a rounded square of [size]: its Idena robot ([RobotAvatars], as
+ * robohash.idena.io draws it), drawn on the phone; the [identicon] only if the robot cannot be drawn.
+ */
 @Composable
 fun Avatar(address: String, size: Dp, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    // Null while drawing (a few milliseconds the first time); Failed when a picture is missing.
+    val robot by produceState<Any?>(RobotAvatars.cached(address), address) {
+        if (value == null) value = withContext(Dispatchers.Default) { RobotAvatars.draw(context, address) } ?: Failed
+    }
+    Box(modifier.size(size).clip(RoundedCornerShape(size / 5)).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+        when (val drawn = robot) {
+            is ImageBitmap -> Image(drawn, contentDescription = null, Modifier.fillMaxSize())
+            Failed -> Identicon(address, size)
+            else -> {}
+        }
+    }
+}
+
+private object Failed
+
+/** The pattern avatar of [address] ([identicon]). */
+@Composable
+private fun Identicon(address: String, size: Dp) {
     val (cells, hue) = remember(address) { identicon(address) }
     val color = Color.hsv(hue.toFloat(), 0.55f, 0.75f)
-    Canvas(
-        modifier.size(size).clip(RoundedCornerShape(size / 5)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    ) {
+    Canvas(Modifier.size(size)) {
         // A margin of half a cell around the picture.
         val cell = this.size.width / (IDENTICON_SIZE + 1)
         val margin = cell / 2
