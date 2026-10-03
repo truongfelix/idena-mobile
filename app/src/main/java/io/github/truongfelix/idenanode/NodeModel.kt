@@ -30,6 +30,9 @@ data class ScreenState(
     val runningForMs: Long? = null,
     /** Blocks per second over the last minute while syncing; null until measured. */
     val blocksPerSecond: Double? = null,
+    /** The chain database's write buffer chosen by the user, and the one of the node's last start. */
+    val writeBuffer: WriteBuffer = WriteBuffer.DEFAULT,
+    val runningWriteBuffer: WriteBuffer? = null,
 )
 
 /**
@@ -97,6 +100,11 @@ class NodeModel(private val context: Context) {
         state = state.copy(syncEnabled = enabled, startError = null)
     }
 
+    /** Another write buffer was chosen: the screen follows before the next read. */
+    fun writeBufferChanged(value: WriteBuffer) {
+        state = state.copy(writeBuffer = value)
+    }
+
     suspend fun run(lifecycle: Lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
@@ -147,7 +155,10 @@ private fun readState(context: Context): ScreenState {
     )
 }
 
-/** [state] with what the app reads without the node: the switch, the start error, the network, the background. */
+/**
+ * [state] with what the app reads without the node: the switch, the start error, the network, the background,
+ * the write buffer.
+ */
 private fun readLocal(context: Context, state: ScreenState): ScreenState {
     val errorFile = NodeSettings.startErrorFile(context)
     return state.copy(
@@ -158,6 +169,8 @@ private fun readLocal(context: Context, state: ScreenState): ScreenState {
         ignoringBatteryOptimizations = context.getSystemService(PowerManager::class.java)
             .isIgnoringBatteryOptimizations(context.packageName),
         runningForMs = NodeSettings.runningForMs(context),
+        writeBuffer = NodeSettings.writeBuffer(context),
+        runningWriteBuffer = NodeSettings.runningWriteBuffer(context),
     )
 }
 

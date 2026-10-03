@@ -294,6 +294,16 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
         NodeCard(
             state,
             mining = { state.status?.takeUnless { it.accountPending }?.let { MiningSection(it) { scope.launch { refresh() } } } },
+            writeBuffer = {
+                WriteBufferRow(
+                    state,
+                    onChange = {
+                        NodeSettings.setWriteBuffer(context, it)
+                        model.writeBufferChanged(it)
+                    },
+                    onRestart = { NodeService.restart(context) },
+                )
+            },
         ) { enabled ->
             if (enabled) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -339,11 +349,16 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
 
 /**
  * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
- * never move; then [mining] (the identity's mining, once the node has the account). The block, peers,
- * speed and network are in the title row's details (ⓘ).
+ * never move; the [writeBuffer] setting; then [mining] (the identity's mining, once the node has the
+ * account). The block, peers, speed and network are in the title row's details (ⓘ).
  */
 @Composable
-private fun NodeCard(state: ScreenState, mining: @Composable () -> Unit, onSyncChange: (Boolean) -> Unit) {
+private fun NodeCard(
+    state: ScreenState,
+    mining: @Composable () -> Unit,
+    writeBuffer: @Composable () -> Unit,
+    onSyncChange: (Boolean) -> Unit,
+) {
     val status = state.status
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -379,6 +394,7 @@ private fun NodeCard(state: ScreenState, mining: @Composable () -> Unit, onSyncC
                 }
             }
             state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            writeBuffer()
             mining()
         }
     }

@@ -33,6 +33,8 @@ object NodeSettings {
 
     private fun apiKeyFile(context: Context) = File(nodeDir(context), "rpc_key")
     private fun syncEnabledFile(context: Context) = File(nodeDir(context), "sync_enabled")
+    private fun writeBufferFile(context: Context) = File(nodeDir(context), "write_buffer_mib")
+    private fun runningWriteBufferFile(context: Context) = File(nodeDir(context), "write_buffer_running")
 
     /** A random key for the node RPC, created once. Other apps can reach loopback ports too. */
     @Synchronized
@@ -41,10 +43,14 @@ object NodeSettings {
         if (file.exists()) return file.readText().trim()
         val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val key = bytes.joinToString("") { "%02x".format(it) }
-        val tmp = File(file.path + ".tmp")
-        tmp.writeText(key)
-        tmp.renameTo(file)
+        writeAtomically(file, key)
         return key
+    }
+
+    private fun writeAtomically(file: File, text: String) {
+        val tmp = File(file.path + ".tmp")
+        tmp.writeText(text)
+        tmp.renameTo(file)
     }
 
     /** Marks that the answers of a session of [epoch] reached the node, so the screen does not ask again. */
@@ -59,21 +65,40 @@ object NodeSettings {
         if (enabled) file.createNewFile() else file.delete()
     }
 
+    /** The chain database's write buffer chosen by the user; the default until one is chosen. */
+    fun writeBuffer(context: Context): WriteBuffer =
+        WriteBuffer.parse(runCatching { writeBufferFile(context).readText() }.getOrNull())
+
+    fun setWriteBuffer(context: Context, value: WriteBuffer) = writeAtomically(writeBufferFile(context), value.mib.toString())
+
+    /** The write buffer of the node's last start, written by the service; null before the first. */
+    fun runningWriteBuffer(context: Context): WriteBuffer? =
+        runCatching { runningWriteBufferFile(context).readText() }.getOrNull()?.let { WriteBuffer.parse(it) }
+
+    fun setRunningWriteBuffer(context: Context, value: WriteBuffer) =
+        writeAtomically(runningWriteBufferFile(context), value.mib.toString())
+
     /**
      * The node configuration, applied over the mobile defaults: RPC on loopback with the app's key and
      * no browser access (no CORS), and no IPFS "server" profile, whose address filters block peers on
      * the home network. The IPFS port stays fixed: otherwise the node moves to the next port after two
      * minutes without IPFS peers (a Wi-Fi outage), and a port opened for it on the router no longer
-     * matches. Peer limits stay the default ones (not the low-power profile).
+     * matches. Peer limits stay the default ones (not the low-power profile). The chain database's write
+     * buffer is the user's choice.
      */
-    fun nodeConfig(context: Context): String = JSONObject()
+    fun nodeConfig(context: Context, writeBuffer: WriteBuffer = writeBuffer(context)): String =
+        nodeConfig(apiKey(context), writeBuffer)
+
+    /** [nodeConfig] from its parts. */
+    internal fun nodeConfig(apiKey: String, writeBuffer: WriteBuffer): String = JSONObject()
         .put(
             "RPC", JSONObject()
                 .put("HTTPHost", "127.0.0.1")
                 .put("HTTPPort", RPC_PORT)
-                .put("APIKey", apiKey(context))
+                .put("APIKey", apiKey)
                 .put("HTTPCors", JSONArray())
         )
         .put("IpfsConf", JSONObject().put("Profile", "").put("StaticPort", true))
+        .put("Database", JSONObject().put("WriteBufferMiB", writeBuffer.mib))
         .toString()
 }
