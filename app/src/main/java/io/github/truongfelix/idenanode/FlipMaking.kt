@@ -183,13 +183,15 @@ private fun urlEncode(text: String): String = java.net.URLEncoder.encode(text, "
  * is not used twice and no more flips are sent than allowed.
  */
 
-/** A flip sent and maybe not in a block yet: its transaction, its hash (CID) and its keyword pair. */
-data class SentFlip(val txHash: String, val hash: String, val pairId: Int, val sentAt: Long) {
-    fun toJson(): JSONObject = JSONObject().put("txHash", txHash).put("hash", hash).put("pairId", pairId).put("sentAt", sentAt)
+/** A flip sent and maybe not in a block yet: its transaction, its hash (CID), its keyword pair and epoch. */
+data class SentFlip(val txHash: String, val hash: String, val pairId: Int, val sentAt: Long, val epoch: Int) {
+    fun toJson(): JSONObject =
+        JSONObject().put("txHash", txHash).put("hash", hash).put("pairId", pairId).put("sentAt", sentAt).put("epoch", epoch)
 
     companion object {
+        /** A record without an epoch (app 0.1.31) reads as epoch -1: it is from no current epoch. */
         fun fromJson(json: JSONObject): SentFlip? = runCatching {
-            SentFlip(json.getString("txHash"), json.optString("hash"), json.getInt("pairId"), json.getLong("sentAt"))
+            SentFlip(json.getString("txHash"), json.optString("hash"), json.getInt("pairId"), json.getLong("sentAt"), json.optInt("epoch", -1))
         }.getOrNull()
     }
 }
@@ -197,16 +199,32 @@ data class SentFlip(val txHash: String, val hash: String, val pairId: Int, val s
 /** Whether the node counts [sent] already: its pair is used in [pairs] (dna_identity, from the blocks). */
 fun isCounted(sent: SentFlip, pairs: List<KeywordPair>): Boolean = pairs.any { it.id == sent.pairId && it.used }
 
+/** What becomes of the flip sent, at each check. */
+enum class SentFlipCheck { Wait, Counted, OtherEpoch, TimedOut }
+
+/**
+ * The flip sent is [SentFlipCheck.Counted] once its pair is used; from another epoch (pair ids start
+ * again each epoch, so its pair says nothing now) it is forgotten; and after [SENT_FLIP_TIMEOUT_MS]
+ * without being counted, too, whether the node still knows its transaction or not: the record must
+ * never block flip making for good.
+ */
+fun checkSent(sent: SentFlip, epoch: Int, pairs: List<KeywordPair>, now: Long): SentFlipCheck = when {
+    sent.epoch != epoch -> SentFlipCheck.OtherEpoch
+    isCounted(sent, pairs) -> SentFlipCheck.Counted
+    now - sent.sentAt > SENT_FLIP_TIMEOUT_MS -> SentFlipCheck.TimedOut
+    else -> SentFlipCheck.Wait
+}
+
 /**
  * The quota and pairs as they will be once [sent] is in a block: one more flip made and its pair used,
  * when the node does not count it yet.
  */
-fun countSent(quota: FlipQuota, pairs: List<KeywordPair>, sent: SentFlip?): Pair<FlipQuota, List<KeywordPair>> {
-    if (sent == null || isCounted(sent, pairs)) return quota to pairs
+fun countSent(quota: FlipQuota, pairs: List<KeywordPair>, sent: SentFlip?, epoch: Int): Pair<FlipQuota, List<KeywordPair>> {
+    if (sent == null || sent.epoch != epoch || isCounted(sent, pairs)) return quota to pairs
     return quota.copy(made = quota.made + 1) to pairs.map { if (it.id == sent.pairId) it.copy(used = true) else it }
 }
 
-/** How long a sent flip may stay out of a block before the app forgets it (the node's mempool drops it by then). */
+/** How long a sent flip may stay uncounted before the app forgets it (the node's mempool drops it by then). */
 const val SENT_FLIP_TIMEOUT_MS = 30 * 60 * 1000L
 
 /**

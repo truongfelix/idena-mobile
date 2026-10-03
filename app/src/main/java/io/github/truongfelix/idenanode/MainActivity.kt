@@ -504,7 +504,7 @@ private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
                 Field("Flips", "${quota.made} of ${quota.required} made$extra" + if (quota.missing == 0) " ✓" else "")
                 if (quota.missing > 0) {
                     Text(
-                        "Make ${quota.missing} more flip${if (quota.missing > 1) "s" else ""} before the flip lottery, about 2 hours " +
+                        "Make ${quota.missing} more flip${if (quota.missing > 1) "s" else ""} before the flip lottery, 5 minutes " +
                             "before the validation; without them the identity becomes ${quota.missingOutcome}.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,

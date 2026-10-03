@@ -108,24 +108,43 @@ class FlipMakingTest {
     fun aSentFlipCountsBeforeItsBlock() {
         val quota = FlipQuota("Newbie", 3, 3, 1)
         val pairs = listOf(KeywordPair(0, listOf(1, 2), true), KeywordPair(1, listOf(3, 4), false), KeywordPair(2, listOf(5, 6), false))
-        val sent = SentFlip("0xtx", "bafy", pairId = 1, sentAt = 0)
-        val (q, p) = countSent(quota, pairs, sent)
+        val sent = SentFlip("0xtx", "bafy", pairId = 1, sentAt = 0, epoch = 230)
+        val (q, p) = countSent(quota, pairs, sent, 230)
         assertEquals("one more made at once", 2, q.made)
         assertTrue("its pair is no longer offered", p.single { it.id == 1 }.used)
         assertFalse(p.single { it.id == 2 }.used)
         // Once the node counts it (the pair used in the state), it is not counted twice.
         val inBlock = pairs.map { if (it.id == 1) it.copy(used = true) else it }
         assertTrue(isCounted(sent, inBlock))
-        assertEquals(quota.copy(made = 2) to inBlock, countSent(quota.copy(made = 2), inBlock, sent))
-        assertEquals(quota to pairs, countSent(quota, pairs, null))
+        assertEquals(quota.copy(made = 2) to inBlock, countSent(quota.copy(made = 2), inBlock, sent, 230))
+        assertEquals(quota to pairs, countSent(quota, pairs, null, 230))
         assertEquals(sent, SentFlip.fromJson(sent.toJson()))
+    }
+
+    @Test
+    fun aSentFlipNeverBlocksForGood() {
+        val pairs = listOf(KeywordPair(0, listOf(1, 2), false), KeywordPair(1, listOf(3, 4), false))
+        val sent = SentFlip("0xtx", "bafy", pairId = 1, sentAt = 1_000, epoch = 230)
+        assertEquals(SentFlipCheck.Wait, checkSent(sent, 230, pairs, now = 2_000))
+        val inBlock = pairs.map { if (it.id == 1) it.copy(used = true) else it }
+        assertEquals(SentFlipCheck.Counted, checkSent(sent, 230, inBlock, now = 2_000))
+        // Mined last epoch and the screen closed before the block: pair 1 of the new epoch is another pair.
+        assertEquals(SentFlipCheck.OtherEpoch, checkSent(sent, 231, pairs, now = 2_000))
+        assertEquals(SentFlipCheck.OtherEpoch, checkSent(sent, 231, inBlock, now = 2_000))
+        val quota = FlipQuota("Newbie", 3, 3, 0)
+        assertEquals("not counted in another epoch", quota to pairs, countSent(quota, pairs, sent, 231))
+        // Still unknown to the state after the timeout, even if the node knows its transaction.
+        assertEquals(SentFlipCheck.TimedOut, checkSent(sent, 230, pairs, now = 1_000 + SENT_FLIP_TIMEOUT_MS + 1))
+        // A record of app 0.1.31 has no epoch: it is from no current epoch.
+        val old = SentFlip.fromJson(sent.toJson().apply { remove("epoch") })!!
+        assertEquals(SentFlipCheck.OtherEpoch, checkSent(old, 230, pairs, now = 2_000))
     }
 
     @Test
     fun theLastAllowedFlipSentStopsMore() {
         val quota = FlipQuota("Newbie", 3, 3, 2)
         val pairs = listOf(KeywordPair(4, listOf(1, 2), false))
-        assertFalse(countSent(quota, pairs, SentFlip("0xtx", "h", 4, 0)).first.canMake)
+        assertFalse(countSent(quota, pairs, SentFlip("0xtx", "h", 4, 0, 230), 230).first.canMake)
     }
 
     @Test

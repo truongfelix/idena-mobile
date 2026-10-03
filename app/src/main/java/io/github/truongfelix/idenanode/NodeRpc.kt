@@ -245,18 +245,21 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
     fun flipDeadline(): java.time.Instant? {
         val epoch = call("dna_epoch") as JSONObject
         val intervals = call("dna_ceremonyIntervals") as JSONObject
-        val validation = runCatching { java.time.Instant.parse(epoch.optString("nextValidation")) }.getOrNull() ?: return null
+        val validation = parseValidationTime(epoch.optString("nextValidation")) ?: return null
         return flipDeadline(validation, intervals.optDouble("FlipLotteryDuration", 0.0))
     }
 
     /** Submits a flip: the node encrypts it, keeps it on IPFS and sends the transaction. */
-    fun submitFlip(flip: FlipHex, pairId: Int): SentFlip {
+    fun submitFlip(flip: FlipHex, pairId: Int, epoch: Int): SentFlip {
         val result = call("flip_submit", flipSubmitArgs(flip, pairId), readTimeoutMs = 60_000) as JSONObject
-        return SentFlip(result.getString("txHash"), result.optString("hash"), pairId, System.currentTimeMillis())
+        return SentFlip(result.getString("txHash"), result.optString("hash"), pairId, System.currentTimeMillis(), epoch)
     }
 
-    /** Whether the node knows transaction [hash] (in a block or waiting in its mempool). */
-    fun knowsTx(hash: String): Boolean = runCatching { call("bcn_transaction", JSONArray().put(hash)) != null }.getOrDefault(false)
+    /**
+     * Whether the node is synced: a flip made on a node behind the chain uses the epoch, the keys and the
+     * nonce of the past, and never counts.
+     */
+    fun synced(): Boolean = !(call("bcn_syncing") as JSONObject).optBoolean("syncing", true)
 
     /** Sends the answers of a session; returns the transaction hash. */
     fun submitAnswers(short: Boolean, answers: List<SubmittedAnswer>): String {
