@@ -62,7 +62,7 @@ private enum class WalletDialog { Send, Receive, Stake }
  * refuses a stake replenishment from the flip lottery on).
  */
 @Composable
-fun WalletCard(status: NodeStatus, people: Map<String, Person>, onChanged: () -> Unit) {
+fun WalletCard(status: NodeStatus, people: Map<String, Person>, network: NetworkRewards?, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf<WalletDialog?>(null) }
@@ -105,6 +105,22 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, onChanged: () ->
             Text("Wallet", style = MaterialTheme.typography.titleMedium)
             Field("Balance", idna(status.balance))
             Field("Stake", idna(status.stake))
+            // The stake's details, from the Account card before 0.1.35.
+            val stake = status.stake.toDoubleOrNull() ?: 0.0
+            val locked = status.lockedStake.toDoubleOrNull() ?: 0.0
+            if (locked > 0) Field("Locked", idna(status.lockedStake))
+            val miss = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Miss)
+            val fail = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Fail)
+            if (miss != null && fail != null) {
+                Field("Protection", "${percent(miss)} if missed, ${percent(fail)} if failed")
+            }
+            network?.let { apy(stake, it) }?.let {
+                Field("APY", "${percent(it.yearly)} (staking + mining)")
+                Text(
+                    "If the identity validates and mines itself; flip and invitation rewards are not counted.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             val padding = PaddingValues(horizontal = 14.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { dialog = WalletDialog.Send }, enabled = canTransact, contentPadding = padding) { Text("Send") }

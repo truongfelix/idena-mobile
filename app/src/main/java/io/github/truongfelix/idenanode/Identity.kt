@@ -10,7 +10,7 @@ package io.github.truongfelix.idenanode
 /** How the identity would do at the next validation: not taking part, or failing it. */
 enum class Outcome { Miss, Fail }
 
-private val validatedStates = setOf("Newbie", "Verified", "Human")
+internal val validatedStates = setOf("Newbie", "Verified", "Human")
 
 /**
  * Whether the identity ends up Killed after [outcome] (determineNewIdentityState). Verified and Human
