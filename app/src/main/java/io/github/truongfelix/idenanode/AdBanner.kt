@@ -206,25 +206,19 @@ private fun AdDialog(ad: ChainAd, onDismiss: () -> Unit) {
 const val DEV_NOTE_TITLE = "A note from the devs"
 const val DEV_NOTE_LINE = "You run an optimised, more secure Idena node. Tap to read."
 
-/** The package this app belongs to, as GitHub repositories and what each one is. */
-private val PACKAGE = listOf(
-    "truongfelix/idena-go" to "the node: optimised, more secure",
-    "truongfelix/idena-desktop" to "the desktop app",
-    "truongfelix/idena-mobile" to "this app",
-)
+/** The package this app belongs to: its GitHub repositories (their names say what each one is). */
+private val PACKAGE = listOf("truongfelix/idena-go", "truongfelix/idena-desktop", "truongfelix/idena-mobile")
 
-/** The original Idena code, which the package builds on. */
-private val LEGACY = "idena-network" to "the original Idena code (legacy, no longer maintained)"
-
-/** Contributors, direct and indirect, and what of theirs the package builds on. */
-private val CONTRIBUTORS = listOf(
-    "ubiubi18" to "the idena-go and idena-desktop forks this package started from, and reviews of its pull requests",
-    "N3CR0M4NC3R-dev/idena.social" to "idena.social, the social network of the Social tab",
+/** The original code and the contributors, direct and indirect, with what the package owes them. */
+private val CREDITS = listOf(
+    "idena-network" to "the original Idena code, no longer maintained",
+    "ubiubi18" to "the forks we started from, and code reviews",
+    "N3CR0M4NC3R-dev/idena.social" to "idena.social, the Social tab",
 )
 
 /**
- * The developers' note: a community package, not the original team's; who makes it and its repositories,
- * the original code, the contributors, a personal statement on mining and reported flips, and the avatars' credits.
+ * The developers' note: a community package, not the original team's; its repositories, the credits, the
+ * devs' view on mining and reported flips, an invitation to help, and the avatars' credits.
  */
 @Composable
 private fun DevNoteDialog(onDismiss: () -> Unit) {
@@ -234,29 +228,23 @@ private fun DevNoteDialog(onDismiss: () -> Unit) {
         title = { Text(DEV_NOTE_TITLE) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Community work: this package is not made by the original Idena team.",
-                    fontWeight = FontWeight.Bold,
-                )
-                Text("This app is part of the Idena community package by truongfelix, on the same chain as the original:")
-                PACKAGE.forEach { (path, what) -> GitHubLink(path, what) }
-                Text("Built on the original Idena code:", style = MaterialTheme.typography.bodyMedium)
-                GitHubLink(LEGACY.first, LEGACY.second)
-                Text("With thanks for their direct and indirect contributions:", style = MaterialTheme.typography.bodyMedium)
-                CONTRIBUTORS.forEach { (path, what) -> GitHubLink(path, what) }
+                Text("Community work, not by the original Idena team. Same chain as the original.", fontWeight = FontWeight.Bold)
+                Column { PACKAGE.forEach { GitHubLink(it) } }
+                Text("Thanks to:", style = MaterialTheme.typography.bodyMedium)
+                CREDITS.forEach { (path, what) -> GitHubLink(path, what) }
                 HorizontalDivider()
                 Text(
-                    "Today, an identity that cannot solve flips is penalised in mining, while an identity whose flips " +
-                        "are reported is not. We believe this is unfair, and unstable for the future of the network.",
+                    "What we believe: today an identity that fails to solve flips loses mining rewards, but an identity " +
+                        "whose flips get reported loses nothing. That is unfair, and it weakens the network.",
                 )
                 Text(
-                    "If you think an identity that keeps making flips that get reported should be penalised, its mining " +
-                        "rate reduced in proportion to its reported flips out of its total flips over the last 10 epochs, " +
-                        "please speak out on Telegram, Discord and idena.social.",
+                    "Our proposal: cut an identity's mining rewards in proportion to its share of reported flips over " +
+                        "the last 10 epochs. If you agree, say so on Telegram, Discord or idena.social.",
                     fontWeight = FontWeight.Bold,
                 )
                 COMMUNITY.forEach { (name, url) -> Link(name, url) }
                 HorizontalDivider()
+                Text("Want to help? Feel free to fork the code, review it and propose changes on GitHub.")
                 Text(
                     "Robot avatars: RoboHash (MIT), robots by Zikri Kader (CC-BY 4.0), drawn on this phone.",
                     style = MaterialTheme.typography.bodySmall,
@@ -270,7 +258,7 @@ private fun DevNoteDialog(onDismiss: () -> Unit) {
 
 /** Where the community talks (idena.social is the Social tab). */
 private val COMMUNITY = listOf(
-    "Telegram" to "https://t.me/IdenaAnnouncements",
+    "Telegram" to "https://t.me/IdenaNetworkPublic",
     "Discord" to "https://discord.com/invite/idena-community-634481767352369162",
 )
 
@@ -284,13 +272,13 @@ private fun Link(name: String, url: String) {
     }
 }
 
-/** A GitHub account or repository ([path]) as a link, with [what] it is under it. */
+/** A GitHub account or repository ([path]) as a link, with [what] it is under it if given. */
 @Composable
-private fun GitHubLink(path: String, what: String) {
+private fun GitHubLink(path: String, what: String? = null) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().clickable { openInBrowser(context, "https://github.com/$path") }) {
         Text(path, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
-        Text(what, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        what?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
