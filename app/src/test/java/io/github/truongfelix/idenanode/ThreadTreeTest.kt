@@ -34,4 +34,19 @@ class ThreadTreeTest {
         assertEquals(setOf(11L, 12L, 13L), tree.flatMap { listOf(it.comment.id) + it.children.map { c -> c.comment.id } }.toSet())
         assertEquals(3, tree.size + tree.sumOf { it.descendants })
     }
+
+    @Test
+    fun twoThreadsOfEachFivePostsShowAnAd() {
+        for (salt in listOf(0L, 1L, -7L, 123456789L)) {
+            for (group in 0 until 50) {
+                val shown = (0 until POSTS_PER_AD).count { threadShowsAd(group * POSTS_PER_AD + it, salt) }
+                assertEquals(THREAD_ADS_PER_GROUP, shown)
+            }
+        }
+        // The same post keeps its answer while the app runs (same salt).
+        assertEquals(threadShowsAd(17, 42), threadShowsAd(17, 42))
+        assertFalse("a post not in the feed", threadShowsAd(-1, 42))
+        // Another app start picks other posts somewhere.
+        assertTrue((0 until 100).any { threadShowsAd(it, 1) != threadShowsAd(it, 2) })
+    }
 }

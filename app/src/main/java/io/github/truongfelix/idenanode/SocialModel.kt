@@ -190,6 +190,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
     var feedFollowing by mutableStateOf(false)
 
+    /** The random picks of the posts whose thread shows an ad ([threadShowsAd]), new at each app start. */
+    val adSalt = kotlin.random.Random.nextLong()
+
     /** What the feed's search bar has; the feed shows what it finds while it has [MIN_SEARCH] characters. */
     var searchQuery by mutableStateOf("")
 

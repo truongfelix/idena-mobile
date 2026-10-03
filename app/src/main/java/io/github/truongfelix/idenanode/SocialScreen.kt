@@ -178,8 +178,11 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         when {
             current != null -> Editor(model, current, canPost = canAct)
             page is SocialPage.Thread -> key(page) {
+                // 2 posts of each 5 in a row, at random, show an ad under the post, above the answers.
+                val rank = remember(feed, page.postId) { feed.map { it.id }.sorted().binarySearch(page.postId) }
                 ThreadView(
                     post = feed.firstOrNull { it.id == page.postId },
+                    ad = if (threadShowsAd(rank, model.adSalt)) ({ FeedAd(ads, rank, Modifier.padding(vertical = 8.dp)) }) else null,
                     focusId = page.focusId,
                     pageState = model.pageState(page),
                     states = states,
@@ -1092,6 +1095,7 @@ private fun ProfileItemCard(
 @Composable
 private fun ThreadView(
     post: SocialPost?,
+    ad: (@Composable () -> Unit)?,
     focusId: Long?,
     pageState: PageState,
     states: Map<String, AuthorIdentity>,
@@ -1125,6 +1129,7 @@ private fun ThreadView(
                     ActionBar(post, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
                         onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
                     }, onTip = { onTip(post) }, onWho = { onWho(post) })
+                    ad?.invoke()
                     HorizontalDivider()
                     val answers = replyCount(post)
                     Text(if (answers == 1) "1 answer" else "$answers answers", style = MaterialTheme.typography.titleSmall)

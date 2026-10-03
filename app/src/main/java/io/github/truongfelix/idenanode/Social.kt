@@ -724,6 +724,21 @@ fun socialBarLabel(state: BarState, peers: Int?): String = when {
 /** Posts between two ads in the feed. */
 const val POSTS_PER_AD = 5
 
+/** How many posts of each [POSTS_PER_AD] in a row show an ad under them when opened. */
+const val THREAD_ADS_PER_GROUP = 2
+
+/**
+ * Whether the thread of the post at [rank] (its place among the feed's posts, oldest first) shows an ad
+ * under the post: in each [POSTS_PER_AD] posts in a row, [THREAD_ADS_PER_GROUP] picked at random. [salt]
+ * changes the picks (one per app start) and keeps them the same while the app runs.
+ */
+fun threadShowsAd(rank: Int, salt: Long): Boolean {
+    if (rank < 0) return false
+    val group = rank / POSTS_PER_AD
+    val picks = (0 until POSTS_PER_AD).shuffled(kotlin.random.Random(salt xor group.toLong() * 0x9E3779B97F4A7C15uL.toLong())).take(THREAD_ADS_PER_GROUP)
+    return rank % POSTS_PER_AD in picks
+}
+
 /** The feed's rows for [posts] posts: an ad after each [POSTS_PER_AD] posts, none after a shorter end. */
 fun feedRows(posts: Int): Int = posts + posts / POSTS_PER_AD
 
