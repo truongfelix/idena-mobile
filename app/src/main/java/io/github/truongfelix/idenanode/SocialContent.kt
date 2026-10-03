@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -74,7 +75,7 @@ private fun rememberIpfs(cid: String): Pair<Fetched, () -> Unit> {
 
 /** A post's text and first media; [showMedia] false shows a short mention instead of the media. */
 @Composable
-fun PostContent(call: PostCall, style: TextStyle, maxLines: Int = Int.MAX_VALUE, showMedia: Boolean = true) {
+fun PostContent(call: PostCall, style: TextStyle, maxLines: Int = Int.MAX_VALUE, showMedia: Boolean = true, mediaMaxHeight: Dp = 360.dp) {
     val cid = ipfsCid(call.message)
     when {
         cid != null -> IpfsText(cid, style, maxLines)
@@ -82,7 +83,7 @@ fun PostContent(call: PostCall, style: TextStyle, maxLines: Int = Int.MAX_VALUE,
         call.message.isNotEmpty() -> Text(call.message, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
     }
     if (call.hasMedia) {
-        if (showMedia) PostMedia(call) else Note("🖼 Media")
+        if (showMedia) PostMedia(call, mediaMaxHeight) else Note("🖼 Media")
     }
 }
 
@@ -99,7 +100,7 @@ private fun IpfsText(cid: String, style: TextStyle, maxLines: Int) {
 
 /** The first media: an image (inline or on IPFS); video, audio and SVG are only mentioned. */
 @Composable
-private fun PostMedia(call: PostCall) {
+private fun PostMedia(call: PostCall, maxHeight: Dp) {
     val type = call.mediaType.lowercase()
     val cid = ipfsCid(call.media)
     when {
@@ -110,7 +111,7 @@ private fun PostMedia(call: PostCall) {
             val (state, retry) = rememberIpfs(cid)
             when (state) {
                 Fetched.Loading -> Note("Loading the image from IPFS through the node…")
-                is Fetched.Loaded -> PostImage(cid, state.bytes)
+                is Fetched.Loaded -> PostImage(cid, state.bytes, maxHeight)
                 Fetched.Unavailable -> Unavailable(retry)
                 is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
             }
@@ -118,14 +119,14 @@ private fun PostMedia(call: PostCall) {
         call.media.startsWith("ipfs://") -> Note("Media on IPFS with an invalid address.")
         else -> {
             val bytes = remember(call.hash) { runCatching { Base64.getDecoder().decode(call.media) }.getOrNull() }
-            if (bytes == null) Note("🖼 Unreadable image.") else PostImage(call.hash, bytes)
+            if (bytes == null) Note("🖼 Unreadable image.") else PostImage(call.hash, bytes, maxHeight)
         }
     }
 }
 
 /** An image decoded off the main thread, at most 1,080 pixels on its longer side. */
 @Composable
-private fun PostImage(key: String, bytes: ByteArray) {
+private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp) {
     val decoded by produceState<Pair<Boolean, ImageBitmap?>>(false to images.get(key), key) {
         if (value.second == null) {
             val bitmap = withContext(Dispatchers.Default) { decodeScaled(bytes) }
@@ -138,7 +139,7 @@ private fun PostImage(key: String, bytes: ByteArray) {
         bitmap != null -> Image(
             bitmap = bitmap,
             contentDescription = "Image of the post",
-            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Fit,
         )
         decoded.first -> Note("🖼 An image this phone cannot show.")
