@@ -190,9 +190,6 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
     var feedFollowing by mutableStateOf(false)
 
-    /** Whether the bars above the feed (title row, search, options) are hidden while the feed scrolls down. */
-    var barsHidden by mutableStateOf(false)
-
     /** What the feed's search bar has; the feed shows what it finds while it has [MIN_SEARCH] characters. */
     var searchQuery by mutableStateOf("")
 

@@ -11,9 +11,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.AnimatedVisibility
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -153,36 +150,46 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
         Box(modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                // One row: the title, the Node | Social switch and the status (a dot; ⓘ has the details): the node's
-                // on the Node tab, the scan's on the Social tab. It slides away while the feed scrolls down.
+                // One row: the title, the Node | Social switch and the status (a dot with the peers; ⓘ has the
+                // details): the node's on the Node tab, the scan's on the Social tab, where the feed slides it away.
                 val unread = social.unread.size
-                AnimatedVisibility(!(tab == MainTab.Social && social.barsHidden), enter = expandVertically(), exit = shrinkVertically()) {
-                    Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Idena", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.width(14.dp))
-                        TabSwitch(tab, unread) { tab = it }
-                        Spacer(Modifier.weight(1f))
-                        val health = if (tab == MainTab.Node) node.bar.health else social.status.health
-                        val onInfo = { if (tab == MainTab.Node) nodeInfo = true else socialInfo = true }
-                        Box(Modifier.clickable(onClick = onInfo).padding(8.dp)) { StatusDot(health) }
-                        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
+                val titleBar: @Composable () -> Unit = {
+                    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Idena", style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.width(14.dp))
+                            TabSwitch(tab, unread) { tab = it }
+                            Spacer(Modifier.weight(1f))
+                            val health = if (tab == MainTab.Node) node.bar.health else social.status.health
+                            val peers = (if (tab == MainTab.Social) social.node?.peers else null) ?: node.view?.peers
+                            val onInfo = { if (tab == MainTab.Node) nodeInfo = true else socialInfo = true }
+                            Row(Modifier.clickable(onClick = onInfo).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                StatusDot(health)
+                                peers?.let {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("$it", style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+                            IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
+                        }
+                        // The paid action of the Social tab while it runs (sending, waiting for its block).
+                        social.sendStatus?.takeIf { tab == MainTab.Social }?.let {
+                            Text(
+                                it,
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
-                // The paid action of the Social tab while it runs (sending, waiting for its block).
-                social.sendStatus?.takeIf { tab == MainTab.Social }?.let {
-                    Text(
-                        it,
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                if (tab == MainTab.Node) titleBar()
                 // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
                 when (tab) {
                     MainTab.Node -> NodeScreen(node, social.people, Modifier.weight(1f))
-                    MainTab.Social -> SocialScreen(social, ads.ads, Modifier.weight(1f))
+                    MainTab.Social -> SocialScreen(social, ads.ads, titleBar, Modifier.weight(1f))
                 }
                 if (tab == MainTab.Node) AdBanner(ads.ads)
             }
