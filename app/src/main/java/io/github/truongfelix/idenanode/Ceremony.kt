@@ -88,6 +88,32 @@ data class Answers(
         Relevance.Approved -> if (best == hash) 5 else 2
         Relevance.None -> 0
     }
+
+    /*
+     * What the screens ask for before they offer Submit (the 10-04 ceremony was lost to a Submit tapped with
+     * 2 of 6 flips answered). The answers still go by themselves at the end of the session, whatever is done.
+     */
+
+    /** The flips that can be answered: those the node delivered. */
+    fun solvable(flips: List<Flip>): List<Flip> = flips.filter { it.loaded }
+
+    fun solvedCount(flips: List<Flip>): Int = solvable(flips).count { choice(it.hash) != Choice.None }
+
+    /** True once a story is picked for every delivered flip; flips still loading cannot be answered. */
+    fun storiesDone(flips: List<Flip>): Boolean = solvable(flips).let { it.isNotEmpty() && solvedCount(flips) == it.size }
+
+    /** The flips the keyword check asks about: those whose keywords are on screen. */
+    fun gradable(flips: List<Flip>): List<Flip> = flips.filter { it.loaded && it.keywords.isNotEmpty() }
+
+    fun gradedCount(flips: List<Flip>): Int = gradable(flips).count { relevance(it.hash) != Relevance.None }
+
+    /** True once every flip with keywords on screen is approved or reported. */
+    fun gradesDone(flips: List<Flip>): Boolean = gradedCount(flips) == gradable(flips).size
+
+    /** A best flip is due as soon as a flip is approved: only an approved flip can be the best. */
+    val bestDone: Boolean get() = best != null || !hasApproved
+
+    fun keywordCheckDone(flips: List<Flip>): Boolean = gradesDone(flips) && bestDone
 }
 
 /** The validation time the node reports (RFC 3339), or null if it cannot be read. */

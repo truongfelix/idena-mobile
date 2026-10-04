@@ -59,6 +59,49 @@ class AnswersTest {
         assertTrue(Answers(flips.size).toggleBest("flip1").hasApproved)
     }
 
+    private fun flip(hash: String, loaded: Boolean = true, keywords: Boolean = true) = Flip(
+        hash,
+        if (loaded) List(4) { ByteArray(1) } else emptyList(),
+        listOf(0, 1, 2, 3),
+        listOf(3, 2, 1, 0),
+        if (keywords) listOf(Keyword("castle", ""), Keyword("rain", "")) else emptyList(),
+    )
+
+    @Test
+    fun submitOnlyOnceEveryDeliveredFlipIsAnswered() {
+        // The 10-04 ceremony: Submit tapped with 2 of 6 flips answered.
+        val session = listOf(flip("a"), flip("b"), flip("c"), flip("loading", loaded = false))
+        var answers = Answers(session.size).choose("a", Choice.Left).choose("b", Choice.Right)
+        assertFalse(answers.storiesDone(session))
+        assertEquals(listOf(2, 3), listOf(answers.solvedCount(session), answers.solvable(session).size))
+        answers = answers.choose("c", Choice.Left)
+        assertTrue("a flip still loading cannot be answered and does not block", answers.storiesDone(session))
+        assertFalse("nothing delivered, nothing to submit", Answers(1).storiesDone(listOf(flip("x", loaded = false))))
+    }
+
+    @Test
+    fun keywordCheckAsksEveryFlipWithKeywordsThenTheBest() {
+        val session = listOf(flip("a"), flip("b"), flip("c"), flip("noWords", keywords = false))
+        var answers = Answers(session.size).approve("a").report("b")
+        assertFalse(answers.gradesDone(session))
+        assertEquals(listOf(2, 3), listOf(answers.gradedCount(session), answers.gradable(session).size))
+        answers = answers.approve("c")
+        assertTrue("a flip without keywords on screen is not asked about", answers.gradesDone(session))
+        assertFalse("an approved flip makes the best due", answers.keywordCheckDone(session))
+        answers = answers.toggleBest("c")
+        assertTrue(answers.keywordCheckDone(session))
+        assertFalse("removing the mark makes it due again", answers.toggleBest("c").keywordCheckDone(session))
+    }
+
+    @Test
+    fun noBestIsDueWithoutAnApprovedFlip() {
+        val oneFlip = listOf(flip("a"), flip("b", keywords = false), flip("c", keywords = false))
+        assertTrue(Answers(oneFlip.size).report("a").keywordCheckDone(oneFlip))
+        // No keywords loaded at all: the validator is not stuck.
+        val noWords = listOf(flip("a", keywords = false), flip("b", keywords = false))
+        assertTrue(Answers(noWords.size).keywordCheckDone(noWords))
+    }
+
     @Test
     fun unansweredFlipsSendNothing() {
         val answers = Answers(flips.size).choose("flip1", Choice.Right)
