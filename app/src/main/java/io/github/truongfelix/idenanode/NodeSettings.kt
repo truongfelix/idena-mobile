@@ -33,8 +33,16 @@ object NodeSettings {
 
     private fun apiKeyFile(context: Context) = File(nodeDir(context), "rpc_key")
     private fun syncEnabledFile(context: Context) = File(nodeDir(context), "sync_enabled")
-    private fun writeBufferFile(context: Context) = File(nodeDir(context), "write_buffer_mib")
-    private fun runningWriteBufferFile(context: Context) = File(nodeDir(context), "write_buffer_running")
+    private fun writeBufferFile(context: Context, database: NodeDatabase) =
+        File(nodeDir(context), filePrefix(database) + "write_buffer_mib")
+    private fun runningWriteBufferFile(context: Context, database: NodeDatabase) =
+        File(nodeDir(context), filePrefix(database) + "write_buffer_running")
+
+    // The chain database's files keep the names they had before the IPFS database got its own setting.
+    private fun filePrefix(database: NodeDatabase) = when (database) {
+        NodeDatabase.Chain -> ""
+        NodeDatabase.Ipfs -> "ipfs_"
+    }
 
     /** A random key for the node RPC, created once. Other apps can reach loopback ports too. */
     @Synchronized
@@ -65,32 +73,41 @@ object NodeSettings {
         if (enabled) file.createNewFile() else file.delete()
     }
 
-    /** The chain database's write buffer chosen by the user; the default until one is chosen. */
-    fun writeBuffer(context: Context): WriteBuffer =
-        WriteBuffer.parse(runCatching { writeBufferFile(context).readText() }.getOrNull())
+    /** The write buffer of [database] chosen by the user; the default until one is chosen. */
+    fun writeBuffer(context: Context, database: NodeDatabase): WriteBuffer =
+        WriteBuffer.parse(runCatching { writeBufferFile(context, database).readText() }.getOrNull())
 
-    fun setWriteBuffer(context: Context, value: WriteBuffer) = writeAtomically(writeBufferFile(context), value.mib.toString())
+    /** The write buffers chosen for every database. */
+    fun writeBuffers(context: Context): Map<NodeDatabase, WriteBuffer> =
+        NodeDatabase.entries.associateWith { writeBuffer(context, it) }
 
-    /** The write buffer of the node's last start, written by the service; null before the first. */
-    fun runningWriteBuffer(context: Context): WriteBuffer? =
-        runCatching { runningWriteBufferFile(context).readText() }.getOrNull()?.let { WriteBuffer.parse(it) }
+    fun setWriteBuffer(context: Context, database: NodeDatabase, value: WriteBuffer) =
+        writeAtomically(writeBufferFile(context, database), value.mib.toString())
 
-    fun setRunningWriteBuffer(context: Context, value: WriteBuffer) =
-        writeAtomically(runningWriteBufferFile(context), value.mib.toString())
+    /** The write buffer of [database] at the node's last start, written by the service; null before the first. */
+    fun runningWriteBuffer(context: Context, database: NodeDatabase): WriteBuffer? =
+        runCatching { runningWriteBufferFile(context, database).readText() }.getOrNull()?.let { WriteBuffer.parse(it) }
+
+    fun setRunningWriteBuffer(context: Context, database: NodeDatabase, value: WriteBuffer) =
+        writeAtomically(runningWriteBufferFile(context, database), value.mib.toString())
 
     /**
      * The node configuration, applied over the mobile defaults: RPC on loopback with the app's key and
      * no browser access (no CORS), and no IPFS "server" profile, whose address filters block peers on
      * the home network. The IPFS port stays fixed: otherwise the node moves to the next port after two
      * minutes without IPFS peers (a Wi-Fi outage), and a port opened for it on the router no longer
-     * matches. Peer limits stay the default ones (not the low-power profile). The chain database's write
-     * buffer is the user's choice.
+     * matches. Peer limits stay the default ones (not the low-power profile). The write buffers of the chain
+     * and IPFS databases are the user's choice.
      */
-    fun nodeConfig(context: Context, writeBuffer: WriteBuffer = writeBuffer(context)): String =
-        nodeConfig(apiKey(context), writeBuffer)
+    fun nodeConfig(context: Context, writeBuffers: Map<NodeDatabase, WriteBuffer> = writeBuffers(context)): String =
+        nodeConfig(
+            apiKey(context),
+            writeBuffers[NodeDatabase.Chain] ?: WriteBuffer.DEFAULT,
+            writeBuffers[NodeDatabase.Ipfs] ?: WriteBuffer.DEFAULT,
+        )
 
     /** [nodeConfig] from its parts. */
-    internal fun nodeConfig(apiKey: String, writeBuffer: WriteBuffer): String = JSONObject()
+    internal fun nodeConfig(apiKey: String, chainBuffer: WriteBuffer, ipfsBuffer: WriteBuffer): String = JSONObject()
         .put(
             "RPC", JSONObject()
                 .put("HTTPHost", "127.0.0.1")
@@ -98,7 +115,12 @@ object NodeSettings {
                 .put("APIKey", apiKey)
                 .put("HTTPCors", JSONArray())
         )
-        .put("IpfsConf", JSONObject().put("Profile", "").put("StaticPort", true))
-        .put("Database", JSONObject().put("WriteBufferMiB", writeBuffer.mib))
+        .put(
+            "IpfsConf", JSONObject()
+                .put("Profile", "")
+                .put("StaticPort", true)
+                .put("DatastoreWriteBufferMiB", ipfsBuffer.mib)
+        )
+        .put("Database", JSONObject().put("WriteBufferMiB", chainBuffer.mib))
         .toString()
 }

@@ -15,10 +15,12 @@ meant to be delegated to a pool, such as a desktop node.
   battery optimization may stop the node with the screen off, with buttons to Android's setting and to the
   autostart and battery pages some phones add. The node keeps its IPFS port (40405) fixed, so that a port
   opened for it on the router keeps matching: outside nodes can then connect to the phone. The Sync card
-  sets the chain database's **write buffer**: 4 MiB (idena-go's default), 16 MiB (optimal, the app's
-  default), 32 MiB (phones with 4 GB of RAM or more), 64 MiB (computers). A bigger buffer means fewer disk
-  writes (at 4 MiB the node writes about 3 MB a block, 13 GB a day) for more memory; the node takes it
-  when it starts, and the card offers a restart (with a warning close to a validation, none during it).
+  sets the **write buffers** of the node's two databases, each on its own: the chain database (the
+  blockchain) and the IPFS database (what the network uses to find content; it writes the most once outside
+  nodes can reach the phone). Each offers Default (idena-go's 4 MiB), 16, 32 or 64 MiB: a higher level needs
+  more RAM but writes less to the phone's storage (chain database on the test phone: 3.1 MiB written a block
+  at 4 MiB, 0.7 at 32 MiB). The node takes the sizes when it starts, and the card offers a restart (with a
+  warning close to a validation, none during it).
 - **Account**: identity state and age, the address with its robot avatar; for an address without an
   identity, an **invitation code** field (activation, no fee).
 - **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee

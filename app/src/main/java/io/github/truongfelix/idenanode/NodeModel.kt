@@ -30,9 +30,9 @@ data class ScreenState(
     val runningForMs: Long? = null,
     /** Blocks per second over the last minute while syncing; null until measured. */
     val blocksPerSecond: Double? = null,
-    /** The chain database's write buffer chosen by the user, and the one of the node's last start. */
-    val writeBuffer: WriteBuffer = WriteBuffer.DEFAULT,
-    val runningWriteBuffer: WriteBuffer? = null,
+    /** The write buffer of each database chosen by the user, and the one of the node's last start (if any). */
+    val writeBuffers: Map<NodeDatabase, WriteBuffer> = NodeDatabase.entries.associateWith { WriteBuffer.DEFAULT },
+    val runningWriteBuffers: Map<NodeDatabase, WriteBuffer> = emptyMap(),
 )
 
 /**
@@ -100,9 +100,9 @@ class NodeModel(private val context: Context) {
         state = state.copy(syncEnabled = enabled, startError = null)
     }
 
-    /** Another write buffer was chosen: the screen follows before the next read. */
-    fun writeBufferChanged(value: WriteBuffer) {
-        state = state.copy(writeBuffer = value)
+    /** Another write buffer was chosen for [database]: the screen follows before the next read. */
+    fun writeBufferChanged(database: NodeDatabase, value: WriteBuffer) {
+        state = state.copy(writeBuffers = state.writeBuffers + (database to value))
     }
 
     suspend fun run(lifecycle: Lifecycle) {
@@ -169,8 +169,10 @@ private fun readLocal(context: Context, state: ScreenState): ScreenState {
         ignoringBatteryOptimizations = context.getSystemService(PowerManager::class.java)
             .isIgnoringBatteryOptimizations(context.packageName),
         runningForMs = NodeSettings.runningForMs(context),
-        writeBuffer = NodeSettings.writeBuffer(context),
-        runningWriteBuffer = NodeSettings.runningWriteBuffer(context),
+        writeBuffers = NodeSettings.writeBuffers(context),
+        runningWriteBuffers = NodeDatabase.entries.mapNotNull { database ->
+            NodeSettings.runningWriteBuffer(context, database)?.let { database to it }
+        }.toMap(),
     )
 }
 

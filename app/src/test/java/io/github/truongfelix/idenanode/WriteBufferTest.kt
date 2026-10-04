@@ -13,10 +13,17 @@ class WriteBufferTest {
     private val now = Instant.parse("2026-10-04T12:00:00Z")
 
     @Test
-    fun theFourSizesWithSixteenByDefault() {
+    fun theFourSizesWithIdenasByDefault() {
         assertEquals(listOf(4, 16, 32, 64), WriteBuffer.entries.map { it.mib })
-        assertEquals(WriteBuffer.MiB16, WriteBuffer.DEFAULT)
-        assertEquals("Idena default", WriteBuffer.MiB4.label)
+        assertEquals(WriteBuffer.MiB4, WriteBuffer.DEFAULT)
+        assertEquals(listOf("Default", "16 MiB", "32 MiB", "64 MiB"), WriteBuffer.entries.map { it.label })
+    }
+
+    @Test
+    fun twoDatabasesSetOnTheirOwn() {
+        assertEquals(listOf(NodeDatabase.Chain, NodeDatabase.Ipfs), NodeDatabase.entries)
+        assertEquals("Chain database buffer", NodeDatabase.Chain.title)
+        assertEquals("IPFS database buffer", NodeDatabase.Ipfs.title)
     }
 
     @Test
@@ -41,9 +48,10 @@ class WriteBufferTest {
     }
 
     @Test
-    fun theNodeConfigCarriesTheWriteBuffer() {
-        val config = JSONObject(NodeSettings.nodeConfig("abc123", WriteBuffer.MiB32))
+    fun theNodeConfigCarriesBothWriteBuffers() {
+        val config = JSONObject(NodeSettings.nodeConfig("abc123", WriteBuffer.MiB32, WriteBuffer.MiB16))
         assertEquals(32, config.getJSONObject("Database").getInt("WriteBufferMiB"))
+        assertEquals(16, config.getJSONObject("IpfsConf").getInt("DatastoreWriteBufferMiB"))
         val rpc = config.getJSONObject("RPC")
         assertEquals("127.0.0.1", rpc.getString("HTTPHost"))
         assertEquals(NodeSettings.RPC_PORT, rpc.getInt("HTTPPort"))
@@ -86,5 +94,12 @@ class WriteBufferTest {
         assertEquals(6, ramGb(5_780_000_000))
         assertEquals(8, ramGb(7_740_000_000))
         assertEquals(12, ramGb(11_600_000_000))
+    }
+
+    @Test
+    fun theDefaultIsIdenasForBoth() {
+        val config = JSONObject(NodeSettings.nodeConfig("abc123", WriteBuffer.DEFAULT, WriteBuffer.DEFAULT))
+        assertEquals(4, config.getJSONObject("Database").getInt("WriteBufferMiB"))
+        assertEquals(4, config.getJSONObject("IpfsConf").getInt("DatastoreWriteBufferMiB"))
     }
 }

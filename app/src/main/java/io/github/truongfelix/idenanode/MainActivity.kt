@@ -294,15 +294,18 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
         NodeCard(
             state,
             mining = { state.status?.takeUnless { it.accountPending }?.let { MiningSection(it) { scope.launch { refresh() } } } },
-            writeBuffer = {
-                WriteBufferRow(
-                    state,
-                    onChange = {
-                        NodeSettings.setWriteBuffer(context, it)
-                        model.writeBufferChanged(it)
-                    },
-                    onRestart = { NodeService.restart(context) },
-                )
+            writeBuffers = {
+                NodeDatabase.entries.forEach { database ->
+                    WriteBufferRow(
+                        database,
+                        state,
+                        onChange = {
+                            NodeSettings.setWriteBuffer(context, database, it)
+                            model.writeBufferChanged(database, it)
+                        },
+                        onRestart = { NodeService.restart(context) },
+                    )
+                }
             },
         ) { enabled ->
             if (enabled) {
@@ -349,14 +352,14 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
 
 /**
  * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
- * never move; the [writeBuffer] setting; then [mining] (the identity's mining, once the node has the
+ * never move; the [writeBuffers] settings; then [mining] (the identity's mining, once the node has the
  * account). The block, peers, speed and network are in the title row's details (ⓘ).
  */
 @Composable
 private fun NodeCard(
     state: ScreenState,
     mining: @Composable () -> Unit,
-    writeBuffer: @Composable () -> Unit,
+    writeBuffers: @Composable () -> Unit,
     onSyncChange: (Boolean) -> Unit,
 ) {
     val status = state.status
@@ -394,7 +397,7 @@ private fun NodeCard(
                 }
             }
             state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            writeBuffer()
+            writeBuffers()
             mining()
         }
     }

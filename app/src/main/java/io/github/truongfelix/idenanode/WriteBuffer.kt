@@ -5,26 +5,47 @@ import java.time.Instant
 import kotlin.math.roundToLong
 
 /**
- * The sizes of the chain database's write buffer the app offers. The database writes the buffer to disk
- * when it is full, and each of these writes makes it rewrite older data: with idena-go's 4 MiB a node
- * at the top of the chain writes about 16 times the new data (3 MB a block, 13 GB a day on a phone).
- * A bigger buffer cuts these writes (flash wear, battery) for more memory. The figures are from mainnet
- * blocks replayed at the chain's pace on a PC (2026-10-01).
+ * The write buffer sizes the app offers for each of the node's two databases ([NodeDatabase]). A database
+ * writes its buffer to disk when it is full, and each of these writes makes it rewrite older data: a bigger
+ * buffer writes much less to the phone's storage, for more memory. Default is idena-go's 4 MiB. Measured on a
+ * phone (chain database, 2026-10-03/04): 3.1 MiB written a block at 4 MiB, 0.7 at 32 MiB; RAM 206, 235, 272,
+ * 391 MB on average at 4, 16, 32, 64 MiB.
  */
-enum class WriteBuffer(val mib: Int, val label: String, val detail: String) {
-    MiB4(4, "Idena default", "Most disk writes, least memory"),
-    MiB16(16, "Optimal", "About 65% fewer disk writes, 15-30 MB more memory"),
-    MiB32(32, "Phone with 4 GB+ RAM", "About 75% fewer disk writes, 60-90 MB more memory"),
-    MiB64(64, "Computer", "About 85% fewer disk writes, 200-270 MB more memory"),
+enum class WriteBuffer(val mib: Int, val label: String) {
+    MiB4(4, "Default"),
+    MiB16(16, "16 MiB"),
+    MiB32(32, "32 MiB"),
+    MiB64(64, "64 MiB"),
     ;
 
     companion object {
-        val DEFAULT = MiB16
+        val DEFAULT = MiB4
 
         /** The size a settings file holds; the default when it is missing or holds no offered size. */
         fun parse(text: String?): WriteBuffer = entries.firstOrNull { it.mib.toString() == text?.trim() } ?: DEFAULT
     }
 }
+
+/** The node's databases with a write buffer setting, each set on its own. */
+enum class NodeDatabase(val title: String, val noun: String, val about: String) {
+    Chain(
+        "Chain database buffer",
+        "chain database",
+        "The chain database holds the blockchain: the node writes to it at every block.",
+    ),
+    Ipfs(
+        "IPFS database buffer",
+        "IPFS database",
+        "The IPFS database holds what the network uses to find content (which node has which flip, post or " +
+            "block). When nodes outside can reach the phone (a port open on the router), they store these " +
+            "records on it, and this database writes the most.",
+    ),
+}
+
+/** What the info of each buffer says after [NodeDatabase.about]. */
+const val WRITE_BUFFER_INFO =
+    "A higher level needs more RAM but writes less to the phone's storage (less wear, a little less work). " +
+        "If Android closes the node, choose a lower level. The node takes the size at its start."
 
 /**
  * Whether the node runs with another write buffer than [chosen]: the database takes its size when it
