@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -22,6 +24,7 @@ import androidx.core.content.ContextCompat
 import io.github.truongfelix.idenanode.go.mobile.Mobile
 import java.text.NumberFormat
 import java.util.concurrent.Executors
+import kotlin.concurrent.thread
 
 /**
  * Runs the node in the `:node` process while sync is switched on, as a foreground service: it keeps
@@ -70,7 +73,10 @@ class NodeService : Service() {
         NodeSettings.startErrorFile(this).delete()
         // The screens count the wait for a first peer from here.
         runCatching { NodeSettings.startedAtFile(this).writeText(System.currentTimeMillis().toString()) }
-        val error = Mobile.start(dir.absolutePath, NodeSettings.nodeConfig(this))
+        // The screen compares them with the user's choices: a change applies from the next start.
+        val writeBuffers = NodeSettings.writeBuffers(this)
+        writeBuffers.forEach { (database, size) -> runCatching { NodeSettings.setRunningWriteBuffer(this, database, size) } }
+        val error = Mobile.start(dir.absolutePath, NodeSettings.nodeConfig(this, writeBuffers))
         if (error.isNotEmpty()) {
             Log.e(TAG, "Node start failed: $error")
             NodeSettings.startErrorFile(this).writeText(error)
@@ -189,5 +195,26 @@ class NodeService : Service() {
             NodeSettings.setSyncEnabled(context, false)
             context.startService(Intent(context, NodeService::class.java).setAction(ACTION_STOP))
         }
+
+        /**
+         * Restarts the node, for a setting it reads at its start: ends the node process with sync left
+         * on, waits until the process is gone, then starts the node in a new one.
+         */
+        fun restart(context: Context) {
+            val app = context.applicationContext
+            thread(name = "node-restart") {
+                // A stop sent with no node process would start one just to stop nothing.
+                if (nodeProcessRuns(app)) app.startService(Intent(app, NodeService::class.java).setAction(ACTION_STOP))
+                val deadline = SystemClock.elapsedRealtime() + RESTART_TIMEOUT_MS
+                while (nodeProcessRuns(app) && SystemClock.elapsedRealtime() < deadline) Thread.sleep(200)
+                start(app)
+            }
+        }
+
+        private const val RESTART_TIMEOUT_MS = 15_000L
+
+        private fun nodeProcessRuns(context: Context): Boolean =
+            context.getSystemService(ActivityManager::class.java).runningAppProcesses
+                ?.any { it.processName == context.packageName + ":node" } == true
     }
 }
