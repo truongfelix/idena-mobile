@@ -43,16 +43,23 @@ meant to be delegated to a pool, such as a desktop node.
   Android backups.
 - **Validation**: the "Open the validation" button from the flip lottery on. It waits for the short session
   (the flips load meanwhile), shows the node's flips (extra flips replace the ones that did not load, as on
-  the desktop), then the long session with the keyword check (approve, report up to a third of the flips,
-  one best flip). Answers go to the node 10 s before each session ends, or when submitted, and are sent
-  again if the node refuses them while the session lasts. After the long answers, the screen says when
-  they are in blocks: from then on the app may close.
+  the desktop), then the long session with the keyword check (the story on the left; on the right the two
+  keywords large, the reports used and left, the approvals and the best, then Approve / Report / Best; a tap
+  on a picture shows it full screen; report up to a third of the flips, one best flip: a new best asks before
+  the previous one goes back to approved). The bottom marks each flip: a green ✓ once solved, then ✓ approved,
+  a red ✗ reported, a gold ★ the best. Previous / Next move between the flips; Submit (and Check keywords)
+  only shows once every flip that loaded is answered (in the keyword check: every flip with keywords approved
+  or reported, and the best marked), and asks to confirm. As on the desktop, the keyword check does not go
+  back to the stories. Answers go to the node 10 s before each session ends, whatever is done, or when
+  submitted, and are sent again if the node refuses them while the session lasts. After the long answers, the
+  screen says when they are in blocks: from then on the app may close.
 - **Practice validation**: the short and long sessions with the sample flips of the Idena web app, then
   the results with the right answers and why a flip should be reported.
 - **Social** tab: [idena.social](https://idena.social) read from the phone's own node, laid out like
   Reddit. The feed: one line per author (avatar, name, state, time), three lines of text, pictures kept
   small, pills ♡ 💬 🪙 and 👁 (who liked and tipped); sorts (newest, latest activity, most liked, commented
-  or tipped over a period), a Following filter and a search. The title row, search and options slide away
+  or tipped over a period), a Following filter and a search (people and addresses as rows, the posts,
+  replies and comments found as in the feed, with their pills). The title row, search and options slide away
   while the feed scrolls down. A thread shows the post, then its replies and comments nested by what they
   answer; a tap on a comment's rail (or header) folds it with everything under it. Profiles (identity, or
   "Not validated"; posts, replies, comments, likes and tips given, media), Contacts (private names, Follow,

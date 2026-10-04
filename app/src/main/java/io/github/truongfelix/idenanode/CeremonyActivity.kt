@@ -151,10 +151,10 @@ private fun Intro(practice: Practice, onStart: () -> Unit) {
         )
         Text(
             "Long session: ${practice.long.size} flips in ${practice.long.size} minutes. Solve them, then " +
-                "check the keywords of each flip: approve it, or report it (up to ${practice.long.size / 3} " +
+                "check the keywords of each flip (the stories cannot change after that): approve it, or report it (up to ${practice.long.size / 3} " +
                 "flips) when a keyword is not in the story, numbers or letters show the order, it needs " +
-                "reading text, or it lists objects instead of telling a story. You can mark one approved " +
-                "flip as the best.",
+                "reading text, or it lists objects instead of telling a story. Then mark one approved flip " +
+                "as the best. Submit comes once every flip is answered.",
         )
         Button(onClick = onStart) { Text("Start the short session") }
     }
