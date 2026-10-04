@@ -61,7 +61,7 @@ meant to be delegated to a pool, such as a desktop node.
   like, reply, comment, tip, as idena.social writes them; every fee is shown before sending. "Scan blocks"
   reads the new blocks, then the older ones back to the contract's creation (once, kept on the phone);
   nothing is scanned while the node syncs or a validation runs. Not done yet: private messages.
-- **Ads**: Idena ads for this identity and a note from the developers: a banner on the Node tab, a card
+- **Ads**: Idena ads for this identity and a note from the developer: a banner on the Node tab, a card
   after each 5 posts of the feed, and under 2 of each 5 posts opened (picked at random). An ad shows when
   coins were burnt for it over the last day, its author's profile lists it, and the oracles' review vote
   approved it; its audience (language, Android, age, stake) must include the identity. Everything comes

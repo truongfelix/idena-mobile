@@ -56,7 +56,7 @@ val AD_BANNER_HEIGHT = 56.dp
 /** How long each item of the banner shows. */
 private const val ROTATION_MS = 10_000L
 
-/** What the banner rotates: the ads, then the developers' note. */
+/** What the banner rotates: the ads, then the developer's note. */
 private sealed interface BannerItem {
     class Ad(val ad: ChainAd) : BannerItem
     data object DevNote : BannerItem
@@ -64,7 +64,7 @@ private sealed interface BannerItem {
 
 /**
  * The banner at the bottom of the Node tab: the approved Idena ads for this identity in turn, and the
- * developers' note. A tap opens the item.
+ * developer's note. A tap opens the item.
  */
 @Composable
 fun AdBanner(ads: List<ChainAd>, modifier: Modifier = Modifier) {
@@ -84,7 +84,7 @@ fun AdBanner(ads: List<ChainAd>, modifier: Modifier = Modifier) {
 }
 
 /**
- * The ad shown in the Social feed after each [POSTS_PER_AD] posts: the ads and the developers' note in
+ * The ad shown in the Social feed after each [POSTS_PER_AD] posts: the ads and the developer's note in
  * turn, [number] being the ad's place in the feed (0 the first). A tap opens it.
  */
 @Composable
@@ -203,7 +203,7 @@ private fun AdDialog(ad: ChainAd, onDismiss: () -> Unit) {
     )
 }
 
-const val DEV_NOTE_TITLE = "A note from the devs"
+const val DEV_NOTE_TITLE = "A note from the dev"
 const val DEV_NOTE_LINE = "You run an optimised, more secure Idena node. Tap to read."
 
 /** The package this app belongs to: its GitHub repositories (their names say what each one is). */
@@ -212,13 +212,13 @@ private val PACKAGE = listOf("truongfelix/idena-go", "truongfelix/idena-desktop"
 /** The original code and the contributors, direct and indirect, with what the package owes them. */
 private val CREDITS = listOf(
     "idena-network" to "the original Idena code, no longer maintained",
-    "ubiubi18" to "the forks we started from, and code reviews",
+    "ubiubi18" to "the forks I started from, and code reviews",
     "N3CR0M4NC3R-dev/idena.social" to "idena.social, the Social tab",
 )
 
 /**
- * The developers' note: a community package, not the original team's; its repositories, the credits, the
- * devs' view on mining and reported flips, an invitation to help, and the avatars' credits.
+ * The developer's note: a community package, not the original team's; its repositories, the credits, the
+ * dev's view on mining and reported flips, an invitation to help, and the avatars' credits.
  */
 @Composable
 private fun DevNoteDialog(onDismiss: () -> Unit) {
@@ -234,12 +234,13 @@ private fun DevNoteDialog(onDismiss: () -> Unit) {
                 CREDITS.forEach { (path, what) -> GitHubLink(path, what) }
                 HorizontalDivider()
                 Text(
-                    "What we believe: today an identity that fails to solve flips loses mining rewards, but an identity " +
+                    "What I believe: today an identity that fails to solve flips loses mining rewards, but an identity " +
                         "whose flips get reported loses nothing. That is unfair, and it weakens the network.",
                 )
                 Text(
-                    "Our proposal: cut an identity's mining rewards in proportion to its share of reported flips over " +
-                        "the last 10 epochs. If you agree, say so on Telegram, Discord or idena.social.",
+                    "The proposal: cut an identity's mining rewards in proportion to its share of reported flips over " +
+                        "the last 10 epochs. Also, an identity with 2 or more flips reported in a validation can't mine " +
+                        "during the next epoch. If you agree, say so on Telegram, Discord or idena.social.",
                     fontWeight = FontWeight.Bold,
                 )
                 COMMUNITY.forEach { (name, url) -> Link(name, url) }
