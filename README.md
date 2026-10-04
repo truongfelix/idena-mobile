@@ -58,7 +58,8 @@ meant to be delegated to a pool, such as a desktop node.
 - **Social** tab: [idena.social](https://idena.social) read from the phone's own node, laid out like
   Reddit. The feed: one line per author (avatar, name, state, time), three lines of text, pictures kept
   small, pills ♡ 💬 🪙 and 👁 (who liked and tipped); sorts (newest, latest activity, most liked, commented
-  or tipped over a period), a Following filter and a search. The title row, search and options slide away
+  or tipped over a period), a Following filter and a search (people and addresses as rows, the posts,
+  replies and comments found as in the feed, with their pills). The title row, search and options slide away
   while the feed scrolls down. A thread shows the post, then its replies and comments nested by what they
   answer; a tap on a comment's rail (or header) folds it with everything under it. Profiles (identity, or
   "Not validated"; posts, replies, comments, likes and tips given, media), Contacts (private names, Follow,

@@ -104,6 +104,10 @@ class PeopleTest {
         assertEquals(SearchHit.Named(people.getValue(a)), hits[0])
         assertEquals("newest first, the IPFS text included", listOf(5L, 3L, 1L), hits.drop(1).map { (it as SearchHit.Text).node.id })
         assertEquals("the comment opens in its post's thread", 1L, (hits[1] as SearchHit.Text).threadId)
+        // A like goes where the thread screen sends it: the post, or the reply's discussion channel.
+        assertEquals(PostTarget.onComment(2, 5), (hits[1] as SearchHit.Text).target)
+        assertEquals(PostTarget.onPost(1), (hits[3] as SearchHit.Text).target)
+        assertEquals(PostTarget.onReply(2), (searchSocial(feed, people, "no match").single() as SearchHit.Text).target)
 
         assertEquals("an IPFS text not fetched is not searched", listOf(5L, 1L),
             searchSocial(feed, emptyMap(), "hello").map { (it as SearchHit.Text).node.id })

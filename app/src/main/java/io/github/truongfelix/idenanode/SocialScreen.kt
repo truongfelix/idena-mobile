@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -270,8 +271,19 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                             when {
                                 found == null -> item(key = "searching") { Text("Searching…", style = MaterialTheme.typography.bodySmall) }
                                 found.isEmpty() -> item(key = "none") { Text("Nothing found in the posts read so far.", style = MaterialTheme.typography.bodySmall) }
-                                else -> items(found, key = { hitKey(it) }) { hit ->
-                                    HitCard(hit, states, onProfile = model::openProfile, onOpen = openThread)
+                                else -> itemsIndexed(found, key = { _, hit -> hitKey(hit) }) { i, hit ->
+                                    HitCard(
+                                        hit,
+                                        first = i == 0,
+                                        states = states,
+                                        myAddress = myAddress,
+                                        canAct = canAct,
+                                        onProfile = model::openProfile,
+                                        onOpen = openThread,
+                                        onLike = { target -> model.preparePost("Like", LIKE, target) },
+                                        onTip = { tipping = it },
+                                        onWho = { who = it },
+                                    )
                                 }
                             }
                             return@LazyColumn
@@ -1458,13 +1470,22 @@ private fun hitKey(hit: SearchHit): String = when (hit) {
     is SearchHit.Text -> "text:${hit.node.id}"
 }
 
-/** One search result: a profile to open (an address, a person), or a text opening its thread at it. */
+/**
+ * One search result: a profile to open (an address, a person), or a post, reply or comment drawn as in the
+ * feed (flat, a thin line above unless [first]), opening its thread at it.
+ */
 @Composable
 private fun HitCard(
     hit: SearchHit,
+    first: Boolean,
     states: Map<String, AuthorIdentity>,
+    myAddress: String?,
+    canAct: Boolean,
     onProfile: (String) -> Unit,
     onOpen: (threadId: Long, focusId: Long?) -> Unit,
+    onLike: (PostTarget) -> Unit,
+    onTip: (SocialPost) -> Unit,
+    onWho: (SocialPost) -> Unit,
 ) {
     when (hit) {
         is SearchHit.Address -> Card(Modifier.fillMaxWidth().clickable { onProfile(hit.address) }) {
@@ -1478,11 +1499,19 @@ private fun HitCard(
             }
         }
         is SearchHit.Named -> PersonRow(hit.person) { onProfile(hit.person.address) }
-        is SearchHit.Text -> Card(Modifier.fillMaxWidth().clickable { onOpen(hit.threadId, hit.node.id.takeIf { it != hit.threadId }) }) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                PostHeader(hit.node.call, states, onProfile)
-                PostContent(hit.node.call, MaterialTheme.typography.bodyLarge, maxLines = 4, showMedia = false)
-            }
+        is SearchHit.Text -> Column {
+            if (!first) HorizontalDivider()
+            PostCard(
+                post = hit.node,
+                states = states,
+                myAddress = myAddress,
+                canAct = canAct,
+                onOpen = { onOpen(hit.threadId, hit.node.id.takeIf { it != hit.threadId }) },
+                onProfile = onProfile,
+                onLike = { onLike(hit.target) },
+                onTip = { onTip(hit.node) },
+                onWho = { onWho(hit.node) },
+            )
         }
     }
 }

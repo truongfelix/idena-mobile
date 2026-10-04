@@ -88,8 +88,11 @@ sealed interface SearchHit {
     /** Someone of the People list, by name or address. */
     data class Named(val person: Person) : SearchHit
 
-    /** A post, reply or comment ([node]) in the thread of post [threadId] whose text matches. */
-    data class Text(val node: SocialPost, val threadId: Long) : SearchHit
+    /**
+     * A post, reply or comment ([node]) in the thread of post [threadId] whose text matches; [target] is
+     * where a like of it goes (a reply's and a comment's go to the reply's discussion channel).
+     */
+    data class Text(val node: SocialPost, val threadId: Long, val target: PostTarget) : SearchHit
 }
 
 /** The shortest query searched in the texts. */
@@ -117,13 +120,22 @@ fun searchSocial(
         if (person.name.contains(q, ignoreCase = true) || byAddress) hits += SearchHit.Named(person)
     }
     val texts = ArrayList<SearchHit.Text>()
-    fun visit(node: SocialPost, threadId: Long) {
+    /** [replyId]: the reply a comment is under, null for the post and its replies. */
+    fun visit(node: SocialPost, threadId: Long, replyId: Long?) {
         val message = node.call.message
         val text = ipfsCid(message)?.let(ipfsText) ?: message.takeUnless { it.startsWith("ipfs://") }
-        if (text != null && text.contains(q, ignoreCase = true)) texts += SearchHit.Text(node, threadId)
-        node.replies.forEach { visit(it, threadId) }
+        if (text != null && text.contains(q, ignoreCase = true)) {
+            val target = when {
+                node.id == threadId -> PostTarget.onPost(node.id)
+                replyId == null -> PostTarget.onReply(node.id)
+                else -> PostTarget.onComment(replyId, node.id)
+            }
+            texts += SearchHit.Text(node, threadId, target)
+        }
+        val under = if (node.id == threadId) null else replyId ?: node.id
+        node.replies.forEach { visit(it, threadId, under) }
     }
-    feed.forEach { visit(it, it.id) }
+    feed.forEach { visit(it, it.id, null) }
     texts.sortWith(compareByDescending<SearchHit.Text> { it.node.call.height }.thenByDescending { it.node.call.index })
     return hits + texts.take(limit)
 }
