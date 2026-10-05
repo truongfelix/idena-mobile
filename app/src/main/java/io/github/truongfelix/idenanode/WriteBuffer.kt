@@ -44,15 +44,33 @@ enum class NodeDatabase(val title: String, val noun: String, val about: String) 
 
 /** What the info of each buffer says after [NodeDatabase.about]. */
 const val WRITE_BUFFER_INFO =
-    "A higher level needs more RAM but writes less to the phone's storage (less wear, a little less work). " +
-        "If Android closes the node, choose a lower level. The node takes the size at its start."
+    "Default is 4 MiB, as on a computer. A higher level needs more RAM but writes less to the phone's storage " +
+        "(less wear, a little less work). If Android closes the node, choose a lower level. The node takes the " +
+        "size at its start."
 
 /**
- * Whether the node runs with another write buffer than [chosen]: the database takes its size when it
- * opens, so the choice applies from the node's next start.
+ * Whether the node runs with another setting than [chosen] (a write buffer, the peer level...): the node
+ * takes its settings at its start, so the choice applies from the next one.
  */
-fun writeBufferPending(syncEnabled: Boolean, running: WriteBuffer?, chosen: WriteBuffer): Boolean =
+fun <T> settingPending(syncEnabled: Boolean, running: T?, chosen: T): Boolean =
     syncEnabled && running != null && running != chosen
+
+/** An Advanced setting the node does not run with yet: its [title] and the [value] chosen. */
+data class PendingChange(val title: String, val value: String)
+
+/** The settings of [chosen] the node runs without ([settingPending]), in the order of Advanced settings. */
+fun pendingChanges(syncEnabled: Boolean, chosen: NodeOptions, running: RunningOptions): List<PendingChange> = buildList {
+    if (settingPending(syncEnabled, running.peerLevel, chosen.peerLevel)) {
+        add(PendingChange(PEER_LEVEL_TITLE, chosen.peerLevel.label))
+    }
+    if (settingPending(syncEnabled, running.ipfsConnections, chosen.ipfsConnections)) {
+        add(PendingChange(IPFS_CONNECTIONS_TITLE, chosen.ipfsConnections.label))
+    }
+    NodeDatabase.entries.forEach { database ->
+        val size = chosen.writeBuffers[database] ?: WriteBuffer.DEFAULT
+        if (settingPending(syncEnabled, running.writeBuffers[database], size)) add(PendingChange(database.title, "${size.mib} MiB"))
+    }
+}
 
 /**
  * Why a node restart now is a risk, or null: after a restart the node looks for peers again, which can

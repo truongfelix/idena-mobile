@@ -37,6 +37,10 @@ object NodeSettings {
         File(nodeDir(context), filePrefix(database) + "write_buffer_mib")
     private fun runningWriteBufferFile(context: Context, database: NodeDatabase) =
         File(nodeDir(context), filePrefix(database) + "write_buffer_running")
+    private fun peerLevelFile(context: Context) = File(nodeDir(context), "peer_level")
+    private fun runningPeerLevelFile(context: Context) = File(nodeDir(context), "peer_level_running")
+    private fun ipfsConnectionsFile(context: Context) = File(nodeDir(context), "ipfs_connections")
+    private fun runningIpfsConnectionsFile(context: Context) = File(nodeDir(context), "ipfs_connections_running")
 
     // The chain database's files keep the names they had before the IPFS database got its own setting.
     private fun filePrefix(database: NodeDatabase) = when (database) {
@@ -73,54 +77,101 @@ object NodeSettings {
         if (enabled) file.createNewFile() else file.delete()
     }
 
-    /** The write buffer of [database] chosen by the user; the default until one is chosen. */
-    fun writeBuffer(context: Context, database: NodeDatabase): WriteBuffer =
-        WriteBuffer.parse(runCatching { writeBufferFile(context, database).readText() }.getOrNull())
+    private fun read(file: File): String? = runCatching { file.readText() }.getOrNull()
 
-    /** The write buffers chosen for every database. */
-    fun writeBuffers(context: Context): Map<NodeDatabase, WriteBuffer> =
-        NodeDatabase.entries.associateWith { writeBuffer(context, it) }
+    /** The settings chosen by the user ([NodeOptions]); the defaults until chosen. */
+    fun options(context: Context): NodeOptions {
+        val peerLevel = PeerLevel.parse(read(peerLevelFile(context)))
+        return NodeOptions(
+            writeBuffers = NodeDatabase.entries.associateWith { WriteBuffer.parse(read(writeBufferFile(context, it))) },
+            peerLevel = peerLevel,
+            ipfsConnections = IpfsConnections.parse(read(ipfsConnectionsFile(context))).atLeastFor(peerLevel),
+        )
+    }
 
     fun setWriteBuffer(context: Context, database: NodeDatabase, value: WriteBuffer) =
         writeAtomically(writeBufferFile(context, database), value.mib.toString())
 
-    /** The write buffer of [database] at the node's last start, written by the service; null before the first. */
-    fun runningWriteBuffer(context: Context, database: NodeDatabase): WriteBuffer? =
-        runCatching { runningWriteBufferFile(context, database).readText() }.getOrNull()?.let { WriteBuffer.parse(it) }
+    /** Sets the peer level, and raises the IPFS connection limit if the level cannot run with the one chosen. */
+    fun setPeerLevel(context: Context, value: PeerLevel) {
+        writeAtomically(peerLevelFile(context), value.key)
+        val limit = IpfsConnections.parse(read(ipfsConnectionsFile(context)))
+        if (!limit.allows(value)) setIpfsConnections(context, limit.atLeastFor(value))
+    }
 
-    fun setRunningWriteBuffer(context: Context, database: NodeDatabase, value: WriteBuffer) =
-        writeAtomically(runningWriteBufferFile(context, database), value.mib.toString())
+    fun setIpfsConnections(context: Context, value: IpfsConnections) =
+        writeAtomically(ipfsConnectionsFile(context), value.high.toString())
+
+    /** The settings of the node's last start, written by the service; a setting is null before a start recorded it. */
+    fun runningOptions(context: Context): RunningOptions = RunningOptions(
+        writeBuffers = NodeDatabase.entries.mapNotNull { database ->
+            read(runningWriteBufferFile(context, database))?.let { database to WriteBuffer.parse(it) }
+        }.toMap(),
+        peerLevel = read(runningPeerLevelFile(context))?.let { PeerLevel.parse(it) },
+        ipfsConnections = read(runningIpfsConnectionsFile(context))?.let { IpfsConnections.parse(it) },
+    )
+
+    /** Records [options] as the node's start settings, for the screen to compare with the user's choices. */
+    fun setRunningOptions(context: Context, options: NodeOptions) {
+        options.writeBuffers.forEach { (database, size) ->
+            runCatching { writeAtomically(runningWriteBufferFile(context, database), size.mib.toString()) }
+        }
+        runCatching { writeAtomically(runningPeerLevelFile(context), options.peerLevel.key) }
+        runCatching { writeAtomically(runningIpfsConnectionsFile(context), options.ipfsConnections.high.toString()) }
+    }
 
     /**
      * The node configuration, applied over the mobile defaults: RPC on loopback with the app's key and
      * no browser access (no CORS), and no IPFS "server" profile, whose address filters block peers on
      * the home network. The IPFS port stays fixed: otherwise the node moves to the next port after two
      * minutes without IPFS peers (a Wi-Fi outage), and a port opened for it on the router no longer
-     * matches. Peer limits stay the default ones (not the low-power profile). The write buffers of the chain
-     * and IPFS databases are the user's choice.
+     * matches. The write buffers of the chain and IPFS databases, the peer level and the IPFS connection
+     * limit are the user's choice ([NodeOptions]).
      */
-    fun nodeConfig(context: Context, writeBuffers: Map<NodeDatabase, WriteBuffer> = writeBuffers(context)): String =
-        nodeConfig(
-            apiKey(context),
-            writeBuffers[NodeDatabase.Chain] ?: WriteBuffer.DEFAULT,
-            writeBuffers[NodeDatabase.Ipfs] ?: WriteBuffer.DEFAULT,
-        )
+    fun nodeConfig(context: Context, options: NodeOptions = options(context)): String = nodeConfig(apiKey(context), options)
 
     /** [nodeConfig] from its parts. */
-    internal fun nodeConfig(apiKey: String, chainBuffer: WriteBuffer, ipfsBuffer: WriteBuffer): String = JSONObject()
-        .put(
-            "RPC", JSONObject()
-                .put("HTTPHost", "127.0.0.1")
-                .put("HTTPPort", RPC_PORT)
-                .put("APIKey", apiKey)
-                .put("HTTPCors", JSONArray())
-        )
-        .put(
-            "IpfsConf", JSONObject()
-                .put("Profile", "")
-                .put("StaticPort", true)
-                .put("DatastoreWriteBufferMiB", ipfsBuffer.mib)
-        )
-        .put("Database", JSONObject().put("WriteBufferMiB", chainBuffer.mib))
-        .toString()
+    internal fun nodeConfig(apiKey: String, options: NodeOptions): String {
+        val level = options.peerLevel
+        val limit = options.ipfsConnections.atLeastFor(level)
+        return JSONObject()
+            .put(
+                "RPC", JSONObject()
+                    .put("HTTPHost", "127.0.0.1")
+                    .put("HTTPPort", RPC_PORT)
+                    .put("APIKey", apiKey)
+                    .put("HTTPCors", JSONArray())
+            )
+            .put(
+                "P2P", JSONObject()
+                    .put("MaxInboundOwnShardPeers", level.inboundOwnShard)
+                    .put("MaxInboundPeers", level.inboundOtherShards)
+                    .put("MaxOutboundOwnShardPeers", level.outboundOwnShard)
+                    .put("MaxOutboundPeers", level.outboundOtherShards)
+            )
+            .put(
+                "IpfsConf", JSONObject()
+                    .put("Profile", "")
+                    .put("StaticPort", true)
+                    .put("DatastoreWriteBufferMiB", (options.writeBuffers[NodeDatabase.Ipfs] ?: WriteBuffer.DEFAULT).mib)
+                    .put("LowWater", limit.low)
+                    .put("HighWater", limit.high)
+            )
+            .put("Database", JSONObject().put("WriteBufferMiB", (options.writeBuffers[NodeDatabase.Chain] ?: WriteBuffer.DEFAULT).mib))
+            .toString()
+    }
 }
+
+/** The settings the node takes at its start, in the Sync card's Advanced settings. */
+data class NodeOptions(
+    val writeBuffers: Map<NodeDatabase, WriteBuffer> = NodeDatabase.entries.associateWith { WriteBuffer.DEFAULT },
+    val peerLevel: PeerLevel = PeerLevel.DEFAULT,
+    val ipfsConnections: IpfsConnections = IpfsConnections.DEFAULT,
+)
+
+/** The [NodeOptions] of the node's last start; a setting is null when no start recorded it (an older app). */
+data class RunningOptions(
+    val writeBuffers: Map<NodeDatabase, WriteBuffer> = emptyMap(),
+    val peerLevel: PeerLevel? = null,
+    val ipfsConnections: IpfsConnections? = null,
+)

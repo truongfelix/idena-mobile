@@ -14,13 +14,22 @@ meant to be delegated to a pool, such as a desktop node.
 - **Node**: idena-go in the app's own process, as a foreground service while Sync is on. A card warns when
   battery optimization may stop the node with the screen off, with buttons to Android's setting and to the
   autostart and battery pages some phones add. The node keeps its IPFS port (40405) fixed, so that a port
-  opened for it on the router keeps matching: outside nodes can then connect to the phone. The Sync card
-  sets the **write buffers** of the node's two databases, each on its own: the chain database (the
-  blockchain) and the IPFS database (what the network uses to find content; it writes the most once outside
-  nodes can reach the phone). Each offers Default (idena-go's 4 MiB), 16, 32 or 64 MiB: a higher level needs
-  more RAM but writes less to the phone's storage (chain database on the test phone: 3.1 MiB written a block
-  at 4 MiB, 0.7 at 32 MiB). The node takes the sizes when it starts, and the card offers a restart (with a
-  warning close to a validation, none during it).
+  opened for it on the router keeps matching: outside nodes can then connect to the phone. The Sync card's
+  **Advanced settings** (folded until opened):
+  - **Peer level**: Eco (up to 7 Idena peers, idena-go's low-power numbers), Normal (default, up to 18,
+    idena-go's defaults) or Hub (up to 30: twice the incoming slots, for nodes that reach the phone through
+    the router port).
+  - **IPFS connections**: 20, 50, 100 or No limit (default). Idena peers ride on these connections, so a
+    limit must leave room for the level's peers: 20 needs Eco, 50 Eco or Normal (the app raises a limit that
+    is too low when the level changes).
+  - The **write buffers** of the node's two databases, each on its own: the chain database (the blockchain)
+    and the IPFS database (what the network uses to find content; it writes the most once outside nodes can
+    reach the phone). Each offers Default (idena-go's 4 MiB), 16, 32 or 64 MiB: a higher level needs more
+    RAM but writes less to the phone's storage (chain database on the test phone: 3.1 MiB written a block at
+    4 MiB, 0.7 at 32 MiB).
+
+  The node takes these settings when it starts, and the card offers a restart (with a warning close to a
+  validation, none during it).
 - **Account**: identity state and age, the address with its robot avatar; for an address without an
   identity, an **invitation code** field (activation, no fee).
 - **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee
@@ -124,8 +133,9 @@ deletes the chain and the imported key.
 - `go/wasm-binding-android.patch`: Android support for the wasm binding (a link file and build tags),
   applied by `scripts/build-node-aar.sh`.
 - The node on the phone: RPC on 127.0.0.1 only, with a random key and no browser access; the IPFS
-  "server" profile is off, because its address filters block peers on the home network; the default peer
-  limits (not the low-power profile).
+  "server" profile is off, because its address filters block peers on the home network; the peer limits and
+  the IPFS connection manager's limits come from Advanced settings (by default idena-go's peer limits and
+  no IPFS connection limit).
 
 ## Credits and license
 

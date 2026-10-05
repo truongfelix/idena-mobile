@@ -12,6 +12,9 @@ import java.time.Instant
 class WriteBufferTest {
     private val now = Instant.parse("2026-10-04T12:00:00Z")
 
+    private fun buffers(chain: WriteBuffer, ipfs: WriteBuffer) =
+        NodeOptions(writeBuffers = mapOf(NodeDatabase.Chain to chain, NodeDatabase.Ipfs to ipfs))
+
     @Test
     fun theFourSizesWithIdenasByDefault() {
         assertEquals(listOf(4, 16, 32, 64), WriteBuffer.entries.map { it.mib })
@@ -39,17 +42,17 @@ class WriteBufferTest {
 
     @Test
     fun pendingOnlyWhileTheNodeRunsWithAnotherSize() {
-        assertTrue(writeBufferPending(syncEnabled = true, running = WriteBuffer.MiB4, chosen = WriteBuffer.MiB16))
-        assertFalse(writeBufferPending(syncEnabled = true, running = WriteBuffer.MiB16, chosen = WriteBuffer.MiB16))
+        assertTrue(settingPending(syncEnabled = true, running = WriteBuffer.MiB4, chosen = WriteBuffer.MiB16))
+        assertFalse(settingPending(syncEnabled = true, running = WriteBuffer.MiB16, chosen = WriteBuffer.MiB16))
         // Stopped: the next start takes the choice anyway.
-        assertFalse(writeBufferPending(syncEnabled = false, running = WriteBuffer.MiB4, chosen = WriteBuffer.MiB16))
+        assertFalse(settingPending(syncEnabled = false, running = WriteBuffer.MiB4, chosen = WriteBuffer.MiB16))
         // Never started by this app: nothing to compare.
-        assertFalse(writeBufferPending(syncEnabled = true, running = null, chosen = WriteBuffer.MiB16))
+        assertFalse(settingPending(syncEnabled = true, running = null, chosen = WriteBuffer.MiB16))
     }
 
     @Test
     fun theNodeConfigCarriesBothWriteBuffers() {
-        val config = JSONObject(NodeSettings.nodeConfig("abc123", WriteBuffer.MiB32, WriteBuffer.MiB16))
+        val config = JSONObject(NodeSettings.nodeConfig("abc123", buffers(WriteBuffer.MiB32, WriteBuffer.MiB16)))
         assertEquals(32, config.getJSONObject("Database").getInt("WriteBufferMiB"))
         assertEquals(16, config.getJSONObject("IpfsConf").getInt("DatastoreWriteBufferMiB"))
         val rpc = config.getJSONObject("RPC")
@@ -98,7 +101,7 @@ class WriteBufferTest {
 
     @Test
     fun theDefaultIsIdenasForBoth() {
-        val config = JSONObject(NodeSettings.nodeConfig("abc123", WriteBuffer.DEFAULT, WriteBuffer.DEFAULT))
+        val config = JSONObject(NodeSettings.nodeConfig("abc123", NodeOptions()))
         assertEquals(4, config.getJSONObject("Database").getInt("WriteBufferMiB"))
         assertEquals(4, config.getJSONObject("IpfsConf").getInt("DatastoreWriteBufferMiB"))
     }
