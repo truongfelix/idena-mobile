@@ -35,6 +35,8 @@ import kotlin.concurrent.thread
 class NodeService : Service() {
 
     private val executor = Executors.newSingleThreadExecutor()
+    private val routerExecutor = Executors.newSingleThreadExecutor()
+    private val searchExecutor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var started = false
     private var wakeLock: PowerManager.WakeLock? = null
@@ -64,6 +66,7 @@ class NodeService : Service() {
             acquireLocks()
             executor.execute { runNode() }
         }
+        if (intent?.action == ACTION_ROUTER_SEARCH) searchExecutor.execute { RouterSearch.run(this) }
         return START_STICKY
     }
 
@@ -85,6 +88,17 @@ class NodeService : Service() {
             return
         }
         handler.post(updateNotification)
+        handler.postDelayed(routerUpkeep, ROUTER_UPKEEP_FIRST_MS)
+    }
+
+    /** Keeps the router opening the user made in the app ([RouterPortUpkeep]) while the node runs. */
+    private val routerUpkeep: Runnable = object : Runnable {
+        override fun run() {
+            routerExecutor.execute {
+                runCatching { RouterPortUpkeep.run(this@NodeService) }.onFailure { Log.w(TAG, "Router port upkeep: $it") }
+            }
+            handler.postDelayed(this, ROUTER_UPKEEP_INTERVAL_MS)
+        }
     }
 
     /** Refreshes the notification with the sync progress while the node runs. */
@@ -113,6 +127,7 @@ class NodeService : Service() {
 
     private fun stopNode() {
         handler.removeCallbacks(updateNotification)
+        handler.removeCallbacks(routerUpkeep)
         releaseLocks()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -181,7 +196,16 @@ class NodeService : Service() {
         private const val CHANNEL_ID = "node"
         private const val NOTIFICATION_ID = 1
         private const val UPDATE_INTERVAL_MS = 15_000L
+        private const val ROUTER_UPKEEP_FIRST_MS = 60_000L
+        private const val ROUTER_UPKEEP_INTERVAL_MS = 5 * 60_000L
         const val ACTION_STOP = "io.github.truongfelix.idenanode.STOP"
+        const val ACTION_ROUTER_SEARCH = "io.github.truongfelix.idenanode.ROUTER_SEARCH"
+
+        /** Asks the running node's process to look for the router of this Wi-Fi ([RouterSearch]). */
+        fun searchRouter(context: Context) {
+            if (!NodeSettings.isSyncEnabled(context) || !NodeSettings.hasKey(context)) return
+            ContextCompat.startForegroundService(context, Intent(context, NodeService::class.java).setAction(ACTION_ROUTER_SEARCH))
+        }
 
         /** Starts the node; does nothing without a key (the screen keeps the switch off then). */
         fun start(context: Context) {
