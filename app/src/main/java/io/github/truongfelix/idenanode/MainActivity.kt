@@ -261,8 +261,21 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
     // The model reads the node every 3 s while this tab is shown.
     val state = model.state
     var network by remember { mutableStateOf<NetworkRewards?>(null) }
+    val routerPort = remember { RouterPortModel(context.applicationContext) }
 
     suspend fun refresh() = model.refresh()
+
+    // The router port row: on Wi-Fi when the tab shows, the router found before, else a search by the node
+    // process (followed every 15 s); then the router's state every minute.
+    LaunchedEffect(state.syncEnabled, state.network) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            routerPort.refresh(state.syncEnabled, search = true)
+            while (true) {
+                delay(if (routerPort.state is RouterPortState.Searching) 15_000L else 60_000L)
+                routerPort.refresh(state.syncEnabled, search = false)
+            }
+        }
+    }
 
     // The APY's network data reads every identity: every 10 minutes, once the node is synced.
     LaunchedEffect(Unit) {
@@ -294,6 +307,9 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
         NodeCard(
             state,
             mining = { state.status?.takeUnless { it.accountPending }?.let { MiningSection(it) { scope.launch { refresh() } } } },
+            routerPort = {
+                RouterPortRow(routerPort, state.syncEnabled, state.status?.let { parseValidationTime(it.nextValidation) })
+            },
             advanced = {
                 AdvancedSettings(state, onChanged = { model.optionsChanged() }, onRestart = { NodeService.restart(context) })
             },
@@ -342,13 +358,14 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
 
 /**
  * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
- * never move; [mining] (the identity's mining, once the node has the account); then the [advanced] settings.
- * The block, peers, speed and network are in the title row's details (ⓘ).
+ * never move; [mining] (the identity's mining, once the node has the account); the [routerPort] on Wi-Fi; then
+ * the [advanced] settings. The block, peers, speed and network are in the title row's details (ⓘ).
  */
 @Composable
 private fun NodeCard(
     state: ScreenState,
     mining: @Composable () -> Unit,
+    routerPort: @Composable () -> Unit,
     advanced: @Composable () -> Unit,
     onSyncChange: (Boolean) -> Unit,
 ) {
@@ -388,6 +405,7 @@ private fun NodeCard(
             }
             state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             mining()
+            routerPort()
             advanced()
         }
     }

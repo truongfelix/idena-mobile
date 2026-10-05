@@ -30,6 +30,17 @@ meant to be delegated to a pool, such as a desktop node.
 
   The node takes these settings when it starts, and the card offers a restart (with a warning close to a
   validation, none during it).
+- **Router port** (on Wi-Fi, in the Sync card): the node's process looks for the router by UPnP (a search,
+  then the router's own announcements for up to 16 minutes, since some routers such as the Livebox never answer
+  a search and announce themselves only every ~15 minutes; a router found once is remembered and found again at
+  once) and the app asks whether to open the node's port (40405) for 6 hours, 1, 3 or 7 days, or until
+  the next validation + 2 h. The router keeps the opening until then, also after the phone leaves that Wi-Fi;
+  Close removes it at once. An opening made outside the app for the phone shows too, with Close. While the
+  node runs it keeps the opening every 5 minutes: made again for a new address of the phone or after the
+  router lost it, renewed near the end of a router lease shorter than the choice (not during a validation),
+  and made again once if no peer connected from outside within 5 minutes of a change (the node's log has
+  them). Any change to an opening drops the peers connected at that moment for a minute or two (measured on
+  a Livebox), so the app changes it only when needed. Only the router is contacted, on the local network.
 - **Account**: identity state and age, the address with its robot avatar; for an address without an
   identity, an **invitation code** field (activation, no fee).
 - **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee
