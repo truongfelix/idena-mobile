@@ -74,9 +74,9 @@ class NodeService : Service() {
         // The screens count the wait for a first peer from here.
         runCatching { NodeSettings.startedAtFile(this).writeText(System.currentTimeMillis().toString()) }
         // The screen compares them with the user's choices: a change applies from the next start.
-        val writeBuffers = NodeSettings.writeBuffers(this)
-        writeBuffers.forEach { (database, size) -> runCatching { NodeSettings.setRunningWriteBuffer(this, database, size) } }
-        val error = Mobile.start(dir.absolutePath, NodeSettings.nodeConfig(this, writeBuffers))
+        val options = NodeSettings.options(this)
+        NodeSettings.setRunningOptions(this, options)
+        val error = Mobile.start(dir.absolutePath, NodeSettings.nodeConfig(this, options))
         if (error.isNotEmpty()) {
             Log.e(TAG, "Node start failed: $error")
             NodeSettings.startErrorFile(this).writeText(error)

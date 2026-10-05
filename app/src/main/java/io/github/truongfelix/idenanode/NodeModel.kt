@@ -30,9 +30,9 @@ data class ScreenState(
     val runningForMs: Long? = null,
     /** Blocks per second over the last minute while syncing; null until measured. */
     val blocksPerSecond: Double? = null,
-    /** The write buffer of each database chosen by the user, and the one of the node's last start (if any). */
-    val writeBuffers: Map<NodeDatabase, WriteBuffer> = NodeDatabase.entries.associateWith { WriteBuffer.DEFAULT },
-    val runningWriteBuffers: Map<NodeDatabase, WriteBuffer> = emptyMap(),
+    /** The Advanced settings chosen by the user, and those of the node's last start. */
+    val options: NodeOptions = NodeOptions(),
+    val runningOptions: RunningOptions = RunningOptions(),
 )
 
 /**
@@ -100,9 +100,9 @@ class NodeModel(private val context: Context) {
         state = state.copy(syncEnabled = enabled, startError = null)
     }
 
-    /** Another write buffer was chosen for [database]: the screen follows before the next read. */
-    fun writeBufferChanged(database: NodeDatabase, value: WriteBuffer) {
-        state = state.copy(writeBuffers = state.writeBuffers + (database to value))
+    /** Another Advanced setting was chosen: the screen follows before the next read. */
+    fun optionsChanged() {
+        state = state.copy(options = NodeSettings.options(context))
     }
 
     suspend fun run(lifecycle: Lifecycle) {
@@ -157,7 +157,7 @@ private fun readState(context: Context): ScreenState {
 
 /**
  * [state] with what the app reads without the node: the switch, the start error, the network, the background,
- * the write buffer.
+ * the Advanced settings.
  */
 private fun readLocal(context: Context, state: ScreenState): ScreenState {
     val errorFile = NodeSettings.startErrorFile(context)
@@ -169,10 +169,8 @@ private fun readLocal(context: Context, state: ScreenState): ScreenState {
         ignoringBatteryOptimizations = context.getSystemService(PowerManager::class.java)
             .isIgnoringBatteryOptimizations(context.packageName),
         runningForMs = NodeSettings.runningForMs(context),
-        writeBuffers = NodeSettings.writeBuffers(context),
-        runningWriteBuffers = NodeDatabase.entries.mapNotNull { database ->
-            NodeSettings.runningWriteBuffer(context, database)?.let { database to it }
-        }.toMap(),
+        options = NodeSettings.options(context),
+        runningOptions = NodeSettings.runningOptions(context),
     )
 }
 
