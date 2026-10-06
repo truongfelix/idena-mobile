@@ -411,9 +411,10 @@ private fun NodeCard(
     }
 }
 
-/** The account: its avatar (drawn from the address), the address with copy, the identity and its age. */
+/** The account: its avatar (drawn from the address), the address with copy, the identity and its age, and History. */
 @Composable
 private fun AccountCard(state: ScreenState, onChanged: () -> Unit) {
+    val context = LocalContext.current
     val status = state.status
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -439,6 +440,11 @@ private fun AccountCard(state: ScreenState, onChanged: () -> Unit) {
                 }
             }
             AddressLine(address)
+            if (status != null && !status.accountPending) {
+                OutlinedButton(onClick = { context.startActivity(Intent(context, HistoryActivity::class.java)) }) {
+                    Text("History")
+                }
+            }
             if (status != null && !status.accountPending && status.identityState == "Undefined") ActivateCodeSection(status, onChanged)
             if (status != null && !status.accountPending && status.syncing) {
                 Text(
