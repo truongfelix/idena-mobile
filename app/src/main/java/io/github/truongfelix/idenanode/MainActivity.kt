@@ -173,7 +173,7 @@ private fun MainScreen(modifier: Modifier = Modifier) {
                             IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
                         }
                         // The paid action of the Social tab while it runs (sending, waiting for its block).
-                        social.sendStatus?.takeIf { tab == MainTab.Social }?.let {
+                        social.sending.sendStatus?.takeIf { tab == MainTab.Social }?.let {
                             Text(
                                 it,
                                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
