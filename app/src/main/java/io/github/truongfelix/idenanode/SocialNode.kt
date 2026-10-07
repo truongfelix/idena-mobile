@@ -123,8 +123,8 @@ data class PostFee(val fee: BigDecimal, val maxFee: BigDecimal)
  */
 data class SocialCall(val method: String, val argument: String, val amount: String)
 
-/** Calling idena.social with the node's key: posts (makePost) and tips (sendTip). */
-class SocialPosting(private val rpc: NodeRpc) {
+/** Calling idena.social with the node's key: posts (makePost) and tips (sendTip), then their blocks. */
+class SocialPosting(private val rpc: NodeRpc) : TxLookup {
     private fun callArgs(from: String, call: SocialCall, maxFee: BigDecimal?): JSONArray {
         val args = JSONObject()
             .put("from", from)
@@ -182,6 +182,13 @@ class SocialPosting(private val rpc: NodeRpc) {
      * sets the nonce and a max fee of twice the fee. Returns the transaction hash.
      */
     fun store(cid: String): String = rpc.call("dna_storeToIpfs", JSONArray().put(JSONObject().put("cid", cid))) as String
+
+    override fun transaction(hash: String): JSONObject? = rpc.call("bcn_transaction", JSONArray().put(hash)) as? JSONObject
+
+    override fun blockHeight(blockHash: String): Long =
+        (rpc.call("bcn_block", JSONArray().put(blockHash)) as? JSONObject)?.getLong("height") ?: throw IOException("block $blockHash is missing")
+
+    override fun receipt(hash: String): JSONObject? = rpc.call("bcn_txReceipt", JSONArray().put(hash)) as? JSONObject
 
     companion object {
         /** idena.social sends this amount with each post (the contract passes it on in its event). */

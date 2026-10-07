@@ -106,7 +106,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             value = System.currentTimeMillis() / 1000
         }
     }
-    CompositionLocalProvider(LocalNames provides model.names, LocalNow provides now) {
+    CompositionLocalProvider(LocalNames provides model.names, LocalNow provides now, LocalPendingLikes provides model.sending.sent.likes) {
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
     val page = model.pages.lastOrNull()

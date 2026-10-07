@@ -26,11 +26,18 @@ import java.math.BigDecimal
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
-/** What a paid action does and costs: the files stored on IPFS first, each with its fee, then the call. */
+/**
+ * What a paid action does and costs: the files stored on IPFS first, each with its fee (none for a file
+ * stored by an earlier try), then the call.
+ */
 fun confirmText(pending: PendingPost): String = buildString {
     pending.detail?.let { append(it).append(". ") }
     append("It is public and stays on the blockchain for good, signed by your identity ${shortAddress(pending.from)}.")
     for (file in pending.files) {
+        if (file.stored) {
+            append("\n\nThe ${file.what} is already stored on IPFS: no new fee.")
+            continue
+        }
         append("\n\nStoring the ${file.what} on IPFS (${kilobytes(file.bytes.size)}): about ${fee(file.fee)} iDNA (at most ${fee(file.fee * BigDecimal(2))}).")
     }
     append("\n\n${if (pending.files.isEmpty()) "Fee" else "The post"}: about ${fee(pending.fee.fee)} iDNA (at most ${fee(pending.fee.maxFee)}).")

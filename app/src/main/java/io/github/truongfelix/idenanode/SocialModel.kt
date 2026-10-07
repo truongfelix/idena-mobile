@@ -292,6 +292,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private suspend fun show(next: SocialCache) {
         cache = next
         feed = withContext(Dispatchers.Default) { next.feed() }
+        // What was sent is in the feed now when its block was read.
+        sending.sent.scanned(next.authorsHeight)
         // The ages and states change at the validation: ask again in a new epoch.
         node?.epochStart?.let { start ->
             if (statesEpochStart != null && statesEpochStart != start) states.clear()

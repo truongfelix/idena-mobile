@@ -51,6 +51,9 @@ fun ago(seconds: Long): String = timeAgo(seconds, LocalNow.current)
 /** The names of the contact list by lowercase address, shown instead of the addresses. */
 val LocalNames = compositionLocalOf<Map<String, String>> { emptyMap() }
 
+/** The posts, replies and comments liked by a like sent but not read by the scan yet ([SentList]). */
+val LocalPendingLikes = compositionLocalOf<Set<Long>> { emptySet() }
+
 /** "  ·  Human  ·  age 12", the state and its age in the state's color. */
 private fun AnnotatedString.Builder.appendStatus(identity: AuthorIdentity, palette: (String) -> Color) {
     append("  ·  ")
@@ -191,7 +194,7 @@ fun Pill(text: String, enabled: Boolean, description: String? = null, onClick: (
 }
 
 /**
- * The pills under a post, reply or comment: its likes (Like; "❤️" once the identity liked it), the
+ * The pills under a post, reply or comment: its likes (Like; "❤️" once the identity liked it or sent a like), the
  * answer pill ([answer]), and its tips (Tip; not on one's own posts).
  */
 @Composable
@@ -206,7 +209,8 @@ fun ActionBar(
     onTip: () -> Unit,
     onWho: () -> Unit,
 ) {
-    val liked = myAddress != null && myAddress in post.likedBy
+    // A like sent counts at once: the pill stays off until the scan reads it.
+    val liked = myAddress != null && myAddress in post.likedBy || post.id in LocalPendingLikes.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", canAct && !liked, onClick = onLike)
         Pill(answer, answerEnabled, onClick = onAnswer)
