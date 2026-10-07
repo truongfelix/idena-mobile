@@ -49,9 +49,11 @@ class PeerLevelTest {
     }
 
     @Test
-    fun ipfsLimitsInIncreasingOrderWithNoLimitByDefault() {
+    fun ipfsLimitsInIncreasingOrderWithTheOfficialNodesByDefault() {
         assertEquals(listOf("20", "50", "100", "No limit"), IpfsConnections.entries.map { it.label })
-        assertEquals(IpfsConnections.NoLimit, IpfsConnections.DEFAULT)
+        // idena-go's CLI default (LowWater 30, HighWater 50), as the desktop app.
+        assertEquals(IpfsConnections.C50, IpfsConnections.DEFAULT)
+        assertEquals(30, IpfsConnections.DEFAULT.low)
         // 0 / 0: Kubo's connection manager closes nothing, as before the setting.
         assertEquals(0, IpfsConnections.NoLimit.high)
         assertEquals(0, IpfsConnections.NoLimit.low)
@@ -93,7 +95,7 @@ class PeerLevelTest {
     }
 
     @Test
-    fun theDefaultConfigKeepsTheNodesFormerPeersAndNoIpfsLimit() {
+    fun theDefaultConfigHasTheOfficialNodesPeersAndIpfsLimit() {
         val config = JSONObject(NodeSettings.nodeConfig("abc123", NodeOptions()))
         val p2p = config.getJSONObject("P2P")
         assertEquals(8, p2p.getInt("MaxInboundOwnShardPeers"))
@@ -101,6 +103,14 @@ class PeerLevelTest {
         assertEquals(4, p2p.getInt("MaxOutboundOwnShardPeers"))
         assertEquals(2, p2p.getInt("MaxOutboundPeers"))
         val ipfs = config.getJSONObject("IpfsConf")
+        assertEquals(30, ipfs.getInt("LowWater"))
+        assertEquals(50, ipfs.getInt("HighWater"))
+        assertEquals("40s", ipfs.getString("GracePeriod"))
+    }
+
+    @Test
+    fun noLimitStaysOnOffer() {
+        val ipfs = JSONObject(NodeSettings.nodeConfig("abc123", NodeOptions(ipfsConnections = IpfsConnections.NoLimit))).getJSONObject("IpfsConf")
         assertEquals(0, ipfs.getInt("LowWater"))
         assertEquals(0, ipfs.getInt("HighWater"))
     }

@@ -156,6 +156,7 @@ object NodeSettings {
                     .put("DatastoreWriteBufferMiB", (options.writeBuffers[NodeDatabase.Ipfs] ?: WriteBuffer.DEFAULT).mib)
                     .put("LowWater", limit.low)
                     .put("HighWater", limit.high)
+                    .put("GracePeriod", IPFS_GRACE_PERIOD)
             )
             .put("Database", JSONObject().put("WriteBufferMiB", (options.writeBuffers[NodeDatabase.Chain] ?: WriteBuffer.DEFAULT).mib))
             .toString()

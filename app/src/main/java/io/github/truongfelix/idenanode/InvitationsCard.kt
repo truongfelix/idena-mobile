@@ -101,10 +101,11 @@ fun InvitationsCard(status: NodeStatus, people: Map<String, Person>, onChanged: 
     var dialog by remember { mutableStateOf<InviteDialog?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    // Read again at each block: the receivers' states change with the blocks.
-    LaunchedEffect(status.epoch, status.invitees, status.currentBlock, reads) {
+    // Read again at each block: the receivers' states change with the blocks. Only the identity's own
+    // invitations: those of another key imported before stay in the file.
+    LaunchedEffect(status.address, status.epoch, status.invitees, status.currentBlock, reads) {
         rows = withContext(Dispatchers.IO) {
-            val sent = InviteStore.load(context, status.epoch)
+            val sent = InviteStore.load(context, status.epoch).filter { it.sentBy(status.address) }
             val node = rpc(context)
             val byTx = status.invitees.associateBy { it.txHash }
             val addresses = (sent.map { byTx[it.txHash]?.address ?: it.receiver } + status.invitees.map { it.address }).distinct()
@@ -123,7 +124,9 @@ fun InvitationsCard(status: NodeStatus, people: Map<String, Person>, onChanged: 
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val tx = rpc(context).sendInvite(to)
-                    val invite = SentInvite(cleanName(name), tx.receiver, tx.code, tx.hash, status.epoch, System.currentTimeMillis())
+                    val invite = SentInvite(
+                        cleanName(name), tx.receiver, tx.code, tx.hash, status.epoch, System.currentTimeMillis(), status.address.lowercase(),
+                    )
                     // The code exists nowhere else: kept before it is shown, and shown even if it could not be kept.
                     invite to runCatching { InviteStore.add(context, invite) }.isSuccess
                 }

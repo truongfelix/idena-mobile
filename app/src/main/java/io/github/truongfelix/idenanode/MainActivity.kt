@@ -349,7 +349,14 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
                         password,
                     )
                 }
-                done(error)
+                if (error.isNotEmpty()) {
+                    done(false, error)
+                } else {
+                    val risk = state.status?.let { restartRisk(Instant.now(), parseValidationTime(it.nextValidation), it.period) }
+                    val imported = keyImported(state.syncEnabled, risk)
+                    if (imported.restart) NodeService.restart(context)
+                    done(true, imported.message)
+                }
                 refresh()
             }
         }
@@ -457,7 +464,7 @@ private fun AccountCard(state: ScreenState, onChanged: () -> Unit) {
 }
 
 @Composable
-private fun KeyCard(state: ScreenState, onImport: (String, String, (String) -> Unit) -> Unit) {
+private fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> Unit) -> Unit) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     var key by remember { mutableStateOf("") }
@@ -485,6 +492,9 @@ private fun KeyCard(state: ScreenState, onImport: (String, String, (String) -> U
                 if (state.hasKey) {
                     Text("The current key is kept in a backup file.", style = MaterialTheme.typography.bodySmall)
                 }
+                if (state.status?.let { it.online && it.delegatee == null } == true) {
+                    Text(MINING_IMPORT_WARNING, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
                 Text(
                     "Do not run the same key on two nodes at the same time, for example here and on a desktop " +
                         "node: both would act for the identity.",
@@ -507,20 +517,14 @@ private fun KeyCard(state: ScreenState, onImport: (String, String, (String) -> U
                         enabled = !busy && key.isNotBlank() && password.isNotEmpty(),
                         onClick = {
                             busy = true
-                            onImport(key, password) { error ->
+                            onImport(key, password) { imported, text ->
                                 busy = false
-                                if (error.isEmpty()) {
+                                if (imported) {
                                     key = ""
                                     password = ""
                                     open = false
-                                    message = if (state.status != null) {
-                                        "Key imported. Switch sync off and on to use it."
-                                    } else {
-                                        "Key imported."
-                                    }
-                                } else {
-                                    message = error
                                 }
+                                message = text
                             }
                         },
                     ) { Text("Import") }
