@@ -33,8 +33,9 @@ enum class PeerLevel(
 
 /**
  * The limit on the node's IPFS connections (Kubo's connection manager): above [high] it closes the least
- * used ones down to [low]. Idena peers ride on these connections and are closed last; [NoLimit] (0, 0) closes
- * none, as the app did before the setting.
+ * used ones down to [low]. Idena peers ride on these connections and are closed last. The default is the
+ * official node's (idena-go's CLI default, the desktop app's too); [NoLimit] (0, 0) closes none, as the app
+ * did before the setting.
  */
 enum class IpfsConnections(val label: String, val high: Int, val low: Int) {
     C20("20", 20, 12),
@@ -53,7 +54,7 @@ enum class IpfsConnections(val label: String, val high: Int, val low: Int) {
     fun atLeastFor(level: PeerLevel): IpfsConnections = entries.drop(ordinal).first { it.allows(level) }
 
     companion object {
-        val DEFAULT = NoLimit
+        val DEFAULT = C50
 
         /** The limit a settings file holds; the default when it is missing or holds no offered limit. */
         fun parse(text: String?): IpfsConnections = entries.firstOrNull { it.high.toString() == text?.trim() } ?: DEFAULT
@@ -62,6 +63,9 @@ enum class IpfsConnections(val label: String, val high: Int, val low: Int) {
 
 /** The connections a limit keeps beyond the level's Idena peers, once trimmed. */
 const val IPFS_CONNECTIONS_MARGIN = 5
+
+/** How long a new IPFS connection is kept before the limit may close it: the official node's (idena-go's CLI default). */
+const val IPFS_GRACE_PERIOD = "40s"
 
 const val PEER_LEVEL_TITLE = "Peer level"
 const val IPFS_CONNECTIONS_TITLE = "IPFS connections"
@@ -81,7 +85,7 @@ val PEER_LEVEL_INFO =
 val IPFS_CONNECTIONS_INFO =
     "IPFS connections carry flips, posts and the records that tell which node has them. The node finds its " +
         "Idena peers among them.\n\n" +
-        "No limit (default): the node keeps every connection. Above a limit it closes the least used ones " +
-        "and keeps its Idena peers: fewer connections use less data and battery. A low limit leaves " +
-        "too few for many peers: 20 needs Eco, 50 Eco or Normal.\n\n" +
+        "Above the limit the node closes the least used ones and keeps its Idena peers: fewer connections " +
+        "use less data and battery. The default is 50, as on a computer; No limit keeps every connection. A " +
+        "low limit leaves too few for many peers: 20 needs Eco, 50 Eco or Normal.\n\n" +
         "The node takes the limit at its start."
