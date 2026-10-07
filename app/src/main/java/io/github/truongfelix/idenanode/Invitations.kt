@@ -20,7 +20,8 @@ import org.json.JSONObject
 
 /**
  * An invitation this phone sent in [epoch]: to [receiver], a new address whose private key is [code], or
- * an address given by the user ([code] null). [name] is a private label, never published.
+ * an address given by the user ([code] null). [name] is a private label, never published. [inviter] is the
+ * identity that sent it (lowercase), null for one saved by an older app version.
  */
 data class SentInvite(
     val name: String,
@@ -29,10 +30,14 @@ data class SentInvite(
     val txHash: String,
     val epoch: Int,
     val sentAt: Long,
+    val inviter: String? = null,
 ) {
+    /** Whether [address] sent it; one saved without its inviter counts for any address. */
+    fun sentBy(address: String): Boolean = inviter == null || inviter == address.lowercase()
+
     fun toJson(): JSONObject = JSONObject()
         .put("name", name).put("receiver", receiver).put("code", code ?: "").put("txHash", txHash)
-        .put("epoch", epoch).put("sentAt", sentAt)
+        .put("epoch", epoch).put("sentAt", sentAt).put("inviter", inviter ?: "")
 
     companion object {
         fun fromJson(json: JSONObject): SentInvite? = runCatching {
@@ -43,6 +48,7 @@ data class SentInvite(
                 json.getString("txHash").lowercase(),
                 json.getInt("epoch"),
                 json.getLong("sentAt"),
+                json.optString("inviter").lowercase().takeIf { it.isNotEmpty() },
             )
         }.getOrNull()
     }

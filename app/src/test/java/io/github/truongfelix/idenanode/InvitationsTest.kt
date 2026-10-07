@@ -80,6 +80,22 @@ class InvitationsTest {
     }
 
     @Test
+    fun eachKeyImportedListsItsOwnInvitations() {
+        val a = "0xa000000000000000000000000000000000000001"
+        val b = "0xb000000000000000000000000000000000000002"
+        val fromA = SentInvite("Alice", "0xaaaa000000000000000000000000000000000001", code, "0xt1", 230, 1, inviter = a)
+        val fromB = fromA.copy(txHash = "0xt2", inviter = b)
+        // Saved by an older version, without its inviter: shown for any key.
+        val older = fromA.copy(txHash = "0xt3", inviter = null)
+        val kept = parseSentInvites(sentInvitesJson(listOf(fromA, fromB, older)), 230)
+        assertEquals(listOf(fromA, fromB, older), kept)
+        assertEquals(listOf(fromA, older), kept.filter { it.sentBy(a.uppercase().replace("0X", "0x")) })
+        assertEquals(listOf(fromB, older), kept.filter { it.sentBy(b) })
+        val savedBefore = """[{"name":"Alice","receiver":"0xaaaa000000000000000000000000000000000001","code":"","txHash":"0xt1","epoch":230,"sentAt":1}]"""
+        assertEquals(null, parseSentInvites(savedBefore, 230).single().inviter)
+    }
+
+    @Test
     fun inviteesAsTheNodeGivesThem() {
         val array = JSONArray()
             .put(JSONObject().put("TxHash", "0xAB").put("Address", "0xDDDD000000000000000000000000000000000004"))

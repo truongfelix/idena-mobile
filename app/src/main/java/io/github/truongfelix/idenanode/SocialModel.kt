@@ -109,6 +109,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         get() = if (node == null && !nodeFailed) BarState(Health.Off, "Connecting to the node…") else scanState(node, scanning, head, cache)
     var scanning by mutableStateOf(SocialStore.isScanning(context))
         private set
+    /** The node's account (lowercase), read at each scan step; null before the first. */
     var myAddress by mutableStateOf<String?>(null)
         private set
 
@@ -307,6 +308,21 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         updateActivity()
     }
 
+    /**
+     * The node's account is [address] (lowercase): at the first scan step, or another one after a key import.
+     * For another one, what is on its posts already is not news, and its own profile shows from the top.
+     */
+    private suspend fun setAccount(address: String) {
+        val switched = myAddress != null
+        myAddress = address
+        if (switched) {
+            markSeen()
+            highlightAfter = seenThrough
+            scope.launch { myProfileState.scrollToItem(0) }
+        }
+        updateActivity()
+    }
+
     /** The activity on the identity's posts after a scan, and a notice of what is new. */
     private suspend fun updateActivity() {
         val me = myAddress ?: return
@@ -357,15 +373,14 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                     }
                     node = view
                     nodeFailed = false
+                    // The node's account, at each step: another one after a key import (the node restarts with it).
+                    val address = withContext(Dispatchers.IO) { rpc(context).call("dna_getCoinbaseAddr") as String }.lowercase()
+                    if (address != myAddress) setAccount(address)
                     ready = !view.syncing && !view.validation
                     if (!ready) {
                         scanStatus = if (view.syncing) "Waiting: the node is syncing." else "Paused during the validation."
                         pause(30_000)
                         continue
-                    }
-                    if (myAddress == null) {
-                        myAddress = withContext(Dispatchers.IO) { rpc(context).call("dna_getCoinbaseAddr") as String }.lowercase()
-                        updateActivity()
                     }
                     val source = NodeSocialSource(rpc(context))
                     val nodeHead = withContext(Dispatchers.IO) { source.head() }
