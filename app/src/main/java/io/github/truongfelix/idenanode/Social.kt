@@ -5,9 +5,10 @@ import org.json.JSONObject
 import java.math.BigDecimal
 
 /*
- * idena.social (https://idena.social), read from the node: posts are makePost calls of its contract,
- * whose JSON argument holds the text, and tips are sendTip calls. The rules follow idena.social-ui (getNewPosterAndPost in
- * src/logic/asyncUtils.ts, PostComponent.tsx), for posts made since its current contract (v12).
+ * idena.social (https://idena.social), read from the node: posts are makePost calls of its contracts,
+ * whose JSON argument holds the text, and tips are sendTip (and, in v1 and v5, sendTipFromBalance) calls. The
+ * rules follow idena.social-ui (getNewPosterAndPost in src/logic/asyncUtils.ts, PostComponent.tsx); each
+ * contract version's calls are read in its own format (SocialVersions.kt).
  */
 
 /** The idena.social contract (idena.social-ui v12) and the block where its posts start. */
@@ -38,6 +39,8 @@ data class PostCall(
     val media: String = "",
     /** Its type as the post declares it (image/png, video/mp4...). */
     val mediaType: String = "",
+    /** The older contract version it was made with ([SocialVersion.name]); empty for the current contract. */
+    val version: String = "",
 ) {
     val isLike: Boolean
         get() = message == LIKE && replyTo.isNotEmpty()
@@ -45,7 +48,7 @@ data class PostCall(
     fun toJson(): JSONObject = JSONObject()
         .put("hash", hash).put("height", height).put("time", time).put("index", index).put("author", author)
         .put("message", message).put("replyTo", replyTo).put("channel", channel).put("hasMedia", hasMedia)
-        .put("media", media).put("mediaType", mediaType)
+        .put("media", media).put("mediaType", mediaType).put("version", version)
 
     companion object {
         /** Inline media larger than this (base64 characters, about 1 MB) is not kept in the scan. */
@@ -63,18 +66,23 @@ data class PostCall(
             hasMedia = json.optBoolean("hasMedia"),
             media = json.optString("media"),
             mediaType = json.optString("mediaType"),
+            version = json.optString("version"),
         )
 
         /**
-         * The post of a makePost call, from its first argument (hex of the JSON text idena.social sends:
-         * message, replyToPostId, channelId, media, mediaType); null if the argument is not such JSON.
+         * The post of a makePost call of contract [version], from its first argument (hex of the JSON text
+         * idena.social sends: message, replyToPostId, channelId, media, mediaType); null if the argument is not
+         * such JSON. v1 and v5 refuse a post without a message, and their media fields were never used.
          */
-        fun parse(hash: String, height: Long, time: Long, index: Int, from: String, argHex: String): PostCall? {
+        fun parse(hash: String, height: Long, time: Long, index: Int, from: String, argHex: String, version: SocialVersion = CURRENT_VERSION): PostCall? {
             val args = runCatching { JSONObject(String(hexToBytes(argHex), Charsets.UTF_8)) }.getOrNull() ?: return null
+            val older = version.format == CallFormat.V1
+            if (older && args.optString("message").isEmpty()) return null
             val media = args.optJSONArray("media")
             val mediaType = args.optJSONArray("mediaType")
-            val hasMedia = media != null && media.length() > 0 && mediaType != null && mediaType.length() > 0
+            val hasMedia = !older && media != null && media.length() > 0 && mediaType != null && mediaType.length() > 0
             val first = if (hasMedia) media!!.optString(0) else ""
+            val replyTo = args.optString("replyToPostId")
             return PostCall(
                 hash = hash,
                 height = height,
@@ -82,14 +90,38 @@ data class PostCall(
                 index = index,
                 author = from.lowercase(),
                 message = args.optString("message"),
-                replyTo = args.optString("replyToPostId"),
+                replyTo = if (older) olderReplyTo(replyTo) else replyTo,
                 channel = args.optString("channelId"),
                 hasMedia = hasMedia,
                 media = first.takeIf { it.startsWith("ipfs://") || it.length <= MAX_INLINE_MEDIA }.orEmpty(),
                 mediaType = if (hasMedia) mediaType!!.optString(0) else "",
+                version = if (version.isCurrent) "" else version.name,
             )
         }
+
+        private val HEX_ID = Regex("^0x[0-9a-fA-F]+$")
+
+        /**
+         * The post a v1 or v5 reply answers: the web app first wrote its id as hex, the 16 bytes of a
+         * little-endian u128 ("0x2e00…" for 46), later as a decimal.
+         */
+        fun olderReplyTo(value: String): String {
+            if (!HEX_ID.matches(value)) return value
+            val hex = value.substring(2)
+            var id = 0L
+            // Ids stay far below 2^48: the upper bytes are zero.
+            var i = minOf(hex.length, 12) - 2
+            while (i >= 0) {
+                id = id * 256 + hex.substring(i, i + 2).toLong(16)
+                i -= 2
+            }
+            return id.toString()
+        }
     }
+
+    /** Whether it was made with an older contract: read only. */
+    val isOlder: Boolean
+        get() = version.isNotEmpty()
 }
 
 private val CID = Regex("^[A-Za-z0-9]{10,128}$")
@@ -113,24 +145,35 @@ data class TipCall(
     val tipAmount: String,
     /** The iDNA sent with the call (decimal). */
     val amount: String,
+    /** The older contract version it was made with ([SocialVersion.name]); empty for the current contract. */
+    val version: String = "",
+    /** Before v11: the tip is all that was sent. */
+    val sent: Boolean = false,
+    /** A sendTipFromBalance of v1 or v5: the tip, [tipAmount] in iDNA, comes from the tipper's balance in the contract. */
+    val fromBalance: Boolean = false,
 ) {
     /**
      * The tip in iDNA when the contract accepts it (sendTip): a whole number of at least 1 and no more
-     * than was sent; null otherwise (such a call fails).
+     * than was sent; null otherwise (such a call fails). Before v11 ([sent]) the tip is what was sent, if
+     * anything; from the tips balance ([fromBalance]), its tipAmount, if anything (the balance it needs is not
+     * known here).
      */
-    val validAmount: Long?
+    val validAmount: BigDecimal?
         get() {
-            val tip = tipAmount.takeIf { WHOLE_IDNA.matches(it) }?.toLongOrNull()?.takeIf { it > 0 } ?: return null
-            val sent = amount.toBigDecimalOrNull() ?: return null
-            return tip.takeIf { sent >= BigDecimal(it) }
+            if (sent || fromBalance) return (if (fromBalance) tipAmount else amount).toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
+            val tip = tipAmount.takeIf { WHOLE_IDNA.matches(it) }?.toBigDecimal()?.takeIf { it.signum() > 0 } ?: return null
+            val paid = amount.toBigDecimalOrNull() ?: return null
+            return tip.takeIf { paid >= it }
         }
 
     fun toJson(): JSONObject = JSONObject()
         .put("hash", hash).put("height", height).put("time", time).put("index", index).put("from", from)
-        .put("postId", postId).put("tipAmount", tipAmount).put("amount", amount)
+        .put("postId", postId).put("tipAmount", tipAmount).put("amount", amount).put("version", version)
+        .put("sent", sent).put("fromBalance", fromBalance)
 
     companion object {
         private val WHOLE_IDNA = Regex("^[0-9]{1,15}$")
+        private val DIGITS = Regex("^[0-9]{1,40}$")
 
         fun fromJson(json: JSONObject) = TipCall(
             hash = json.getString("hash"),
@@ -141,14 +184,84 @@ data class TipCall(
             postId = json.optString("postId"),
             tipAmount = json.optString("tipAmount"),
             amount = json.optString("amount"),
+            version = json.optString("version"),
+            sent = json.optBoolean("sent"),
+            fromBalance = json.optBoolean("fromBalance"),
         )
 
-        /** The tip of a sendTip call, from its argument (hex of {"postId", "tipAmount"}); null if not such JSON. */
-        fun parse(hash: String, height: Long, time: Long, index: Int, from: String, amount: String, argHex: String): TipCall? {
-            val args = runCatching { JSONObject(String(hexToBytes(argHex), Charsets.UTF_8)) }.getOrNull() ?: return null
-            return TipCall(hash, height, time, index, from.lowercase(), args.optString("postId"), args.optString("tipAmount"), amount)
+        /**
+         * The tip of a [method] call (sendTip, or sendTipFromBalance in v1 and v5) of contract [version], from its
+         * argument; null if not in the version's format. Since v11 the argument is {"postId", "tipAmount"}, the tip
+         * in whole iDNA; v9 and v10 take {"postId"}, v1 and v5 the post id as plain text. sendTipFromBalance takes
+         * {"postId", "tipAmount"} in the version's [BalanceTips] unit; its tipAmount is kept in iDNA.
+         */
+        fun parse(
+            hash: String, height: Long, time: Long, index: Int, from: String, amount: String, argHex: String,
+            method: String = "sendTip", version: SocialVersion = CURRENT_VERSION,
+        ): TipCall? {
+            val text = runCatching { String(hexToBytes(argHex), Charsets.UTF_8) }.getOrNull() ?: return null
+            val fromBalance = method == "sendTipFromBalance"
+            val postId: String
+            var tipAmount = ""
+            if (fromBalance) {
+                val units = version.balanceTips ?: return null
+                val args = runCatching { JSONObject(text) }.getOrNull() ?: return null
+                postId = args.optString("postId")
+                tipAmount = args.optString("tipAmount")
+                if (units == BalanceTips.Atomic) {
+                    tipAmount = tipAmount.takeIf { DIGITS.matches(it) }?.let { BigDecimal(it).movePointLeft(18).stripTrailingZeros().toPlainString() }
+                        ?: return null
+                }
+            } else if (version.format == CallFormat.V1) {
+                postId = text.trim().takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
+            } else {
+                val args = runCatching { JSONObject(text) }.getOrNull() ?: return null
+                postId = args.optString("postId")
+                tipAmount = args.optString("tipAmount")
+            }
+            return TipCall(
+                hash, height, time, index, from.lowercase(), postId, tipAmount, amount,
+                version = if (version.isCurrent) "" else version.name,
+                sent = !fromBalance && version.format != CallFormat.V12,
+                fromBalance = fromBalance,
+            )
         }
     }
+}
+
+/**
+ * A tip amount in iDNA as idena.social shows it (getDisplayTipAmount): at most 3 decimals, "0.000" for a tip
+ * below that.
+ */
+fun tipText(amount: BigDecimal): String {
+    val rounded = amount.setScale(3, java.math.RoundingMode.HALF_UP)
+    if (rounded.signum() == 0) return if (amount.signum() > 0) "0.000" else "0"
+    return rounded.stripTrailingZeros().toPlainString()
+}
+
+/**
+ * The posts and tips among contract calls (bcn_contractCalls) of contract [version]. A call the node marks as
+ * refused by the contract (success false) is left out: it has no post id and moved no coins.
+ */
+fun callsToActivity(calls: JSONArray, version: SocialVersion = CURRENT_VERSION): BlockCalls {
+    val posts = ArrayList<PostCall>()
+    val tips = ArrayList<TipCall>()
+    for (i in 0 until calls.length()) {
+        val call = calls.getJSONObject(i)
+        if (!call.optBoolean("success", true)) continue
+        val arg = call.optJSONArray("args")?.optString(0) ?: continue
+        val hash = call.getString("hash")
+        val height = call.getLong("height")
+        val time = call.getLong("timestamp")
+        val index = call.getInt("index")
+        val from = call.getString("from")
+        when (val method = call.getString("method")) {
+            "makePost" -> PostCall.parse(hash, height, time, index, from, arg, version)?.let { posts += it }
+            "sendTip", "sendTipFromBalance" ->
+                TipCall.parse(hash, height, time, index, from, call.optString("amount"), arg, method, version)?.let { tips += it }
+        }
+    }
+    return BlockCalls(posts, tips)
 }
 
 /** The idena.social calls of some blocks. */
@@ -172,8 +285,12 @@ data class SocialPost(
         get() = likeCalls.map { it.author }
 
     /** The iDNA tipped to the post's author for it. */
-    val tipTotal: Long
-        get() = tips.sumOf { it.validAmount ?: 0 }
+    val tipTotal: BigDecimal
+        get() = tips.sumOf { it.validAmount ?: BigDecimal.ZERO }
+
+    /** Whether it was made with an older contract: read only. */
+    val isOlder: Boolean
+        get() = call.isOlder
 }
 
 /** The channel of the comments under reply [replyId] on idena.social. */
@@ -184,16 +301,19 @@ fun discussChannel(replyId: Long): String = "discuss:$replyId"
  * id's author ([authors], contract map "p:"). Going from the newest call to the oldest, a call gets the
  * next id down when its sender is that id's author; a call that does not match failed and has no id.
  * [posts] and [authors] must cover the same blocks: calls after the blocks the map was read at are left
- * out by the caller.
+ * out by the caller. With [fromOldest] (an older contract version: its posts after the next version came are
+ * not read, but hold the last ids) it counts up from id 1 instead: [posts] must then hold all of its first posts.
  */
-fun postIds(posts: List<PostCall>, authors: Map<Long, String>): Map<String, Long> {
+fun postIds(posts: List<PostCall>, authors: Map<Long, String>, fromOldest: Boolean = false): Map<String, Long> {
     val ids = HashMap<String, Long>()
-    var id = authors.keys.maxOrNull() ?: return ids
-    for (post in posts.sortedWith(compareBy({ it.height }, { it.index })).asReversed()) {
-        if (id < 1) break
+    val last = authors.keys.maxOrNull() ?: return ids
+    val ordered = posts.sortedWith(compareBy({ it.height }, { it.index }))
+    var id = if (fromOldest) 1 else last
+    for (post in if (fromOldest) ordered else ordered.asReversed()) {
+        if (id < 1 || id > last) break
         if (authors[id] == post.author) {
             ids[post.hash] = id
-            id--
+            id += if (fromOldest) 1 else -1
         }
     }
     return ids
@@ -205,10 +325,10 @@ fun postIds(posts: List<PostCall>, authors: Map<Long, String>): Map<String, Long
  * (a main-channel answer to a reply or a comment counts as a comment too). A like (a reply made of
  * [LIKE]) only counts on what it replies to. Each post needs a text or media, an id, and a known,
  * older parent that is not a like; posts in other channels are left out. A tip counts on the post it
- * names when its amount is valid and it comes after that post in the chain.
+ * names when its amount is valid and it comes after that post in the chain. [fromOldest]: see [postIds].
  */
-fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<TipCall> = emptyList()): List<SocialPost> {
-    val ids = postIds(posts, authors)
+fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<TipCall> = emptyList(), fromOldest: Boolean = false): List<SocialPost> {
+    val ids = postIds(posts, authors, fromOldest)
     val byId = HashMap<Long, PostCall>()
     for (post in posts) ids[post.hash]?.let { byId[it] = post }
     val answers = HashMap<Long, MutableList<Long>>()
@@ -310,11 +430,11 @@ enum class FeedSort(val title: String, val ranked: Boolean = false) {
 enum class FeedPeriod(val title: String) { Epoch("This epoch"), Week("7 days"), All("All") }
 
 /** What a ranked sort counts on [post] itself. */
-private fun rankOf(post: SocialPost, sort: FeedSort): Long = when (sort) {
-    FeedSort.Likes -> post.likes.toLong()
-    FeedSort.Comments -> replyCount(post).toLong()
+private fun rankOf(post: SocialPost, sort: FeedSort): BigDecimal = when (sort) {
+    FeedSort.Likes -> post.likes.toBigDecimal()
+    FeedSort.Comments -> replyCount(post).toBigDecimal()
     FeedSort.Tips -> post.tipTotal
-    else -> 0
+    else -> BigDecimal.ZERO
 }
 
 /**
@@ -341,7 +461,7 @@ fun sortFeed(
             }
         }
         .map { it to rankOf(it, sort) }
-        .filter { it.second > 0 }
+        .filter { it.second.signum() > 0 }
         .sortedByDescending { it.second }
         .map { it.first }
 }
@@ -363,7 +483,7 @@ data class ActivityItem(
     val focusId: Long,
     val what: PostCall,
     val answer: PostCall? = null,
-    val amount: Long? = null,
+    val amount: BigDecimal? = null,
 )
 
 /**
@@ -436,7 +556,7 @@ fun noticeText(news: List<ActivityItem>, shortAddress: (String) -> String): Stri
             ActivityKind.Like -> "liked your post"
             ActivityKind.Reply -> "replied to your post"
             ActivityKind.Comment -> "commented on your post"
-            ActivityKind.Tip -> "tipped you ${item.amount} iDNA"
+            ActivityKind.Tip -> "tipped you ${item.amount?.let(::tipText)} iDNA"
         }
         return "${shortAddress(item.actor)} $action"
     }
@@ -489,8 +609,8 @@ data class SocialProfile(
     /** The likes on its posts, replies and comments. */
     val likesReceived: Int,
     /** The iDNA tipped to it, and by it. */
-    val tipsReceived: Long,
-    val tipsGiven: Long,
+    val tipsReceived: BigDecimal,
+    val tipsGiven: BigDecimal,
 )
 
 /** The profile of [address] in [feed]. */
@@ -503,8 +623,8 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
     val tips = ArrayList<ProfileItem>()
     val media = ArrayList<ProfileItem>()
     var likesReceived = 0
-    var tipsReceived = 0L
-    var tipsGiven = 0L
+    var tipsReceived = BigDecimal.ZERO
+    var tipsGiven = BigDecimal.ZERO
 
     fun visit(node: SocialPost, threadId: Long, parent: PostCall?, list: MutableList<ProfileItem>) {
         val own = node.call.author == me
@@ -518,7 +638,7 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
             if (like.author == me) likes += ProfileItem(node, threadId, parent, like = like)
         }
         for (tip in node.tips) {
-            val amount = tip.validAmount ?: 0
+            val amount = tip.validAmount ?: BigDecimal.ZERO
             if (own) tipsReceived += amount
             if (tip.from == me) tipsGiven += amount
             if (tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
@@ -611,13 +731,11 @@ fun postAuthors(items: JSONArray): Map<Long, String> {
     return authors
 }
 
-/** The blocks read per node request while scanning block by block (about 1.5 s on the phone). */
-const val SOCIAL_BATCH = 500L
-
 /**
  * What the phone has scanned, kept in the app's files so that no block is scanned twice: the blocks
- * [low]..[high] (none while [high] < [low]), the posts and tips found there, and the post authors as of
- * block [authorsHeight].
+ * [low]..[high] (none while [high] < [low]), the posts and tips found there (those of an older contract
+ * version carry its name), the current contract's post authors as of block [authorsHeight], and each older
+ * version's authors (they no longer change), by version name.
  */
 data class SocialCache(
     val low: Long,
@@ -626,23 +744,39 @@ data class SocialCache(
     val authors: Map<Long, String>,
     val authorsHeight: Long,
     val tips: List<TipCall> = emptyList(),
+    val olderAuthors: Map<String, Map<Long, String>> = emptyMap(),
 ) {
-    /** Whether the scan reached the first block of the contract. */
+    /** Whether the scan reached the first block of idena.social's history. */
     val historyDone: Boolean
-        get() = low <= SOCIAL_FIRST_BLOCK
+        get() = low <= HISTORY_START
 
-    /** The share of the contract's blocks scanned, 0 to 1. */
+    /** The share of the history's blocks scanned, 0 to 1. */
     val scannedShare: Double
-        get() = if (high < SOCIAL_FIRST_BLOCK) 0.0
-        else (high - maxOf(low, SOCIAL_FIRST_BLOCK) + 1).coerceAtLeast(0).toDouble() / (high - SOCIAL_FIRST_BLOCK + 1)
+        get() = if (high < HISTORY_START) 0.0
+        else (high - maxOf(low, HISTORY_START) + 1).coerceAtLeast(0).toDouble() / (high - HISTORY_START + 1)
 
     /** The oldest block time among the scanned posts; null without posts. */
     val oldestPostTime: Long?
         get() = posts.minOfOrNull { it.time }
 
-    /** The feed of the posts and tips the author map covers. */
-    fun feed(): List<SocialPost> =
-        socialFeed(posts.filter { it.height <= authorsHeight }, authors, tips.filter { it.height <= authorsHeight })
+    /**
+     * The feed of the posts and tips the author maps cover: the current contract's, then each older version's
+     * once the scan read all its blocks (its ids count from its first post), with the app's ids for them
+     * ([withAppIds]). The versions follow each other in time, so the feed stays newest first.
+     */
+    fun feed(): List<SocialPost> {
+        val current = socialFeed(
+            posts.filter { !it.isOlder && it.height <= authorsHeight }, authors, tips.filter { it.version.isEmpty() && it.height <= authorsHeight },
+        )
+        val older = OLDER_VERSIONS.flatMap { version ->
+            val versionAuthors = olderAuthors[version.name]
+            if (versionAuthors == null || low > version.from) return@flatMap emptyList()
+            version.withAppIds(
+                socialFeed(posts.filter { it.version == version.name }, versionAuthors, tips.filter { it.version == version.name }, fromOldest = true),
+            )
+        }
+        return current + older
+    }
 
     /** This cache with the calls of more blocks. */
     fun plus(calls: BlockCalls) = copy(posts = posts + calls.posts, tips = tips + calls.tips)
@@ -652,30 +786,39 @@ data class SocialCache(
         posts.forEach { postArray.put(it.toJson()) }
         val tipArray = JSONArray()
         tips.forEach { tipArray.put(it.toJson()) }
-        val authorObject = JSONObject()
-        authors.forEach { (id, author) -> authorObject.put(id.toString(), author) }
+        val olderObject = JSONObject()
+        olderAuthors.forEach { (name, map) -> olderObject.put(name, authorsJson(map)) }
         return JSONObject().put("contract", SOCIAL_CONTRACT).put("version", VERSION).put("low", low).put("high", high)
-            .put("posts", postArray).put("tips", tipArray).put("authors", authorObject).put("authorsHeight", authorsHeight)
+            .put("posts", postArray).put("tips", tipArray).put("authors", authorsJson(authors)).put("authorsHeight", authorsHeight)
+            .put("olderAuthors", olderObject)
     }
 
     companion object {
-        /** 3: the media references are kept too; a scan of an older version is done again. */
-        const val VERSION = 3
+        /**
+         * 3: the media references are kept too; a scan of an older version is done again. 4: the older contracts
+         * too ([olderAuthors]); a scan of version 3 holds the current contract's blocks only and goes on below them.
+         */
+        const val VERSION = 4
 
-        /** The cache from its JSON; null when it is for another contract or an older version. */
+        private fun authorsJson(authors: Map<Long, String>) = JSONObject().apply { authors.forEach { (id, author) -> put(id.toString(), author) } }
+
+        private fun authorsFrom(json: JSONObject): Map<Long, String> = json.keys().asSequence().associate { it.toLong() to json.getString(it) }
+
+        /** The cache from its JSON; null when it is for another contract or an unknown version. */
         fun fromJson(json: JSONObject): SocialCache? {
             if (!json.optString("contract").equals(SOCIAL_CONTRACT, ignoreCase = true)) return null
-            if (json.optInt("version", 1) != VERSION) return null
+            if (json.optInt("version", 1) !in 3..VERSION) return null
             val postArray = json.getJSONArray("posts")
             val tipArray = json.optJSONArray("tips") ?: JSONArray()
-            val authorObject = json.getJSONObject("authors")
+            val olderObject = json.optJSONObject("olderAuthors") ?: JSONObject()
             return SocialCache(
                 low = json.getLong("low"),
                 high = json.getLong("high"),
                 posts = (0 until postArray.length()).map { PostCall.fromJson(postArray.getJSONObject(it)) },
-                authors = authorObject.keys().asSequence().associate { it.toLong() to authorObject.getString(it) },
+                authors = authorsFrom(json.getJSONObject("authors")),
                 authorsHeight = json.getLong("authorsHeight"),
                 tips = (0 until tipArray.length()).map { TipCall.fromJson(tipArray.getJSONObject(it)) },
+                olderAuthors = olderObject.keys().asSequence().associateWith { authorsFrom(olderObject.getJSONObject(it)) },
             )
         }
     }
@@ -756,11 +899,11 @@ interface SocialSource {
     /** The node's head block. */
     fun head(): Long
 
-    /** The posts and tips of blocks [from]..[to]; throws if a block is missing. */
-    fun calls(from: Long, to: Long): BlockCalls
+    /** The posts and tips of contract [version] in blocks [from]..[to]; throws if a block is missing. */
+    fun calls(from: Long, to: Long, version: SocialVersion = CURRENT_VERSION): BlockCalls
 
-    /** The post authors (contract map "p:") in the node's current state. */
-    fun authors(): Map<Long, String>
+    /** The post authors (contract map "p:") of contract [version] in the node's current state. */
+    fun authors(version: SocialVersion = CURRENT_VERSION): Map<Long, String>
 }
 
 /**
@@ -797,12 +940,19 @@ fun checkNewBlocks(
     return current!!
 }
 
-/** Scans one batch of blocks before the cache, down to the contract's first block. */
+/**
+ * Scans one batch of blocks before the cache, down to the first block of the history, with the contract version
+ * of those blocks: a batch never spans two versions. An older version's authors are read once, with its first
+ * batch.
+ */
 fun scanOlderBlocks(cache: SocialCache, source: SocialSource, save: (SocialCache) -> Unit): SocialCache {
     if (cache.historyDone) return cache
-    val from = maxOf(cache.low - source.batchSize(), SOCIAL_FIRST_BLOCK)
-    val older = source.calls(from, cache.low - 1)
-    val next = cache.copy(low = from, posts = older.posts + cache.posts, tips = older.tips + cache.tips)
+    val version = versionAt(cache.low - 1) ?: return cache
+    val from = maxOf(cache.low - source.batchSize(), version.from)
+    val older = source.calls(from, cache.low - 1, version)
+    var olderAuthors = cache.olderAuthors
+    if (!version.isCurrent && version.name !in olderAuthors) olderAuthors = olderAuthors + (version.name to source.authors(version))
+    val next = cache.copy(low = from, posts = older.posts + cache.posts, tips = older.tips + cache.tips, olderAuthors = olderAuthors)
     save(next)
     return next
 }

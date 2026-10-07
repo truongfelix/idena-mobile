@@ -189,7 +189,7 @@ private fun ProfileHeader(
         }
         val counts = MaterialTheme.typography.bodyMedium
         Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
-        Text("🪙 ${blockNumber.format(profile.tipsReceived)} received · ${blockNumber.format(profile.tipsGiven)} given iDNA", style = counts)
+        Text("🪙 ${tipText(profile.tipsReceived)} received · ${tipText(profile.tipsGiven)} given iDNA", style = counts)
         if (!historyDone) {
             Text(
                 "From the blocks scanned so far: older posts appear as the history scan goes on.",
@@ -249,7 +249,7 @@ private fun ProfileItemCard(
                     val tip = item.tip ?: return@Column
                     Text(
                         buildAnnotatedString {
-                            append("🪙 Tipped ${tip.validAmount} iDNA to ")
+                            append("🪙 Tipped ${tip.validAmount?.let(::tipText)} iDNA to ")
                             appendAddress(call.author, styles, onProfile)
                             append("  ·  ${ago(tip.time)}")
                         },
@@ -263,7 +263,7 @@ private fun ProfileItemCard(
                 }
             }
             Text(
-                "♡ ${item.node.likes}  ·  💬 ${replyCount(item.node)}  ·  🪙 ${item.node.tipTotal}",
+                "♡ ${item.node.likes}  ·  💬 ${replyCount(item.node)}  ·  🪙 ${tipText(item.node.tipTotal)}",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

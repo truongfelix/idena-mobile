@@ -195,7 +195,8 @@ fun Pill(text: String, enabled: Boolean, description: String? = null, onClick: (
 
 /**
  * The pills under a post, reply or comment: its likes (Like; "❤️" once the identity liked it or sent a like), the
- * answer pill ([answer]), and its tips (Tip; not on one's own posts).
+ * answer pill ([answer]), and its tips (Tip; not on one's own posts). An older contract's post is read only: the
+ * answer pill then only opens its thread ([answerEnabled] in the feed).
  */
 @Composable
 fun ActionBar(
@@ -203,18 +204,19 @@ fun ActionBar(
     myAddress: String?,
     canAct: Boolean,
     answer: String,
-    answerEnabled: Boolean = canAct,
+    answerEnabled: Boolean = canAct && !post.isOlder,
     onLike: () -> Unit,
     onAnswer: () -> Unit,
     onTip: () -> Unit,
     onWho: () -> Unit,
 ) {
+    val act = canAct && !post.isOlder
     // A like sent counts at once: the pill stays off until the scan reads it.
     val liked = myAddress != null && myAddress in post.likedBy || post.id in LocalPendingLikes.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", canAct && !liked, onClick = onLike)
+        Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", act && !liked, onClick = onLike)
         Pill(answer, answerEnabled, onClick = onAnswer)
-        Pill(if (post.tipTotal > 0) "🪙 ${post.tipTotal}" else "🪙 Tip", canAct && post.call.author != myAddress, onClick = onTip)
+        Pill(if (post.tipTotal.signum() > 0) "🪙 ${tipText(post.tipTotal)}" else "🪙 Tip", act && post.call.author != myAddress, onClick = onTip)
         Spacer(Modifier.weight(1f))
         // Who liked and tipped, in place of the line "Liked by · tipped by" under the pills.
         if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = "Who liked and tipped", onClick = onWho)
@@ -244,11 +246,11 @@ fun WhoDialog(post: SocialPost, states: Map<String, AuthorIdentity>, onProfile: 
                 if (post.tips.isNotEmpty()) {
                     item {
                         val count = if (post.tips.size == 1) "1 tip" else "${post.tips.size} tips"
-                        Text("🪙 ${post.tipTotal} iDNA in $count", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
+                        Text("🪙 ${tipText(post.tipTotal)} iDNA in $count", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
                     }
                     items(post.tips.sortedByDescending { it.height }, key = { it.hash }) { tip ->
                         Text(
-                            buildAnnotatedString { who(tip.from); append("  ·  ${tip.validAmount} iDNA  ·  ${ago(tip.time)}") },
+                            buildAnnotatedString { who(tip.from); append("  ·  ${tip.validAmount?.let(::tipText)} iDNA  ·  ${ago(tip.time)}") },
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }

@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.math.BigDecimal
 
 class SocialTest {
     private val a = "0xaaaa000000000000000000000000000000000001"
@@ -120,8 +121,8 @@ class SocialTest {
 
     @Test
     fun onlyTipsTheContractAcceptsAreValid() {
-        assertEquals(5L, tip("t", a, "1", "5", "5", 10).validAmount)
-        assertEquals("more sent than tipped", 5L, tip("t", a, "1", "5", "6.5", 10).validAmount)
+        assertEquals(BigDecimal("5"), tip("t", a, "1", "5", "5", 10).validAmount)
+        assertEquals("more sent than tipped", BigDecimal("5"), tip("t", a, "1", "5", "6.5", 10).validAmount)
         assertNull("a fraction: the contract reads 0 and refuses", tip("t", a, "1", "0.5", "0.5", 10).validAmount)
         assertNull(tip("t", a, "1", "0", "1", 10).validAmount)
         assertNull("more tipped than sent", tip("t", a, "1", "5", "4.99", 10).validAmount)
@@ -142,8 +143,8 @@ class SocialTest {
         )
         val feed = socialFeed(posts, authors, tips)
         assertEquals("before the post (t3), a fraction (t4) and an unknown post (t5) do not count", listOf("t1", "t2"), feed[0].tips.map { it.hash })
-        assertEquals(5L, feed[0].tipTotal)
-        assertEquals(4L, feed[0].replies[0].tipTotal)
+        assertEquals(BigDecimal("5"), feed[0].tipTotal)
+        assertEquals(BigDecimal("4"), feed[0].replies[0].tipTotal)
     }
 
     @Test
@@ -169,7 +170,7 @@ class SocialTest {
             ),
             items.map { it.kind to it.actor },
         )
-        assertEquals("the tip on my reply", 2L, items[0].amount)
+        assertEquals("the tip on my reply", BigDecimal("2"), items[0].amount)
         assertEquals("my reply was tipped", "my reply to b", items[0].what.message)
         assertEquals("every item opens post 1's thread", setOf(1L), items.map { it.threadId }.toSet())
         assertEquals("at the answer, or at what was liked or tipped", listOf(5L, 8L, 6L, 1L, 2L), items.map { it.focusId })
@@ -209,8 +210,8 @@ class SocialTest {
         assertEquals("what a liked, not the like a received (p7)", listOf("p2"), profile.likes.map { it.node.call.hash })
         assertEquals("the tips a gave, not the one a received (t1) nor c's on c's own comment", listOf("t2"), profile.tips.map { it.tip!!.hash })
         assertEquals(1, profile.likesReceived)
-        assertEquals(3L, profile.tipsReceived)
-        assertEquals(2L, profile.tipsGiven)
+        assertEquals(BigDecimal("3"), profile.tipsReceived)
+        assertEquals(BigDecimal("2"), profile.tipsGiven)
         assertEquals("every entry opens post 1's thread or its own", setOf(1L, 10L, 9L), (profile.posts + profile.comments + profile.tips).map { it.threadId }.toSet())
     }
 
@@ -220,7 +221,7 @@ class SocialTest {
         assertTrue(profile.posts.isEmpty() && profile.replies.isEmpty() && profile.comments.isEmpty())
         assertTrue(profile.likes.isEmpty() && profile.tips.isEmpty() && profile.media.isEmpty())
         assertEquals(0, profile.likesReceived)
-        assertEquals(0L, profile.tipsReceived + profile.tipsGiven)
+        assertEquals(BigDecimal.ZERO, profile.tipsReceived + profile.tipsGiven)
         assertTrue("an empty feed", socialProfile(emptyList(), a).posts.isEmpty())
     }
 
@@ -256,8 +257,8 @@ class SocialTest {
         assertTrue(sortFeed(emptyList(), FeedSort.Activity).isEmpty())
     }
 
-    private fun activity(kind: ActivityKind, actor: String, height: Long, amount: Long? = null) =
-        ActivityItem(kind, actor, height, 0, height, 1, 1, post("p1", a, "my post", 100), amount = amount)
+    private fun activity(kind: ActivityKind, actor: String, height: Long, amount: Int? = null) =
+        ActivityItem(kind, actor, height, 0, height, 1, 1, post("p1", a, "my post", 100), amount = amount?.toBigDecimal())
 
     @Test
     fun onlyNewActivityOfTheKindsOnNotifies() {
@@ -329,7 +330,7 @@ class SocialTest {
     @Test
     fun theStatusDotFollowsTheNodeAndTheScan() {
         val node = NodeView(peers = 5, syncing = false, currentBlock = 1_000, highestBlock = 1_000, validation = false)
-        val done = SocialCache(low = SOCIAL_FIRST_BLOCK, high = 11_000_000, posts = emptyList(), authors = emptyMap(), authorsHeight = 11_000_000)
+        val done = SocialCache(low = HISTORY_START, high = 11_000_000, posts = emptyList(), authors = emptyMap(), authorsHeight = 11_000_000)
         assertEquals(BarState(Health.Good, "Up to date"), scanState(node, true, 11_000_000, done))
         assertEquals("a few blocks behind is still up to date", Health.Good, scanState(node, true, 11_000_000L + UP_TO_DATE_LAG, done).health)
         assertEquals(BarState(Health.Warn, "4 blocks behind"), scanState(node, true, 11_000_004, done))
@@ -339,7 +340,7 @@ class SocialTest {
         assertEquals(Health.Off, scanState(node.copy(validation = true), true, 11_000_000, done).health)
         assertEquals(BarState(Health.Off, "Scan off"), scanState(node, false, 11_000_100, done))
         assertEquals(BarState(Health.Warn, "Starting the scan"), scanState(node, true, 11_000_000, null))
-        val half = done.copy(low = SOCIAL_FIRST_BLOCK + (11_000_000 - SOCIAL_FIRST_BLOCK) / 2)
+        val half = done.copy(low = HISTORY_START + (11_000_000 - HISTORY_START) / 2)
         assertEquals(BarState(Health.Warn, "Reading older posts: 50%"), scanState(node, true, 11_000_000, half))
     }
 
@@ -368,7 +369,7 @@ class SocialTest {
         assertEquals("{\"postId\":\"102\",\"tipAmount\":\"5\"}", sendTipArgument(102, 5))
         val parsed = TipCall.parse("0x01", 1, 1, 0, "0xAB", "5", hex(sendTipArgument(102, 5)))!!
         assertEquals("102", parsed.postId)
-        assertEquals(5L, parsed.validAmount)
+        assertEquals(BigDecimal("5"), parsed.validAmount)
         assertEquals("0xab", parsed.from)
     }
 
@@ -379,6 +380,19 @@ class SocialTest {
         assertNull("version 1 dropped the tips", SocialCache.fromJson(cache.toJson().put("version", 1)))
         assertNull("version 2 dropped the media", SocialCache.fromJson(cache.toJson().put("version", 2)))
         assertNull("no version is version 1", SocialCache.fromJson(cache.toJson().apply { remove("version") }))
+        assertNull("a version to come", SocialCache.fromJson(cache.toJson().put("version", SocialCache.VERSION + 1)))
+    }
+
+    @Test
+    fun aScanOfTheCurrentContractOnlyGoesOnBelowIt() {
+        // As version 3 saved it: no olderAuthors, posts and tips without a version.
+        val saved = SocialCache(SOCIAL_FIRST_BLOCK, 11_000_000, listOf(post("h", a, "hi", 1, height = 11_000_000)), mapOf(1L to a), 11_000_000, listOf(tip("t", b, "1", "1", "1", 11_000_000)))
+            .toJson().put("version", 3).apply { remove("olderAuthors") }
+        val cache = SocialCache.fromJson(JSONObject(saved.toString()))!!
+        assertEquals(emptyMap<String, Map<Long, String>>(), cache.olderAuthors)
+        assertEquals(listOf("h"), cache.feed().map { it.call.hash })
+        assertFalse("the older contracts come next", cache.historyDone)
+        assertEquals(SocialCache.VERSION, cache.toJson().getInt("version"))
     }
 
     @Test
@@ -403,22 +417,30 @@ class SocialTest {
     }
 
     /** A node whose head moves as [heads] says, one value per head() call (the last one repeats). */
-    private class FakeSource(private val heads: List<Long>, private val postsAt: Map<Long, PostCall> = emptyMap()) : SocialSource {
+    private class FakeSource(
+        private val heads: List<Long>,
+        private val postsAt: Map<Long, PostCall> = emptyMap(),
+        private val batch: Long = 500,
+    ) : SocialSource {
         val ranges = ArrayList<LongRange>()
+        val versions = ArrayList<String>()
+        val authorVersions = ArrayList<String>()
         var authorReads = 0
         private var headCalls = 0
 
-        override fun batchSize() = SOCIAL_BATCH
+        override fun batchSize() = batch
 
         override fun head(): Long = heads[minOf(headCalls++, heads.size - 1)]
 
-        override fun calls(from: Long, to: Long): BlockCalls {
+        override fun calls(from: Long, to: Long, version: SocialVersion): BlockCalls {
             ranges += from..to
+            versions += version.name
             return BlockCalls((from..to).mapNotNull { postsAt[it] }, emptyList())
         }
 
-        override fun authors(): Map<Long, String> {
+        override fun authors(version: SocialVersion): Map<Long, String> {
             authorReads++
+            authorVersions += version.name
             return mapOf(1L to "0x$authorReads")
         }
     }
@@ -476,7 +498,7 @@ class SocialTest {
     }
 
     @Test
-    fun theHistoryStopsAtTheContractsFirstBlock() {
+    fun theHistoryGoesVersionByVersionToItsFirstBlock() {
         var cache = SocialCache(
             low = SOCIAL_FIRST_BLOCK + 700, high = SOCIAL_FIRST_BLOCK + 800,
             posts = emptyList(), authors = emptyMap(), authorsHeight = 0,
@@ -486,11 +508,24 @@ class SocialTest {
         cache = scanOlderBlocks(cache, source) {}
         cache = scanOlderBlocks(cache, source) {}
         assertEquals(
-            listOf((SOCIAL_FIRST_BLOCK + 200)..(SOCIAL_FIRST_BLOCK + 699), SOCIAL_FIRST_BLOCK..(SOCIAL_FIRST_BLOCK + 199)),
+            "a batch stops at the version's first block",
+            listOf((SOCIAL_FIRST_BLOCK + 200)..(SOCIAL_FIRST_BLOCK + 699), SOCIAL_FIRST_BLOCK..(SOCIAL_FIRST_BLOCK + 199), (SOCIAL_FIRST_BLOCK - 500)..(SOCIAL_FIRST_BLOCK - 1)),
             source.ranges,
         )
-        assertTrue(cache.historyDone)
+        assertEquals(listOf("v12", "v12", "v11"), source.versions)
+        assertEquals("the current contract's authors come with the new blocks", listOf("v11"), source.authorVersions)
+        assertFalse(cache.historyDone)
+
+        // With batches larger than any version: one batch per version, each older version's authors read once.
+        val whole = FakeSource(listOf(0), batch = 1_000_000)
+        while (!cache.historyDone) cache = scanOlderBlocks(cache, whole) {}
+        assertEquals(listOf("v11", "v10", "v9", "v5", "v1"), whole.versions)
+        assertEquals(OLDER_VERSIONS.map { (it.from)..((it.to ?: 0) - 1) }.drop(1), whole.ranges.drop(1))
+        assertEquals(listOf("v10", "v9", "v5", "v1"), whole.authorVersions)
+        assertEquals(OLDER_VERSIONS.map { it.name }.toSet(), cache.olderAuthors.keys)
+        assertEquals(HISTORY_START, cache.low)
         assertEquals(1.0, cache.scannedShare, 0.0)
+        assertEquals("nothing more to read", cache, scanOlderBlocks(cache, whole) {})
     }
 
     @Test

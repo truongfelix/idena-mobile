@@ -74,6 +74,13 @@ fun ThreadView(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PostHeader(post.call, states, onProfile)
                     PostContent(post.call, MaterialTheme.typography.bodyLarge)
+                    if (post.isOlder) {
+                        Text(
+                            "From an earlier idena.social contract (${post.call.version}): read only.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     ActionBar(post, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
                         onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
                     }, onTip = { onTip(post) }, onWho = { onWho(post) })
