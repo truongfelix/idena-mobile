@@ -204,7 +204,7 @@ private fun AdDialog(ad: ChainAd, onDismiss: () -> Unit) {
 }
 
 const val DEV_NOTE_TITLE = "A note from the dev"
-const val DEV_NOTE_LINE = "You run an optimised, more secure Idena node. Tap to read."
+const val DEV_NOTE_LINE = "Community work, same chain as the original. Tap to read."
 
 /** The package this app belongs to: its GitHub repositories (their names say what each one is). */
 private val PACKAGE = listOf("truongfelix/idena-go", "truongfelix/idena-desktop", "truongfelix/idena-mobile")
