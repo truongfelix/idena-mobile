@@ -77,7 +77,7 @@ private fun ActivityCard(item: ActivityItem, isNew: Boolean, onProfile: (String)
         ActivityKind.Like -> "liked"
         ActivityKind.Reply -> "replied to"
         ActivityKind.Comment -> "commented on"
-        ActivityKind.Tip -> "tipped you ${item.amount} iDNA for"
+        ActivityKind.Tip -> "tipped you ${item.amount?.let(::tipText)} iDNA for"
     }
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

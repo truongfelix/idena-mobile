@@ -87,7 +87,7 @@ private fun newestText(cache: SocialCache?, head: Long?): String {
 private fun historyText(cache: SocialCache?, posts: Int): String {
     if (cache == null || cache.high < cache.low) return "History: not scanned yet"
     val found = if (posts == 1) "1 post" else "$posts posts"
-    if (cache.historyDone) return "History: complete since block ${blockNumber.format(SOCIAL_FIRST_BLOCK)} · $found"
+    if (cache.historyDone) return "History: complete since block ${blockNumber.format(HISTORY_START)} · $found"
     val percent = (cache.scannedShare * 100).toInt()
     return "History: $percent% scanned, back to block ${blockNumber.format(cache.low)} · $found"
 }

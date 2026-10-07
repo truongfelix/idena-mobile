@@ -1,7 +1,6 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Context
-import io.github.truongfelix.idenanode.go.mobile.Mobile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -17,81 +16,49 @@ import java.math.RoundingMode
 private const val FILTER_BATCH = 10_000L
 
 /**
- * idena.social through the phone's node: the blocks come from bcn_blockAt, their bodies from ipfs_get
- * (the node fetches those it does not have from its peers) and the calls of the contract are decoded by
- * the node library (Mobile.contractCalls), which recovers the senders. A node with bcn_blocksWithAddress
- * (idena-go pull request) picks the blocks with a transaction to the contract from their headers'
- * transaction filters; without it, every block is read.
+ * The blocks one bcn_contractCalls call reads: the node reads 8 bodies at once, each up to 30 s when it fetches
+ * it from its peers, so that one call stays within the node's minute (its HTTP write timeout).
+ */
+const val BLOCKS_PER_CALL = 8
+
+/**
+ * idena.social through the phone's node: bcn_blocksWithAddress picks the blocks with a transaction to a
+ * contract version from their headers' transaction filters, bcn_contractCalls reads those calls (sender,
+ * method, argument, whether the contract accepted it) from the bodies, which the node fetches from its peers
+ * when it does not have them.
  */
 class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
-    /** Whether the node has bcn_blocksWithAddress; null until asked. */
-    private var hasAddressFilter: Boolean? = null
-
-    private fun blocksWithContract(from: Long, to: Long): List<Long> {
-        val heights = rpc.call(
-            "bcn_blocksWithAddress",
-            JSONArray().put(JSONObject().put("address", SOCIAL_CONTRACT).put("from", from).put("to", to)),
-            readTimeoutMs = 60_000,
-        ) as? JSONArray ?: JSONArray()
-        return (0 until heights.length()).map { heights.getLong(it) }
-    }
-
-    private fun addressFilter(): Boolean {
-        hasAddressFilter?.let { return it }
-        val available = try {
-            val head = head()
-            blocksWithContract(head, head)
-            true
-        } catch (e: IOException) {
-            // The node answers an unknown method with "The method ... does not exist/is not available".
-            if (e.message?.contains("does not exist") != true) throw e
-            false
-        }
-        hasAddressFilter = available
-        return available
-    }
-
-    override fun batchSize(): Long = if (addressFilter()) FILTER_BATCH else SOCIAL_BATCH
+    override fun batchSize(): Long = FILTER_BATCH
 
     override fun head(): Long = (rpc.call("bcn_lastBlock") as JSONObject).getLong("height")
 
-    override fun calls(from: Long, to: Long): BlockCalls {
-        val heights = if (addressFilter()) blocksWithContract(from, to) else (from..to).toList()
-        val blocks = rpc.batch("bcn_blockAt", heights.map { JSONArray().put(it) }).mapIndexed { i, block ->
-            block as? JSONObject ?: throw IOException("block ${heights[i]} is missing")
+    override fun calls(from: Long, to: Long, version: SocialVersion): BlockCalls {
+        val found = rpc.call(
+            "bcn_blocksWithAddress",
+            JSONArray().put(JSONObject().put("address", version.address).put("from", from).put("to", to)),
+            readTimeoutMs = 70_000,
+        ) as? JSONArray ?: JSONArray()
+        val heights = (0 until found.length()).map { found.getLong(it) }
+        val calls = JSONArray()
+        for (chunk in heights.chunked(BLOCKS_PER_CALL)) {
+            val page = rpc.call(
+                "bcn_contractCalls",
+                JSONArray().put(JSONObject().put("contract", version.address).put("heights", JSONArray(chunk))),
+                readTimeoutMs = 70_000,
+            ) as? JSONArray ?: continue
+            for (i in 0 until page.length()) calls.put(page.get(i))
         }
-        val withTransactions = blocks.filter { (it.optJSONArray("transactions")?.length() ?: 0) > 0 && !it.isNull("ipfsCid") }
-        val bodies = rpc.batch("ipfs_get", withTransactions.map { JSONArray().put(it.getString("ipfsCid")) })
-        val posts = ArrayList<PostCall>()
-        val tips = ArrayList<TipCall>()
-        withTransactions.zip(bodies).forEach { (block, body) ->
-            val height = block.getLong("height")
-            val time = block.getLong("timestamp")
-            val calls = JSONArray(Mobile.contractCalls(body as? String ?: throw IOException("body of block $height is missing"), SOCIAL_CONTRACT))
-            for (i in 0 until calls.length()) {
-                val call = calls.getJSONObject(i)
-                val args = call.getJSONArray("args")
-                if (args.length() == 0) continue
-                val hash = call.getString("hash")
-                val index = call.getInt("index")
-                val from = call.getString("from")
-                when (call.getString("method")) {
-                    "makePost" -> PostCall.parse(hash, height, time, index, from, args.getString(0))?.let { posts += it }
-                    "sendTip" -> TipCall.parse(hash, height, time, index, from, call.optString("amount"), args.getString(0))?.let { tips += it }
-                }
-            }
-        }
-        return BlockCalls(posts, tips)
+        return callsToActivity(calls, version)
     }
 
-    override fun authors(): Map<Long, String> {
+    override fun authors(version: SocialVersion): Map<Long, String> {
         val authors = HashMap<Long, String>()
         val seen = HashSet<String>()
         var token: String? = null
         do {
             val page = rpc.call(
                 "contract_iterateMap",
-                JSONArray().put(SOCIAL_CONTRACT).put("p:").put(token ?: JSONObject.NULL).put("hex").put("hex").put(100),
+                JSONArray().put(version.address).put("p:").put(token ?: JSONObject.NULL).put("hex").put("hex").put(100),
             ) as? JSONObject ?: break
             page.optJSONArray("items")?.let { authors += postAuthors(it) }
             token = nextPageToken(page.opt("continuationToken"))
