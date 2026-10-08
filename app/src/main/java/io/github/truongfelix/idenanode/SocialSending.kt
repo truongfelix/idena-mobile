@@ -19,6 +19,24 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
 /** What the editor writes: the action's name, the editor's title, what it answers and that text. */
 data class Draft(val what: String, val title: String, val target: PostTarget, val answering: PostCall?)
 
+/** What the editor holds: its text, its image and whether the text goes on IPFS. */
+data class EditorContent(val text: String, val image: ImageDraft?, val textOnIpfs: Boolean)
+
+/**
+ * What the editor gets back when the post it sent ([sent]; null for a like or a tip) is dropped by the node or
+ * refused by the contract: the post, if the editor holds no text and no image by then ([text], [image]); null when
+ * it holds something, which stays. The editor does not open: as after Cancel, the next post starts from it.
+ */
+fun contentToPutBack(sent: EditorContent?, text: String, image: ImageDraft?): EditorContent? =
+    sent?.takeIf { text.isBlank() && image == null }
+
+/** What the report of a failed send says of the editor's post ([sent]), put back or not; null for a like or a tip. */
+fun putBackNote(sent: EditorContent?, putBack: Boolean): String? = when {
+    sent == null -> null
+    putBack -> "The draft is back in the editor."
+    else -> "The editor holds another draft, so this one was not put back."
+}
+
 /** An image chosen for a post: its encodings at the offered sizes (longer side in pixels), and the chosen size. */
 data class ImageDraft(val sizes: Map<Int, ByteArray>, val chosen: Int) {
     val bytes: ByteArray
@@ -42,7 +60,7 @@ class PendingPost(
     val fee: PostFee,
     val detail: String?,
     val files: List<IpfsFile> = emptyList(),
-    /** Whether sending it ends the editor's draft. */
+    /** Whether sending it ends the editor's draft (kept until the block, put back if the send fails). */
     val fromEditor: Boolean = false,
     /** For a like: the post, reply or comment it likes. */
     val likeOf: Long? = null,
@@ -183,6 +201,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 return@launch
             }
             busy = false
+            val sentContent = if (pending.fromEditor) EditorContent(draftText, draftImage, textOnIpfs) else null
             if (pending.fromEditor) {
                 draft = null
                 draftText = ""
@@ -192,14 +211,16 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             sent.add(hash, pending.likeOf)
             report("${pending.what} sent, waiting for a block (${hash.take(10)}…)")
             val block = withContext(Dispatchers.IO) { waitForBlock(NodeTxLookup(rpc(context)), hash) }
+            val note = if (block == null || block.error != null) putBack(sentContent) else null
             when {
                 block == null -> {
                     sent.remove(hash)
-                    report("${pending.what} was not sent: the node no longer has it. Try again.", ERROR_KEEP_MS)
+                    report("${pending.what} was not sent: the node no longer has it. ${note ?: "Try again."}", ERROR_KEEP_MS)
                 }
                 block.error != null -> {
                     sent.remove(hash)
-                    report("${pending.what} is in a block, but the contract refused it (${block.error}): the fee is paid, nothing is posted.", ERROR_KEEP_MS)
+                    val refused = "${pending.what} is in a block, but the contract refused it (${block.error}): the fee is paid, nothing is posted."
+                    report(listOfNotNull(refused, note).joinToString(" "), ERROR_KEEP_MS)
                 }
                 else -> {
                     sent.inBlock(hash, block.height)
@@ -208,6 +229,17 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 }
             }
         }
+    }
+
+    /** Puts the editor's post that failed ([sent]) back in an empty editor; what the report says of it. */
+    private fun putBack(sent: EditorContent?): String? {
+        val back = contentToPutBack(sent, draftText, draftImage)
+        if (back != null) {
+            draftText = back.text
+            draftImage = back.image
+            textOnIpfs = back.textOnIpfs
+        }
+        return putBackNote(sent, back != null)
     }
 
     companion object {
