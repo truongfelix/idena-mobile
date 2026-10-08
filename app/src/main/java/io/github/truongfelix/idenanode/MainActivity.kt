@@ -606,16 +606,6 @@ private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
     }
 }
 
-/** Waits until the node has the transaction in a block, asking every 10 seconds. */
-internal suspend fun waitUntilMined(context: Context, hash: String) {
-    while (!withContext(Dispatchers.IO) {
-            runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false)
-        }
-    ) {
-        delay(10_000)
-    }
-}
-
 /**
  * An invitation sent to the identity's address, waiting to be accepted: the activation transaction
  * makes the identity a candidate for the next validation. Only outside the ceremony.
@@ -638,9 +628,10 @@ private fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
                 return@launch
             }
             pendingTx = hash
-            waitUntilMined(context, hash)
+            val mined = waitUntilMined(context, hash)
             pendingTx = null
-            message = "Invitation accepted: the identity is a candidate for the next validation."
+            message = if (mined) "Invitation accepted: the identity is a candidate for the next validation."
+            else "The invitation is not accepted: $NOT_SENT"
             onChanged()
         }
     }
@@ -724,9 +715,10 @@ private fun MiningSection(status: NodeStatus, onChanged: () -> Unit) {
                 return@launch
             }
             pendingTx = hash
-            waitUntilMined(context, hash)
+            val mined = waitUntilMined(context, hash)
             pendingTx = null
-            message = "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
+            message = if (mined) "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
+            else "${change.title}: not sent, $NOT_SENT"
             onChanged()
         }
     }

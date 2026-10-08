@@ -93,9 +93,9 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, network: Network
                 }
             busy = false
             pendingTx = hash
-            waitUntilMined(context, hash)
+            val mined = waitUntilMined(context, hash)
             pendingTx = null
-            message = "${tx.title}: done."
+            message = if (mined) "${tx.title}: done." else "${tx.title}: not sent, $NOT_SENT"
             onChanged()
         }
     }
