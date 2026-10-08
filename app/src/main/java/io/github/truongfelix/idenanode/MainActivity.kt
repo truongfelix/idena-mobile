@@ -606,16 +606,6 @@ private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
     }
 }
 
-/** Waits until the node has the transaction in a block, asking every 10 seconds. */
-internal suspend fun waitUntilMined(context: Context, hash: String) {
-    while (!withContext(Dispatchers.IO) {
-            runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false)
-        }
-    ) {
-        delay(10_000)
-    }
-}
-
 /**
  * An invitation sent to the identity's address, waiting to be accepted: the activation transaction
  * makes the identity a candidate for the next validation. Only outside the ceremony.
