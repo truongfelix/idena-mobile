@@ -70,6 +70,11 @@ fun pendingChanges(syncEnabled: Boolean, chosen: NodeOptions, running: RunningOp
         val size = chosen.writeBuffers[database] ?: WriteBuffer.DEFAULT
         if (settingPending(syncEnabled, running.writeBuffers[database], size)) add(PendingChange(database.title, "${size.mib} MiB"))
     }
+    // The node takes ids only: a renamed peer needs no restart.
+    val chosenIds = chosen.directPeers.map { it.id }.toSet()
+    if (settingPending(syncEnabled, running.directPeers?.toSet(), chosenIds)) {
+        add(PendingChange(DIRECT_PEERS_TITLE, if (chosenIds.isEmpty()) "none" else chosen.directPeers.joinToString { it.name.ifEmpty { shortPeerId(it.id) } }))
+    }
 }
 
 /**

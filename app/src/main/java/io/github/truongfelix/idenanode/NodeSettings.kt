@@ -41,6 +41,9 @@ object NodeSettings {
     private fun runningPeerLevelFile(context: Context) = File(nodeDir(context), "peer_level_running")
     private fun ipfsConnectionsFile(context: Context) = File(nodeDir(context), "ipfs_connections")
     private fun runningIpfsConnectionsFile(context: Context) = File(nodeDir(context), "ipfs_connections_running")
+    private fun directPeersFile(context: Context) = File(nodeDir(context), "direct_peers")
+    private fun runningDirectPeersFile(context: Context) = File(nodeDir(context), "direct_peers_running")
+    private fun ownPeerNameFile(context: Context) = File(nodeDir(context), "own_peer_name")
 
     // The chain database's files keep the names they had before the IPFS database got its own setting.
     private fun filePrefix(database: NodeDatabase) = when (database) {
@@ -86,8 +89,17 @@ object NodeSettings {
             writeBuffers = NodeDatabase.entries.associateWith { WriteBuffer.parse(read(writeBufferFile(context, it))) },
             peerLevel = peerLevel,
             ipfsConnections = IpfsConnections.parse(read(ipfsConnectionsFile(context))).atLeastFor(peerLevel),
+            directPeers = parseDirectPeers(read(directPeersFile(context))),
         )
     }
+
+    fun setDirectPeers(context: Context, peers: List<DirectPeer>) =
+        writeAtomically(directPeersFile(context), directPeersJson(peers))
+
+    /** The name the user puts in the node's own peer code; empty until chosen. */
+    fun ownPeerName(context: Context): String = cleanPeerName(read(ownPeerNameFile(context)).orEmpty())
+
+    fun setOwnPeerName(context: Context, name: String) = writeAtomically(ownPeerNameFile(context), cleanPeerName(name))
 
     fun setWriteBuffer(context: Context, database: NodeDatabase, value: WriteBuffer) =
         writeAtomically(writeBufferFile(context, database), value.mib.toString())
@@ -109,6 +121,7 @@ object NodeSettings {
         }.toMap(),
         peerLevel = read(runningPeerLevelFile(context))?.let { PeerLevel.parse(it) },
         ipfsConnections = read(runningIpfsConnectionsFile(context))?.let { IpfsConnections.parse(it) },
+        directPeers = read(runningDirectPeersFile(context))?.let { text -> parseDirectPeers(text).map { it.id } },
     )
 
     /** Records [options] as the node's start settings, for the screen to compare with the user's choices. */
@@ -118,6 +131,7 @@ object NodeSettings {
         }
         runCatching { writeAtomically(runningPeerLevelFile(context), options.peerLevel.key) }
         runCatching { writeAtomically(runningIpfsConnectionsFile(context), options.ipfsConnections.high.toString()) }
+        runCatching { writeAtomically(runningDirectPeersFile(context), directPeersJson(options.directPeers)) }
     }
 
     /**
@@ -125,8 +139,8 @@ object NodeSettings {
      * no browser access (no CORS), and no IPFS "server" profile, whose address filters block peers on
      * the home network. The IPFS port stays fixed: otherwise the node moves to the next port after two
      * minutes without IPFS peers (a Wi-Fi outage), and a port opened for it on the router no longer
-     * matches. The write buffers of the chain and IPFS databases, the peer level and the IPFS connection
-     * limit are the user's choice ([NodeOptions]).
+     * matches. The write buffers of the chain and IPFS databases, the peer level, the IPFS connection
+     * limit and the direct peers are the user's choice ([NodeOptions]).
      */
     fun nodeConfig(context: Context, options: NodeOptions = options(context)): String = nodeConfig(apiKey(context), options)
 
@@ -148,6 +162,7 @@ object NodeSettings {
                     .put("MaxInboundPeers", level.inboundOtherShards)
                     .put("MaxOutboundOwnShardPeers", level.outboundOwnShard)
                     .put("MaxOutboundPeers", level.outboundOtherShards)
+                    .put("DirectPeers", JSONArray(configDirectPeers(options.directPeers)))
             )
             .put(
                 "IpfsConf", JSONObject()
@@ -168,6 +183,7 @@ data class NodeOptions(
     val writeBuffers: Map<NodeDatabase, WriteBuffer> = NodeDatabase.entries.associateWith { WriteBuffer.DEFAULT },
     val peerLevel: PeerLevel = PeerLevel.DEFAULT,
     val ipfsConnections: IpfsConnections = IpfsConnections.DEFAULT,
+    val directPeers: List<DirectPeer> = emptyList(),
 )
 
 /** The [NodeOptions] of the node's last start; a setting is null when no start recorded it (an older app). */
@@ -175,4 +191,6 @@ data class RunningOptions(
     val writeBuffers: Map<NodeDatabase, WriteBuffer> = emptyMap(),
     val peerLevel: PeerLevel? = null,
     val ipfsConnections: IpfsConnections? = null,
+    /** The peer ids of the direct peers. */
+    val directPeers: List<String>? = null,
 )

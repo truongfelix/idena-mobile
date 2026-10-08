@@ -73,7 +73,8 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
     /** Reads what the screen shows. Throws if the node does not answer. */
     fun status(): NodeStatus {
         val sync = call("bcn_syncing") as JSONObject
-        val peers = (call("net_peers") as? JSONArray)?.length() ?: 0
+        val peerList = call("net_peers") as? JSONArray
+        val peers = peerList?.length() ?: 0
         val stateBlock = (call("bcn_lastBlock") as JSONObject).optLong("height")
         val address = call("dna_getCoinbaseAddr") as String
         val identity = call("dna_identity") as JSONObject
@@ -105,6 +106,8 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             penaltySeconds = identity.optLong("penaltySeconds"),
             invites = identity.optInt("invites"),
             invitees = parseInvitees(identity.optJSONArray("invitees")),
+            peerIds = peerIds(peerList),
+            peerId = ownPeerId(call("net_ipfsAddress") as? String),
         )
     }
 
@@ -378,6 +381,10 @@ data class NodeStatus(
     /** The invitations the identity may still send this epoch, and its activated invitees. */
     val invites: Int = 0,
     val invitees: List<Invitee> = emptyList(),
+    /** The peer ids of the node's peers (`net_peers`), for the direct peers' connected mark. */
+    val peerIds: Set<String> = emptySet(),
+    /** The node's own peer id, for its peer code; null when the node did not give it. */
+    val peerId: String? = null,
 ) {
     /** Whether the identity, stake and balance are still those of an old state (fast sync running). */
     val accountPending: Boolean

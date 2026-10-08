@@ -36,7 +36,8 @@ import java.time.Instant
 
 /**
  * Advanced settings in the Sync card, folded until opened: the peer level ([PeerLevel]), the IPFS connection
- * limit ([IpfsConnections]) and the write buffer of each database ([WriteBuffer]). The node takes them at its
+ * limit ([IpfsConnections]), the write buffer of each database ([WriteBuffer]) and the direct peers
+ * ([DirectPeersSection]). The node takes them at its
  * start: while it runs with others, a line under the title, shown folded too, offers the restart that applies
  * them. [onChanged] runs after a choice is saved.
  */
@@ -122,6 +123,7 @@ fun AdvancedSettings(state: ScreenState, onChanged: () -> Unit, onRestart: () ->
                 },
             )
         }
+        DirectPeersSection(state) { saved(DIRECT_PEERS_TITLE) }
     }
     if (confirm) {
         val status = state.status
