@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -73,14 +74,25 @@ private fun rememberIpfs(cid: String): Pair<Fetched, () -> Unit> {
     }
 }
 
-/** A post's text and first media; [showMedia] false shows a short mention instead of the media. */
+/**
+ * A post's text and first media; [showMedia] false shows a short mention instead of the media. [selectable] lets a
+ * long press select the text to copy it: only where the whole text shows (the thread), since a tap on a preview
+ * opens the thread.
+ */
 @Composable
-fun PostContent(call: PostCall, style: TextStyle, maxLines: Int = Int.MAX_VALUE, showMedia: Boolean = true, mediaMaxHeight: Dp = 360.dp) {
+fun PostContent(
+    call: PostCall,
+    style: TextStyle,
+    maxLines: Int = Int.MAX_VALUE,
+    showMedia: Boolean = true,
+    mediaMaxHeight: Dp = 360.dp,
+    selectable: Boolean = false,
+) {
     val cid = ipfsCid(call.message)
     when {
-        cid != null -> IpfsText(cid, style, maxLines)
+        cid != null -> IpfsText(cid, style, maxLines, selectable)
         call.message.startsWith("ipfs://") -> Note("Text on IPFS with an invalid address.")
-        call.message.isNotEmpty() -> Text(call.message, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+        call.message.isNotEmpty() -> PostText(call.message, style, maxLines, selectable)
     }
     if (call.hasMedia) {
         if (showMedia) PostMedia(call, mediaMaxHeight) else Note("🖼 Media")
@@ -88,11 +100,17 @@ fun PostContent(call: PostCall, style: TextStyle, maxLines: Int = Int.MAX_VALUE,
 }
 
 @Composable
-private fun IpfsText(cid: String, style: TextStyle, maxLines: Int) {
+private fun PostText(text: String, style: TextStyle, maxLines: Int, selectable: Boolean) {
+    if (selectable) SelectionContainer { Text(text, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis) }
+    else Text(text, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+private fun IpfsText(cid: String, style: TextStyle, maxLines: Int, selectable: Boolean) {
     val (state, retry) = rememberIpfs(cid)
     when (state) {
         Fetched.Loading -> Note("Loading the text from IPFS through the node…")
-        is Fetched.Loaded -> Text(remember(state) { String(state.bytes, Charsets.UTF_8) }, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+        is Fetched.Loaded -> PostText(remember(state) { String(state.bytes, Charsets.UTF_8) }, style, maxLines, selectable)
         Fetched.Unavailable -> Unavailable(retry)
         is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
     }

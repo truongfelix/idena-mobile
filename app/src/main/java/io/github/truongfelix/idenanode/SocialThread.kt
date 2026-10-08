@@ -73,7 +73,7 @@ fun ThreadView(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PostHeader(post.call, states, onProfile)
-                    PostContent(post.call, MaterialTheme.typography.bodyLarge)
+                    PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true)
                     if (post.isOlder) {
                         Text(
                             "From an earlier idena.social contract (${post.call.version}): read only.",
@@ -153,7 +153,7 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
             Box(Modifier.fillMaxWidth().clickable { toggle() }) {
                 PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp)
             }
-            PostContent(item.call, MaterialTheme.typography.bodyLarge)
+            PostContent(item.call, MaterialTheme.typography.bodyLarge, selectable = true)
             val target = if (isReply) PostTarget.onReply(item.id) else PostTarget.onComment(replyId, item.id)
             ActionBar(
                 item, thread.myAddress, thread.canAct, "💬 Reply",
