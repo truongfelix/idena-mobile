@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter
  * The node's port on the router of the Wi-Fi the phone is on, opened by UPnP for a time the user chooses, so
  * that outside nodes can connect to the phone. This file holds what needs no network: the SSDP and SOAP
  * messages, the router's description, the durations and the opening the app made ([RouterOpening]).
- * [RouterNet] talks to the router; [RouterPortModel] runs the Sync card's row; [RouterPortUpkeep] keeps the
+ * [RouterNet] talks to the router; [RouterPortModel] runs the advanced settings' row; [RouterPortUpkeep] keeps the
  * opening while the node runs.
  */
 

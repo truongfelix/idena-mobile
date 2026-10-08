@@ -70,7 +70,7 @@ class StatusTest {
     }
 
     @Test
-    fun theValidationComesFirstWithinADayOrWhileItRuns() {
+    fun theTimeLeftCountsToTheMinuteWithinADayOrWhileItRuns() {
         val ceremony = Instant.parse("2026-10-04T15:00:00Z")
         assertFalse(validationIsClose(ceremony - Duration.ofDays(2), ceremony, "None"))
         assertTrue(validationIsClose(ceremony - Duration.ofHours(23), ceremony, "None"))

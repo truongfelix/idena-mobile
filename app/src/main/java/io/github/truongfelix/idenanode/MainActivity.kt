@@ -12,13 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import android.Manifest
-import android.annotation.SuppressLint
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,24 +32,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -72,7 +58,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.lifecycle.Lifecycle
@@ -85,9 +70,6 @@ import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -262,6 +244,7 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
     val state = model.state
     var network by remember { mutableStateOf<NetworkRewards?>(null) }
     val routerPort = remember { RouterPortModel(context.applicationContext) }
+    val mining = remember { MiningActionState() }
 
     suspend fun refresh() = model.refresh()
 
@@ -304,14 +287,22 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // The identity, its validation and its invitation first, then the wallet, then the node (its state is also in the
+        // title row). The epoch and the flips are current once the fast sync has downloaded the state.
+        val ready = state.status?.takeUnless { it.accountPending }
+        ProfileCard(state, people) { scope.launch { refresh() } }
+        ready?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
         NodeCard(
             state,
-            mining = { state.status?.takeUnless { it.accountPending }?.let { MiningSection(it) { scope.launch { refresh() } } } },
-            routerPort = {
-                RouterPortRow(routerPort, state.syncEnabled, state.status?.let { parseValidationTime(it.nextValidation) })
-            },
+            mining = { ready?.let { MiningSection(it, mining) { scope.launch { refresh() } } } },
             advanced = {
-                AdvancedSettings(state, onChanged = { model.optionsChanged() }, onRestart = { NodeService.restart(context) })
+                AdvancedSettings(
+                    state,
+                    delegation = { DelegationSection(it, mining) },
+                    routerPort = { RouterPortRow(routerPort, state.syncEnabled, ready?.let { parseValidationTime(it.nextValidation) }) },
+                    onChanged = { model.optionsChanged() },
+                    onRestart = { NodeService.restart(context) },
+                )
             },
         ) { enabled ->
             if (enabled) {
@@ -323,21 +314,6 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
                 NodeService.stop(context)
             }
             model.syncChanged(enabled)
-        }
-        // The epoch and the flips are current once the fast sync has downloaded the state. Within a day of
-        // the validation, or during it, its card comes first.
-        val validation = state.status?.takeUnless { it.accountPending }
-        val validationFirst = validation != null &&
-            validationIsClose(Instant.now(), parseValidationTime(validation.nextValidation), validation.period)
-        if (validationFirst) ValidationCard(validation!!, showCountdown = true)
-        AccountCard(state) { scope.launch { refresh() } }
-        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
-        state.status?.takeIf { !it.accountPending && showInvitations(it) }?.let { InvitationsCard(it, people) { scope.launch { refresh() } } }
-        state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
-        if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
-        if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundCard(state)
-        TextButton(onClick = { context.startActivity(Intent(context, CeremonyActivity::class.java)) }) {
-            Text("Practice validation")
         }
         KeyCard(state) { key, password, done ->
             scope.launch {
@@ -361,434 +337,6 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
             }
         }
     }
-}
-
-/**
- * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
- * never move; [mining] (the identity's mining, once the node has the account); the [routerPort] on Wi-Fi; then
- * the [advanced] settings. The block, peers, speed and network are in the title row's details (ⓘ).
- */
-@Composable
-private fun NodeCard(
-    state: ScreenState,
-    mining: @Composable () -> Unit,
-    routerPort: @Composable () -> Unit,
-    advanced: @Composable () -> Unit,
-    onSyncChange: (Boolean) -> Unit,
-) {
-    val status = state.status
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Sync", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        when {
-                            state.startError != null -> "Stopped: the node could not start"
-                            status != null && status.syncing -> "Running, syncing"
-                            status != null -> "Running, synced"
-                            state.syncEnabled -> "Starting…"
-                            !state.hasKey -> "Stopped: import a key first"
-                            else -> "Stopped"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                    )
-                }
-                // Without a key the node would create a random one that the app cannot back up.
-                Switch(
-                    checked = state.syncEnabled,
-                    onCheckedChange = onSyncChange,
-                    enabled = state.hasKey || state.syncEnabled,
-                )
-            }
-            Box(Modifier.fillMaxWidth().height(4.dp)) {
-                if (status != null && status.syncing && status.highestBlock > 0) {
-                    LinearProgressIndicator(
-                        progress = { status.currentBlock.toFloat() / maxOf(status.highestBlock, status.currentBlock).toFloat() },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-            state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            mining()
-            routerPort()
-            advanced()
-        }
-    }
-}
-
-/** The account: its avatar (drawn from the address), the address with copy, the identity and its age, and History. */
-@Composable
-private fun AccountCard(state: ScreenState, onChanged: () -> Unit) {
-    val context = LocalContext.current
-    val status = state.status
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Account", style = MaterialTheme.typography.titleMedium)
-            val address = status?.address ?: state.keyAddress
-            if (address == null) {
-                Text("No key yet: import one below.")
-                return@Column
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(address, 56.dp)
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    when {
-                        status == null -> Text("Switch sync on to read the identity from the node.", style = MaterialTheme.typography.bodyMedium)
-                        status.accountPending -> Text("Identity and age: after sync", style = MaterialTheme.typography.bodyMedium)
-                        else -> {
-                            val color = statusPalette()(status.identityState)
-                            Field("Identity", identityStatus(status.identityState), color)
-                            Field("Age", if (status.age == 1) "1 epoch" else "${status.age} epochs", color)
-                        }
-                    }
-                }
-            }
-            AddressLine(address)
-            if (status != null && !status.accountPending) {
-                OutlinedButton(onClick = { context.startActivity(Intent(context, HistoryActivity::class.java)) }) {
-                    Text("History")
-                }
-            }
-            if (status != null && !status.accountPending && status.identityState == "Undefined") ActivateCodeSection(status, onChanged)
-            if (status != null && !status.accountPending && status.syncing) {
-                Text(
-                    "Values are those of the synced block; they are current once the sync is done.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> Unit) -> Unit) {
-    val context = LocalContext.current
-    var open by remember { mutableStateOf(false) }
-    var key by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    if (state.hasKey && !open) {
-        TextButton(onClick = { open = true; message = null }) { Text("Import another key") }
-        message?.let { Text(it) }
-        return
-    }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Key", style = MaterialTheme.typography.titleMedium)
-            if (!open) {
-                Text("Import the private key exported from the Idena app (Settings, Export my private key).")
-                OutlinedButton(onClick = { open = true; message = null }) { Text("Import a key") }
-                Text(
-                    "No Idena account yet? Create one on app.idena.io, export its private key there, then " +
-                        "import it here.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                TextButton(onClick = { openWebApp(context) }) { Text("Open app.idena.io") }
-            } else {
-                if (state.hasKey) {
-                    Text("The current key is kept in a backup file.", style = MaterialTheme.typography.bodySmall)
-                }
-                if (state.status?.let { it.online && it.delegatee == null } == true) {
-                    Text(MINING_IMPORT_WARNING, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                }
-                Text(
-                    "Do not run the same key on two nodes at the same time, for example here and on a desktop " +
-                        "node: both would act for the identity.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                OutlinedTextField(
-                    value = key, onValueChange = { key = it },
-                    label = { Text("Exported key") },
-                    modifier = Modifier.fillMaxWidth(), minLines = 2,
-                )
-                OutlinedTextField(
-                    value = password, onValueChange = { password = it },
-                    label = { Text("Password") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true, modifier = Modifier.fillMaxWidth(),
-                )
-                Row {
-                    Button(
-                        enabled = !busy && key.isNotBlank() && password.isNotEmpty(),
-                        onClick = {
-                            busy = true
-                            onImport(key, password) { imported, text ->
-                                busy = false
-                                if (imported) {
-                                    key = ""
-                                    password = ""
-                                    open = false
-                                }
-                                message = text
-                            }
-                        },
-                    ) { Text("Import") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { open = false; key = ""; password = "" }) { Text("Cancel") }
-                }
-            }
-            message?.let { Text(it) }
-        }
-    }
-}
-
-@SuppressLint("BatteryLife")
-/** Shown while Android's battery optimization may stop the node with the screen off. */
-@Composable
-private fun BackgroundCard(state: ScreenState) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("The node may stop with the screen off", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-            BackgroundSettings(state)
-        }
-    }
-}
-
-/**
- * The next validation, and the flips still to make with a link to the web app to make them; with
- * [showCountdown] (the card comes first, within a day of it), the time left in its title.
- */
-@Composable
-private fun ValidationCard(status: NodeStatus, showCountdown: Boolean) {
-    val context = LocalContext.current
-    val start = parseValidationTime(status.nextValidation)
-    val date = start?.let {
-        val format = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-            .withZone(ZoneId.systemDefault())
-        "${format.format(it)} (${timeUntil(Instant.now(), it)})"
-    } ?: status.nextValidation
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val title = when {
-                periodText(status.period) != null -> "Validation · now"
-                showCountdown && start != null -> "Next validation · ${countdown(Instant.now(), start)}"
-                else -> "Next validation"
-            }
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            val answersSent = NodeSettings.answersSentFile(context, status.epoch, short = false).exists()
-            Field(
-                "My task",
-                currentTask(status.period, status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips, answersSent),
-            )
-            Field("Date", date)
-            periodText(status.period)?.let { Field("Now", it) }
-            if (status.period in listOf("FlipLottery", "ShortSession", "LongSession")) {
-                Button(
-                    onClick = { context.startActivity(Intent(context, ValidationActivity::class.java)) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Open the validation") }
-            }
-            if (status.requiredFlips > 0 || status.availableFlips > 0) {
-                val quota = FlipQuota(status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips)
-                val extra = if (quota.available > quota.required) " (up to ${quota.available})" else ""
-                Field("Flips", "${quota.made} of ${quota.required} made$extra" + if (quota.missing == 0) " ✓" else "")
-                if (quota.missing > 0) {
-                    Text(
-                        "Make ${quota.missing} more flip${if (quota.missing > 1) "s" else ""} before the flip lottery, 5 minutes " +
-                            "before the validation; without them the identity becomes ${quota.missingOutcome}.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                if ((quota.canMake || quota.made > 0) && status.period == "None") {
-                    Button(
-                        onClick = { context.startActivity(Intent(context, FlipActivity::class.java)) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (quota.made > 0) "My flips" else "Make a flip") }
-                }
-            }
-        }
-    }
-}
-
-/**
- * An invitation sent to the identity's address, waiting to be accepted: the activation transaction
- * makes the identity a candidate for the next validation. Only outside the ceremony.
- */
-@Composable
-private fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var confirming by remember { mutableStateOf(false) }
-    var pendingTx by remember { mutableStateOf<String?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
-
-    fun accept() {
-        message = null
-        scope.launch {
-            val hash = withContext(Dispatchers.IO) {
-                runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).acceptInvitation() }
-            }.getOrElse {
-                message = "The node refused: ${it.message}"
-                return@launch
-            }
-            pendingTx = hash
-            val mined = waitUntilMined(context, hash)
-            pendingTx = null
-            message = if (mined) "Invitation accepted: the identity is a candidate for the next validation."
-            else "The invitation is not accepted: $NOT_SENT"
-            onChanged()
-        }
-    }
-
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Invitation", style = MaterialTheme.typography.titleMedium)
-            Text("You are invited to Idena. Accept the invitation to take part in the next validation as a candidate.")
-            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            when {
-                !canAcceptInvitation(status.period, status.identityState) ->
-                    Text("The invitation can be accepted once the validation is over.", style = MaterialTheme.typography.bodySmall)
-                pendingTx == null -> Button(onClick = { confirming = true }) { Text("Accept the invitation") }
-            }
-        }
-    }
-
-    if (confirming) {
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            title = { Text("Accept the invitation") },
-            text = { Text("The node sends the activation transaction of your address. Your identity becomes a candidate: take part in the next validation to become a Newbie.") },
-            confirmButton = { TextButton(onClick = { confirming = false; accept() }) { Text("Send") } },
-            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
-        )
-    }
-}
-
-/** A mining change the validator confirms: the dialog text and the node call. */
-private enum class MiningChange(val title: String, val text: String) {
-    Start(
-        "Mine on this phone",
-        "Your identity mines with this phone's node, which must then keep running. If it stays offline for " +
-            "about an hour, other nodes can switch your identity offline with a mining penalty.",
-    ),
-    Stop("Stop mining", "Your identity stops mining with this phone's node."),
-    Delegate(
-        "Delegate to a pool",
-        "Your identity mines through the pool's node, and the pool receives your mining and validation " +
-            "rewards. You can lose your stake and all these rewards to the pool. The delegation can be stopped " +
-            "from the next epoch.",
-    ),
-    Undelegate("Stop delegation", "Your identity stops mining through the pool; the rewards come to your address again."),
-}
-
-/**
- * Mining, in the Sync card: with this phone's node, delegated to a pool, or none. Offers the changes the node would accept
- * now (see [MiningActions]) and follows the transaction until it is in a block. The node applies online
- * and delegation changes every 50 blocks (about 17 minutes).
- */
-@Composable
-private fun MiningSection(status: NodeStatus, onChanged: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val actions = MiningActions.of(
-        status.period, status.identityState, status.online, status.isPool, status.delegatee != null,
-        status.delegationEpoch, status.epoch, status.penaltySeconds,
-    )
-    var change by remember { mutableStateOf<MiningChange?>(null) }
-    var pool by remember { mutableStateOf("") }
-    var pendingTx by remember { mutableStateOf<String?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
-
-    fun send(change: MiningChange) {
-        message = null
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
-                    when (change) {
-                        MiningChange.Start -> rpc.startMining()
-                        MiningChange.Stop -> rpc.stopMining()
-                        MiningChange.Delegate -> rpc.delegate(pool.trim())
-                        MiningChange.Undelegate -> rpc.undelegate()
-                    }
-                }
-            }
-            val hash = result.getOrElse {
-                message = "The node refused: ${it.message}"
-                return@launch
-            }
-            pendingTx = hash
-            val mined = waitUntilMined(context, hash)
-            pendingTx = null
-            message = if (mined) "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
-            else "${change.title}: not sent, $NOT_SENT"
-            onChanged()
-        }
-    }
-
-    HorizontalDivider(Modifier.padding(vertical = 4.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Mining", style = MaterialTheme.typography.titleMedium)
-        run {
-            Field("Status", status.miningStatus)
-            // Mining on this phone: the switch sends the change (after its dialog); delegation below.
-            val miningHere = status.online && status.delegatee == null
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Mine on this phone", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                Switch(
-                    checked = miningHere,
-                    onCheckedChange = { on -> change = if (on) MiningChange.Start else MiningChange.Stop },
-                    enabled = pendingTx == null && (actions.canStartMining || actions.canStopMining),
-                )
-            }
-            if (status.period == "None" && status.delegatee == null && !status.isPool && status.identityState !in validatedStates) {
-                Text("Mining needs a validated identity (Newbie, Verified or Human).", style = MaterialTheme.typography.bodySmall)
-            }
-            if (status.penaltySeconds > 0) {
-                Field("Penalty", "${duration(status.penaltySeconds.toDouble())} left")
-            }
-            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            when {
-                status.period != "None" -> Text("Mining changes wait until the validation is over.", style = MaterialTheme.typography.bodySmall)
-                pendingTx == null -> {
-                    if (actions.canDelegate) OutlinedButton(onClick = { change = MiningChange.Delegate }) { Text(MiningChange.Delegate.title) }
-                    if (actions.canUndelegate) OutlinedButton(onClick = { change = MiningChange.Undelegate }) { Text(MiningChange.Undelegate.title) }
-                    if (status.delegatee != null && !actions.canUndelegate) {
-                        Text("The delegation can be stopped from the next epoch.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (status.delegatee == null && !actions.canDelegate && status.penaltySeconds > 0) {
-                        Text("No delegation while a mining penalty runs.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-    }
-
-    change?.let { selected ->
-        val poolValid = Regex("^0x[0-9a-fA-F]{40}$").matches(pool.trim())
-        AlertDialog(
-            onDismissRequest = { change = null },
-            title = { Text(selected.title) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(selected.text)
-                    if (selected == MiningChange.Delegate) {
-                        OutlinedTextField(value = pool, onValueChange = { pool = it }, label = { Text("Pool address (0x…)") }, singleLine = true)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { change = null; send(selected) },
-                    enabled = selected != MiningChange.Delegate || poolValid,
-                ) { Text("Send") }
-            },
-            dismissButton = { TextButton(onClick = { change = null }) { Text("Cancel") } },
-        )
-    }
-}
-
-/** Opens the Idena web app in the browser; nothing happens if the phone has no browser. */
-private fun openWebApp(context: Context) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.idena.io"))) }
 }
 
 @Composable

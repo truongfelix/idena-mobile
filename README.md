@@ -11,11 +11,15 @@ meant to be delegated to a pool, such as a desktop node.
 - **Title row**: "Idena", the Node | Social switch, and the status as a colored dot with the peer count
   (green synced with peers; orange starting, looking for peers, syncing, or a background setting to fix;
   red no peers after 20 min, no answer or a wrong clock; grey sync off); ⓘ gives the details.
-- **Node**: idena-go in the app's own process, as a foreground service while Sync is on. A card warns when
-  battery optimization may stop the node with the screen off, with buttons to Android's setting and to the
-  autostart and battery pages some phones add. The node keeps its IPFS port (40405) fixed, so that a port
-  opened for it on the router keeps matching: outside nodes can then connect to the phone. The Sync card's
-  **Advanced settings** (folded until opened):
+- **Node** (the last card of the Node tab): idena-go in the app's own process, as a foreground service while
+  Sync is on; mining on this phone (a switch, under the mining status, which also names the pool the identity
+  is delegated to). A line warns when battery optimization may stop the node with the screen off; Fix shows
+  the buttons to Android's setting and to the autostart and battery pages some phones add. The node keeps its
+  IPFS port (40405) fixed, so that a port opened for it on the router keeps matching: outside nodes can then
+  connect to the phone. The card's **Advanced settings** (folded until opened) come in three groups: Mining
+  (delegate to a pool, stop the delegation), Connections (the router port, below; up to 3 direct peers, nodes
+  kept connected beyond the slots, with the phone's own peer code to share; the peer level and the IPFS
+  connections) and Storage (the write buffers):
   - **Peer level**: Eco (up to 7 Idena peers, idena-go's low-power numbers), Normal (default, up to 18,
     idena-go's defaults) or Hub (up to 30: twice the incoming slots, for nodes that reach the phone through
     the router port).
@@ -30,29 +34,30 @@ meant to be delegated to a pool, such as a desktop node.
 
   The node takes these settings when it starts, and the card offers a restart (with a warning close to a
   validation, none during it).
-- **Router port** (on Wi-Fi, in the Sync card): the node's process looks for the router by UPnP (a search,
+- **Router port** (on Wi-Fi, in the advanced settings' Connections): the node's process looks for the router by UPnP (a search,
   then the router's own announcements for up to 16 minutes, since some routers such as the Livebox never answer
   a search and announce themselves only every ~15 minutes; a router found once is remembered and found again at
-  once) and the app asks whether to open the node's port (40405) for 6 hours, 1, 3 or 7 days, or until
-  the next validation + 2 h. The router keeps the opening until then, also after the phone leaves that Wi-Fi;
+  once); Open… opens the node's port (40405) for 6 hours, 1, 3 or 7 days, or until the next validation +
+  2 h. The router keeps the opening until then, also after the phone leaves that Wi-Fi;
   Close removes it at once. An opening made outside the app for the phone shows too, with Close. While the
   node runs it keeps the opening every 5 minutes: made again for a new address of the phone or after the
   router lost it, renewed near the end of a router lease shorter than the choice (not during a validation),
   and made again once if no peer connected from outside within 5 minutes of a change (the node's log has
   them). Any change to an opening drops the peers connected at that moment for a minute or two (measured on
   a Livebox), so the app changes it only when needed. Only the router is contacted, on the local network.
-- **Account**: identity state and age, the address with its robot avatar; for an address without an
-  identity, an **invitation code** field (activation, no fee).
+- **Profile** (the first card of the Node tab): identity state and age, the address with its robot avatar;
+  the next validation (below); the invitation that applies: for an address without an identity, an
+  **invitation code** field (activation, no fee), an invitation sent to the address to accept, or the
+  invitations to send (below); then My flips, Practice validation and History.
 - **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee
   estimate, then a confirmation), Add stake (the stake after, how much of it the identity keeps if it
-  misses or fails the next validation, the network's minimum stake, that stake cannot be withdrawn), and
-  mining: on this phone or delegated to a pool.
-- **Invitations** (Verified and Human identities, or with invitations sent): invitations left; invite
+  misses or fails the next validation, the network's minimum stake, that stake cannot be withdrawn).
+- **Invitations** (in the Profile, for Verified and Human identities, or with invitations sent): invitations left; invite
   someone to a code given privately (copy or QR; the app keeps it until the next validation) or to an
   address; the invitations of the epoch with their status (not activated, candidate, validated, cancelled);
   cancel one (fee shown first); spoil a code shared publicly.
-- **Next validation**: its date (within a day of it the card comes first with a countdown), the task, and
-  the flips: how many are made and what missing ones cost.
+- **Next validation** (in the Profile): its date with the time left (to the minute within a day of it), the
+  task, and the flips: how many are made, what missing ones cost, and Make a flip while some are missing.
 - **My flips**: the flips of the epoch, each with its four pictures, words and state, shown as validators
   will see it on a tap; delete one (fee shown first: the node counts a delete as about 120 KB). **Make a
   flip**: an unused keyword pair, four pictures (camera, gallery, or an opt-in DuckDuckGo image search), an

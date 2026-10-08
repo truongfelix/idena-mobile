@@ -178,7 +178,7 @@ object NodeSettings {
     }
 }
 
-/** The settings the node takes at its start, in the Sync card's Advanced settings. */
+/** The settings the node takes at its start, in the Node card's Advanced settings. */
 data class NodeOptions(
     val writeBuffers: Map<NodeDatabase, WriteBuffer> = NodeDatabase.entries.associateWith { WriteBuffer.DEFAULT },
     val peerLevel: PeerLevel = PeerLevel.DEFAULT,
