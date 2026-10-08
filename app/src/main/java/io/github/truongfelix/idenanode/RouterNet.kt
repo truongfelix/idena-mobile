@@ -219,13 +219,12 @@ class RouterError(val answer: SoapAnswer) : Exception(
 )
 
 /**
- * The app's router files, in the node directory so that both processes see them: the opening the app made, the
- * routers found before (to skip the search next time) and those the user said "Not now" to.
+ * The app's router files, in the node directory so that both processes see them: the opening the app made and the
+ * routers found before (to skip the search next time).
  */
 object RouterFiles {
     private fun openingFile(context: Context) = File(NodeSettings.nodeDir(context), "router_opening.json")
     private fun knownFile(context: Context) = File(NodeSettings.nodeDir(context), "router_gateways.json")
-    private fun declinedFile(context: Context) = File(NodeSettings.nodeDir(context), "router_declined")
 
     @Synchronized
     fun opening(context: Context): RouterOpening? =
@@ -247,15 +246,6 @@ object RouterFiles {
     fun remember(context: Context, gateway: Gateway) {
         val list = listOf(gateway) + known(context).filter { it.udn != gateway.udn }
         writeAtomically(knownFile(context), JSONArray(list.take(8).map { it.toJson() }).toString())
-    }
-
-    fun declined(context: Context, udn: String): Boolean =
-        runCatching { declinedFile(context).readLines() }.getOrDefault(emptyList()).contains(udn)
-
-    @Synchronized
-    fun setDeclined(context: Context, udn: String, declined: Boolean) {
-        val lines = runCatching { declinedFile(context).readLines() }.getOrDefault(emptyList()).filter { it.isNotBlank() && it != udn }
-        writeAtomically(declinedFile(context), (if (declined) lines + udn else lines).joinToString("\n"))
     }
 
     /** The end of the node's log, where it writes the peers that connect. */

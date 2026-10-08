@@ -35,14 +35,20 @@ import androidx.compose.ui.unit.dp
 import java.time.Instant
 
 /**
- * Advanced settings in the Sync card, folded until opened: the peer level ([PeerLevel]), the IPFS connection
- * limit ([IpfsConnections]), the write buffer of each database ([WriteBuffer]) and the direct peers
- * ([DirectPeersSection]). The node takes them at its
- * start: while it runs with others, a line under the title, shown folded too, offers the restart that applies
- * them. [onChanged] runs after a choice is saved.
+ * Advanced settings in the Node card, folded until opened, in three groups: Mining (the [delegation], once the node has
+ * the account), Connections (the [routerPort] on Wi-Fi, the direct peers ([DirectPeersSection]), the peer level
+ * ([PeerLevel]) and the IPFS connection limit ([IpfsConnections])) and Storage (the write buffer of each database,
+ * [WriteBuffer]). The node takes the connection and storage settings at its start: while it runs with others, a line
+ * under the title, shown folded too, offers the restart that applies them. [onChanged] runs after a choice is saved.
  */
 @Composable
-fun AdvancedSettings(state: ScreenState, onChanged: () -> Unit, onRestart: () -> Unit) {
+fun AdvancedSettings(
+    state: ScreenState,
+    delegation: @Composable (NodeStatus) -> Unit,
+    routerPort: @Composable () -> Unit,
+    onChanged: () -> Unit,
+    onRestart: () -> Unit,
+) {
     val context = LocalContext.current
     var open by rememberSaveable { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
@@ -78,6 +84,13 @@ fun AdvancedSettings(state: ScreenState, onChanged: () -> Unit, onRestart: () ->
         }
     }
     if (open) {
+        state.status?.takeUnless { it.accountPending }?.let {
+            GroupTitle("Mining")
+            delegation(it)
+        }
+        GroupTitle("Connections")
+        routerPort()
+        DirectPeersSection(state) { saved(DIRECT_PEERS_TITLE) }
         ChoiceRow(
             title = PEER_LEVEL_TITLE,
             info = { PEER_LEVEL_INFO },
@@ -109,6 +122,7 @@ fun AdvancedSettings(state: ScreenState, onChanged: () -> Unit, onRestart: () ->
                 saved(IPFS_CONNECTIONS_TITLE)
             },
         )
+        GroupTitle("Storage")
         NodeDatabase.entries.forEach { database ->
             ChoiceRow(
                 title = database.title,
@@ -123,7 +137,6 @@ fun AdvancedSettings(state: ScreenState, onChanged: () -> Unit, onRestart: () ->
                 },
             )
         }
-        DirectPeersSection(state) { saved(DIRECT_PEERS_TITLE) }
     }
     if (confirm) {
         val status = state.status
@@ -144,6 +157,12 @@ fun AdvancedSettings(state: ScreenState, onChanged: () -> Unit, onRestart: () ->
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Later") } },
         )
     }
+}
+
+/** The title of a group of advanced settings. */
+@Composable
+private fun GroupTitle(title: String) {
+    Text(title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
 }
 
 /**

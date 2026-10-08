@@ -82,7 +82,7 @@ fun canSendInvite(invites: Int, period: String): Boolean = invites > 0 && period
 fun canActivateCode(state: String, period: String): Boolean = state == "Undefined" && period == "None"
 
 /**
- * Whether the Node tab shows the Invitations card: for identities that receive invitations (Verified,
+ * Whether the Profile card shows the Invitations: for identities that receive invitations (Verified,
  * Human, and those that may become so), or with invites or invitees.
  */
 fun showInvitations(status: NodeStatus): Boolean =

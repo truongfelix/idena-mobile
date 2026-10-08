@@ -1,6 +1,5 @@
 package io.github.truongfelix.idenanode
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -28,7 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
-/* The Node tab's Key card (import a key) and the card shown while the node may stop with the screen off. */
+/* The Node tab's Key card: import a key. */
 
 @Composable
 fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> Unit) -> Unit) {
@@ -100,18 +99,6 @@ fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> 
                 }
             }
             message?.let { Text(it) }
-        }
-    }
-}
-
-@SuppressLint("BatteryLife")
-/** Shown while Android's battery optimization may stop the node with the screen off. */
-@Composable
-fun BackgroundCard(state: ScreenState) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("The node may stop with the screen off", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-            BackgroundSettings(state)
         }
     }
 }

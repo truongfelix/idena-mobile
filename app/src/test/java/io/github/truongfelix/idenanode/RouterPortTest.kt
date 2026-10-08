@@ -229,18 +229,16 @@ class RouterPortTest {
     @Test
     fun theRowSaysWhereTheOpeningIsAndOffersWhatFits() {
         val now = Instant.parse("2026-10-05T18:00:00Z")
-        fun found(mapping: PortMapping?, opening: RouterOpening? = null, declined: Boolean = false, inbound: Int? = null) =
-            RouterPortState.Found(livebox, "192.168.1.45", mapping, opening, declined, inbound)
-        val ask = routerPortView(found(null), now, ZoneOffset.UTC)
-        assertEquals("Orange Livebox found. Open the node's port, so that outside nodes can connect to the phone?", ask.text)
-        assertTrue(ask.ask && ask.canOpen && !ask.canClose)
-        assertEquals(RouterPortView("Closed on Orange Livebox", ask = false, canOpen = true, canClose = false), routerPortView(found(null, declined = true), now, ZoneOffset.UTC))
+        fun found(mapping: PortMapping?, opening: RouterOpening? = null, inbound: Int? = null) =
+            RouterPortState.Found(livebox, "192.168.1.45", mapping, opening, inbound)
+        // No forwarding: the row only offers Open (it asks nothing: it is in the advanced settings).
+        assertEquals(RouterPortView("Closed on Orange Livebox", canOpen = true, canClose = false), routerPortView(found(null), now, ZoneOffset.UTC))
         val end = Instant.parse("2026-10-06T00:00:00Z")
         val made = opening(endMs = end.toEpochMilli())
         assertEquals(
             RouterPortView(
                 "Open on Orange Livebox until ${formatOpeningEnd(end, ZoneOffset.UTC)} · 3 peers connected from outside since",
-                ask = false, canOpen = false, canClose = true,
+                canOpen = false, canClose = true,
             ),
             routerPortView(found(mapping(lease = 21_600), made, inbound = 3), now, ZoneOffset.UTC),
         )

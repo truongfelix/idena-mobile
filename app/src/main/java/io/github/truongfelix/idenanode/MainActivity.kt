@@ -12,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import android.Manifest
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -42,7 +41,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -246,6 +244,7 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
     val state = model.state
     var network by remember { mutableStateOf<NetworkRewards?>(null) }
     val routerPort = remember { RouterPortModel(context.applicationContext) }
+    val mining = remember { MiningActionState() }
 
     suspend fun refresh() = model.refresh()
 
@@ -288,14 +287,22 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // The identity, its validation and its invitation first, then the wallet, then the node (its state is also in the
+        // title row). The epoch and the flips are current once the fast sync has downloaded the state.
+        val ready = state.status?.takeUnless { it.accountPending }
+        ProfileCard(state, people) { scope.launch { refresh() } }
+        ready?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
         NodeCard(
             state,
-            mining = { state.status?.takeUnless { it.accountPending }?.let { MiningSection(it) { scope.launch { refresh() } } } },
-            routerPort = {
-                RouterPortRow(routerPort, state.syncEnabled, state.status?.let { parseValidationTime(it.nextValidation) })
-            },
+            mining = { ready?.let { MiningSection(it, mining) { scope.launch { refresh() } } } },
             advanced = {
-                AdvancedSettings(state, onChanged = { model.optionsChanged() }, onRestart = { NodeService.restart(context) })
+                AdvancedSettings(
+                    state,
+                    delegation = { DelegationSection(it, mining) },
+                    routerPort = { RouterPortRow(routerPort, state.syncEnabled, ready?.let { parseValidationTime(it.nextValidation) }) },
+                    onChanged = { model.optionsChanged() },
+                    onRestart = { NodeService.restart(context) },
+                )
             },
         ) { enabled ->
             if (enabled) {
@@ -307,21 +314,6 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
                 NodeService.stop(context)
             }
             model.syncChanged(enabled)
-        }
-        // The epoch and the flips are current once the fast sync has downloaded the state. Within a day of
-        // the validation, or during it, its card comes first.
-        val validation = state.status?.takeUnless { it.accountPending }
-        val validationFirst = validation != null &&
-            validationIsClose(Instant.now(), parseValidationTime(validation.nextValidation), validation.period)
-        if (validationFirst) ValidationCard(validation!!, showCountdown = true)
-        AccountCard(state) { scope.launch { refresh() } }
-        state.status?.takeUnless { it.accountPending }?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
-        state.status?.takeIf { !it.accountPending && showInvitations(it) }?.let { InvitationsCard(it, people) { scope.launch { refresh() } } }
-        state.status?.takeIf { !it.accountPending && it.identityState == "Invite" }?.let { InvitationCard(it) { scope.launch { refresh() } } }
-        if (validation != null && !validationFirst) ValidationCard(validation, showCountdown = false)
-        if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundCard(state)
-        TextButton(onClick = { context.startActivity(Intent(context, CeremonyActivity::class.java)) }) {
-            Text("Practice validation")
         }
         KeyCard(state) { key, password, done ->
             scope.launch {

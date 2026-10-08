@@ -34,7 +34,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-/** What the Sync card's Router port row knows. */
+/** What the Router port row of the advanced settings knows. */
 sealed interface RouterPortState {
     /** Not on Wi-Fi, or nothing to show (sync off and no opening). */
     data object Hidden : RouterPortState
@@ -46,7 +46,6 @@ sealed interface RouterPortState {
         val phoneIp: String,
         val mapping: PortMapping?,
         val opening: RouterOpening?,
-        val declined: Boolean,
         /** Peers that connected from outside since the opening's last change; null without an opening. */
         val inbound: Int?,
     ) : RouterPortState {
@@ -123,7 +122,6 @@ class RouterPortModel(private val context: Context) {
             val now = Instant.now()
             val found = RouterPortState.Found(
                 gateway, phoneIp, mapping, opening,
-                declined = RouterFiles.declined(context, gateway.udn),
                 inbound = opening?.let { inboundPeersSince(RouterFiles.nodeLogTail(context), Instant.ofEpochMilli(it.changedAtMs), now) },
             )
             if (!syncEnabled && found.owner == MappingOwner.None) RouterPortState.Hidden else found
@@ -140,19 +138,12 @@ class RouterPortModel(private val context: Context) {
         val replace = found.owner == MappingOwner.Phone || found.owner == MappingOwner.PhoneBefore
         RouterNet.open(found.gateway, found.phoneIp, opening.leaseSeconds(opening.changedAtMs), replace)
         RouterFiles.setOpening(context, opening)
-        RouterFiles.setDeclined(context, found.gateway.udn, false)
     }
 
     /** Closes the node's port at once. */
     suspend fun close(found: RouterPortState.Found) = act(found) {
         RouterNet.delete(found.gateway)
         RouterFiles.setOpening(context, null)
-    }
-
-    /** "Not now": the row stops asking on this router, and keeps an Open button. */
-    fun notNow(found: RouterPortState.Found) {
-        RouterFiles.setDeclined(context, found.gateway.udn, true)
-        state = found.copy(declined = true)
     }
 
     private suspend fun act(found: RouterPortState.Found, request: () -> Unit) {
@@ -170,7 +161,7 @@ class RouterPortModel(private val context: Context) {
 }
 
 /** What the row says about a found router, and which buttons it offers. */
-data class RouterPortView(val text: String, val ask: Boolean, val canOpen: Boolean, val canClose: Boolean)
+data class RouterPortView(val text: String, val canOpen: Boolean, val canClose: Boolean)
 
 /** An opening's end as the app shows dates: the phone's format and time zone. */
 fun formatOpeningEnd(end: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
@@ -185,18 +176,13 @@ fun routerPortView(found: RouterPortState.Found, now: Instant, zone: ZoneId = Zo
                 ?: mapping.leaseSeconds.takeIf { it > 0 }?.let { now.plusSeconds(it) }
             val until = end?.let { "until ${formatOpeningEnd(it, zone)}" } ?: "with no end"
             val incoming = found.inbound?.let { " · $it ${if (it == 1) "peer" else "peers"} connected from outside since" }.orEmpty()
-            RouterPortView("Open on $name $until$incoming", ask = false, canOpen = false, canClose = true)
+            RouterPortView("Open on $name $until$incoming", canOpen = false, canClose = true)
         }
         MappingOwner.PhoneBefore ->
-            RouterPortView("Open on $name for the phone's former address; the node moves it to the new one", ask = false, canOpen = false, canClose = true)
+            RouterPortView("Open on $name for the phone's former address; the node moves it to the new one", canOpen = false, canClose = true)
         MappingOwner.Other ->
-            RouterPortView("Port $NODE_PORT on $name goes to another device (${found.mapping!!.client})", ask = false, canOpen = false, canClose = false)
-        MappingOwner.None ->
-            if (!found.declined) {
-                RouterPortView("$name found. Open the node's port, so that outside nodes can connect to the phone?", ask = true, canOpen = true, canClose = false)
-            } else {
-                RouterPortView("Closed on $name", ask = false, canOpen = true, canClose = false)
-            }
+            RouterPortView("Port $NODE_PORT on $name goes to another device (${found.mapping!!.client})", canOpen = false, canClose = false)
+        MappingOwner.None -> RouterPortView("Closed on $name", canOpen = true, canClose = false)
     }
 }
 
@@ -208,7 +194,7 @@ val ROUTER_PORT_INFO =
         "Open a port only if you know what it means: the node can then be reached from the internet."
 
 /**
- * The Sync card's Router port row, on Wi-Fi: the search, a found router's question or state, and the Open and
+ * The Router port row of the advanced settings, on Wi-Fi: the search, a found router's state, and the Open and
  * Close buttons. [validation] gives the "until the validation" choice its date.
  */
 @Composable
@@ -255,7 +241,6 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
                 val view = routerPortView(state, Instant.now())
                 Text(view.text, style = small, color = muted)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    if (view.ask) TextButton(enabled = !model.busy, onClick = { model.notNow(state) }) { Text("Not now") }
                     if (view.canOpen) TextButton(enabled = !model.busy, onClick = { choose = true }) { Text("Open…") }
                     if (view.canClose) TextButton(enabled = !model.busy, onClick = { confirmClose = true }) { Text("Close") }
                 }

@@ -57,7 +57,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
- * The History screen, opened from the Account card: the ceremonies (with each recorded validation report), the
+ * The History screen, opened from the Profile card: the ceremonies (with each recorded validation report), the
  * transactions and the mining rewards of the account, all from the app's own node.
  */
 class HistoryActivity : ComponentActivity() {

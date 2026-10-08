@@ -30,7 +30,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
-/* The Invitations card's dialogs: the code to give, a new invitation, spoiling a public code. */
+/* The dialogs of the Profile card's Invitations: the code to give, a new invitation, spoiling a public code. */
 
 /** The code as a QR code and as text, with the warning that goes with it. */
 @Composable

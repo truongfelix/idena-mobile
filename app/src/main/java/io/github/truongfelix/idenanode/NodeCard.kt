@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -31,18 +33,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/* The Node tab's Sync card and its Mining section. */
+/* The Node tab's Node card: sync, mining on this phone, the screen-off warning; the delegation for its advanced settings. */
 
 /**
- * Sync: the switch, and the progress while syncing in a slot of fixed height, so that the cards under it
- * never move; [mining] (the identity's mining, once the node has the account); the [routerPort] on Wi-Fi; then
- * the [advanced] settings. The block, peers, speed and network are in the title row's details (ⓘ).
+ * The Node card, last on the Node tab: the sync switch, and the progress while syncing in a slot of fixed height, so
+ * that the rows under it never move; [mining] (mining on this phone, once the node has the account); a warning while
+ * Android may stop the node with the screen off ([BackgroundWarning]); then the [advanced] settings. The block, peers,
+ * speed and network are in the title row's details (ⓘ).
  */
 @Composable
 fun NodeCard(
     state: ScreenState,
     mining: @Composable () -> Unit,
-    routerPort: @Composable () -> Unit,
     advanced: @Composable () -> Unit,
     onSyncChange: (Boolean) -> Unit,
 ) {
@@ -82,14 +84,39 @@ fun NodeCard(
             }
             state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             mining()
-            routerPort()
+            if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundWarning(state)
             advanced()
         }
     }
 }
 
+/**
+ * While Android may stop the node with the screen off: one line, and Fix with the settings that let it run
+ * ([BackgroundSettings], also in the title row's details).
+ */
+@Composable
+private fun BackgroundWarning(state: ScreenState) {
+    var open by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "The node may stop with the screen off",
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(onClick = { open = true }) { Text("Fix") }
+    }
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { BackgroundSettings(state) } },
+            confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } },
+        )
+    }
+}
+
 /** A mining change the validator confirms: the dialog text and the node call. */
-private enum class MiningChange(val title: String, val text: String) {
+enum class MiningChange(val title: String, val text: String) {
     Start(
         "Mine on this phone",
         "Your identity mines with this phone's node, which must then keep running. If it stays offline for " +
@@ -106,25 +133,34 @@ private enum class MiningChange(val title: String, val text: String) {
 }
 
 /**
- * Mining, in the Sync card: with this phone's node, delegated to a pool, or none. Offers the changes the node would accept
- * now (see [MiningActions]) and follows the transaction until it is in a block. The node applies online
- * and delegation changes every 50 blocks (about 17 minutes).
+ * The mining change under way, shared by the Mining row ([MiningSection]) and the delegation in the advanced settings
+ * ([DelegationSection]): the change being confirmed, the pool typed, the transaction waiting for its block, the outcome.
+ */
+class MiningActionState {
+    var change by mutableStateOf<MiningChange?>(null)
+    var pool by mutableStateOf("")
+    var pendingTx by mutableStateOf<String?>(null)
+    var message by mutableStateOf<String?>(null)
+}
+
+private fun miningActions(status: NodeStatus) = MiningActions.of(
+    status.period, status.identityState, status.online, status.isPool, status.delegatee != null,
+    status.delegationEpoch, status.epoch, status.penaltySeconds,
+)
+
+/**
+ * Mining, in the Node card: the switch that mines with this phone's node, under the identity's mining status (with this
+ * phone, delegated to a pool, or none). Confirms a change, a delegation from [DelegationSection] too, and follows the
+ * transaction until it is in a block. The node applies online and delegation changes every 50 blocks (about 17 minutes).
  */
 @Composable
-fun MiningSection(status: NodeStatus, onChanged: () -> Unit) {
+fun MiningSection(status: NodeStatus, mining: MiningActionState, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val actions = MiningActions.of(
-        status.period, status.identityState, status.online, status.isPool, status.delegatee != null,
-        status.delegationEpoch, status.epoch, status.penaltySeconds,
-    )
-    var change by remember { mutableStateOf<MiningChange?>(null) }
-    var pool by remember { mutableStateOf("") }
-    var pendingTx by remember { mutableStateOf<String?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
+    val actions = miningActions(status)
 
     fun send(change: MiningChange) {
-        message = null
+        mining.message = null
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
@@ -132,19 +168,19 @@ fun MiningSection(status: NodeStatus, onChanged: () -> Unit) {
                     when (change) {
                         MiningChange.Start -> rpc.startMining()
                         MiningChange.Stop -> rpc.stopMining()
-                        MiningChange.Delegate -> rpc.delegate(pool.trim())
+                        MiningChange.Delegate -> rpc.delegate(mining.pool.trim())
                         MiningChange.Undelegate -> rpc.undelegate()
                     }
                 }
             }
             val hash = result.getOrElse {
-                message = "The node refused: ${it.message}"
+                mining.message = "The node refused: ${it.message}"
                 return@launch
             }
-            pendingTx = hash
+            mining.pendingTx = hash
             val mined = waitUntilMined(context, hash)
-            pendingTx = null
-            message = if (mined) "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
+            mining.pendingTx = null
+            mining.message = if (mined) "${change.title}: done. The node applies it within 50 blocks (about 17 minutes)."
             else "${change.title}: not sent, $NOT_SENT"
             onChanged()
         }
@@ -152,63 +188,77 @@ fun MiningSection(status: NodeStatus, onChanged: () -> Unit) {
 
     HorizontalDivider(Modifier.padding(vertical = 4.dp))
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Mining", style = MaterialTheme.typography.titleMedium)
-        run {
-            Field("Status", status.miningStatus)
-            // Mining on this phone: the switch sends the change (after its dialog); delegation below.
-            val miningHere = status.online && status.delegatee == null
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Mine on this phone", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                Switch(
-                    checked = miningHere,
-                    onCheckedChange = { on -> change = if (on) MiningChange.Start else MiningChange.Stop },
-                    enabled = pendingTx == null && (actions.canStartMining || actions.canStopMining),
-                )
+        // The switch sends the change, after its dialog; delegation is in the advanced settings.
+        val miningHere = status.online && status.delegatee == null
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Mine on this phone", style = MaterialTheme.typography.titleMedium)
+                Text(status.miningStatus, style = MaterialTheme.typography.bodyMedium)
             }
-            if (status.period == "None" && status.delegatee == null && !status.isPool && status.identityState !in validatedStates) {
-                Text("Mining needs a validated identity (Newbie, Verified or Human).", style = MaterialTheme.typography.bodySmall)
-            }
-            if (status.penaltySeconds > 0) {
-                Field("Penalty", "${duration(status.penaltySeconds.toDouble())} left")
-            }
-            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            when {
-                status.period != "None" -> Text("Mining changes wait until the validation is over.", style = MaterialTheme.typography.bodySmall)
-                pendingTx == null -> {
-                    if (actions.canDelegate) OutlinedButton(onClick = { change = MiningChange.Delegate }) { Text(MiningChange.Delegate.title) }
-                    if (actions.canUndelegate) OutlinedButton(onClick = { change = MiningChange.Undelegate }) { Text(MiningChange.Undelegate.title) }
-                    if (status.delegatee != null && !actions.canUndelegate) {
-                        Text("The delegation can be stopped from the next epoch.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (status.delegatee == null && !actions.canDelegate && status.penaltySeconds > 0) {
-                        Text("No delegation while a mining penalty runs.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
+            Switch(
+                checked = miningHere,
+                onCheckedChange = { on -> mining.change = if (on) MiningChange.Start else MiningChange.Stop },
+                enabled = mining.pendingTx == null && (actions.canStartMining || actions.canStopMining),
+            )
         }
+        if (status.period == "None" && status.delegatee == null && !status.isPool && status.identityState !in validatedStates) {
+            Text("Mining needs a validated identity (Newbie, Verified or Human).", style = MaterialTheme.typography.bodySmall)
+        }
+        if (status.penaltySeconds > 0) {
+            Field("Penalty", "${duration(status.penaltySeconds.toDouble())} left")
+        }
+        mining.pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
+        mining.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        if (status.period != "None") Text("Mining changes wait until the validation is over.", style = MaterialTheme.typography.bodySmall)
     }
 
-    change?.let { selected ->
-        val poolValid = Regex("^0x[0-9a-fA-F]{40}$").matches(pool.trim())
+    mining.change?.let { selected ->
+        val poolValid = Regex("^0x[0-9a-fA-F]{40}$").matches(mining.pool.trim())
         AlertDialog(
-            onDismissRequest = { change = null },
+            onDismissRequest = { mining.change = null },
             title = { Text(selected.title) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(selected.text)
                     if (selected == MiningChange.Delegate) {
-                        OutlinedTextField(value = pool, onValueChange = { pool = it }, label = { Text("Pool address (0x…)") }, singleLine = true)
+                        OutlinedTextField(value = mining.pool, onValueChange = { mining.pool = it }, label = { Text("Pool address (0x…)") }, singleLine = true)
                     }
                 }
             },
             confirmButton = {
                 TextButton(
-                    onClick = { change = null; send(selected) },
+                    onClick = { mining.change = null; send(selected) },
                     enabled = selected != MiningChange.Delegate || poolValid,
                 ) { Text("Send") }
             },
-            dismissButton = { TextButton(onClick = { change = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { mining.change = null }) { Text("Cancel") } },
         )
+    }
+}
+
+/**
+ * Delegation, in the advanced settings: Delegate to a pool or Stop delegation when the node would accept it now (see
+ * [MiningActions]). The Mining row confirms the change and follows its transaction ([MiningSection]).
+ */
+@Composable
+fun DelegationSection(status: NodeStatus, mining: MiningActionState) {
+    val actions = miningActions(status)
+    val small = MaterialTheme.typography.bodySmall
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        when {
+            status.period != "None" -> Text("Delegation changes wait until the validation is over.", style = small)
+            mining.pendingTx != null -> Text("A mining change is waiting for its block.", style = small)
+            else -> {
+                if (actions.canDelegate) OutlinedButton(onClick = { mining.change = MiningChange.Delegate }) { Text(MiningChange.Delegate.title) }
+                if (actions.canUndelegate) OutlinedButton(onClick = { mining.change = MiningChange.Undelegate }) { Text(MiningChange.Undelegate.title) }
+                if (status.delegatee != null && !actions.canUndelegate) {
+                    Text("The delegation can be stopped from the next epoch.", style = small)
+                }
+                if (status.delegatee == null && !actions.canDelegate && status.penaltySeconds > 0) {
+                    Text("No delegation while a mining penalty runs.", style = small)
+                }
+                if (status.isPool) Text("This identity is a pool: it does not delegate.", style = small)
+            }
+        }
     }
 }

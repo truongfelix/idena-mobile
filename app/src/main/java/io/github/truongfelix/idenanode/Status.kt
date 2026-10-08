@@ -92,6 +92,6 @@ fun countdown(now: Instant, then: Instant): String {
     }
 }
 
-/** Whether the validation at [start] is close enough to come first on the Node tab: under a day, or running. */
+/** Whether the validation at [start] is close: under a day, or running; the Profile card then counts the time left to the minute. */
 fun validationIsClose(now: Instant, start: Instant?, period: String): Boolean =
     period.isNotEmpty() && period != "None" || start != null && Duration.between(now, start) < Duration.ofDays(1)

@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -30,16 +28,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/* Receiving an invitation on the Node tab: accepting one sent to the address, or activating a code. */
+/* Receiving an invitation, in the Profile card: accepting one sent to the address, or activating a code. */
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
 /**
- * An invitation sent to the identity's address, waiting to be accepted: the activation transaction
- * makes the identity a candidate for the next validation. Only outside the ceremony.
+ * In the Profile card, an invitation sent to the identity's address, waiting to be accepted: the activation
+ * transaction makes the identity a candidate for the next validation. Only outside the ceremony.
  */
 @Composable
-fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
+fun AcceptInvitationSection(status: NodeStatus, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var confirming by remember { mutableStateOf(false) }
@@ -50,7 +48,7 @@ fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
         message = null
         scope.launch {
             val hash = withContext(Dispatchers.IO) {
-                runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).acceptInvitation() }
+                runCatching { rpc(context).acceptInvitation() }
             }.getOrElse {
                 message = "The node refused: ${it.message}"
                 return@launch
@@ -64,17 +62,15 @@ fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
         }
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Invitation", style = MaterialTheme.typography.titleMedium)
-            Text("You are invited to Idena. Accept the invitation to take part in the next validation as a candidate.")
-            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            when {
-                !canAcceptInvitation(status.period, status.identityState) ->
-                    Text("The invitation can be accepted once the validation is over.", style = MaterialTheme.typography.bodySmall)
-                pendingTx == null -> Button(onClick = { confirming = true }) { Text("Accept the invitation") }
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Invitation", style = MaterialTheme.typography.titleSmall)
+        Text("You are invited to Idena. Accept the invitation to take part in the next validation as a candidate.")
+        pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
+        message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        when {
+            !canAcceptInvitation(status.period, status.identityState) ->
+                Text("The invitation can be accepted once the validation is over.", style = MaterialTheme.typography.bodySmall)
+            pendingTx == null -> Button(onClick = { confirming = true }) { Text("Accept the invitation") }
         }
     }
 
@@ -90,7 +86,7 @@ fun InvitationCard(status: NodeStatus, onChanged: () -> Unit) {
 }
 
 /**
- * In the Account card, for an address without an identity: the invitation code field. Activating makes
+ * In the Profile card, for an address without an identity: the invitation code field. Activating makes
  * the identity a Candidate for the next validation.
  */
 @Composable

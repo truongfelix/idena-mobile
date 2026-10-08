@@ -4,11 +4,8 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,9 +34,9 @@ import java.io.File
 import java.math.BigDecimal
 
 /*
- * The invitations on the Node tab ([Invitations.kt] has the rules): the Invitations card (send, the
- * invitations sent with their status and code, cancel, spoil a public code) and the code field of the
- * Account card for an address without an identity.
+ * The invitations to send, in the Profile card ([Invitations.kt] has the rules): send, the invitations sent with their
+ * status and code, cancel, spoil a public code. Receiving one: [InvitationReceive.kt]; the dialogs:
+ * [InvitationDialogs.kt].
  */
 
 /** KillInviteeTx: the inviter takes back an invitee. */
@@ -69,7 +66,7 @@ object InviteStore {
     }
 }
 
-/** What the card asks the validator to confirm or shows after a send. */
+/** What the section asks the validator to confirm or shows after a send. */
 private sealed interface InviteDialog {
     data object New : InviteDialog
     data class Code(val invite: SentInvite, val saved: Boolean) : InviteDialog
@@ -78,12 +75,12 @@ private sealed interface InviteDialog {
 }
 
 /**
- * The Invitations card: invites left, "Invite someone", the invitations sent this epoch (from this phone,
+ * The Profile card's Invitations: invites left, "Invite someone", the invitations sent this epoch (from this phone,
  * then from another app) with their status, the code to give (copy or QR) and Cancel, and "Spoil a public
  * code".
  */
 @Composable
-fun InvitationsCard(status: NodeStatus, people: Map<String, Person>, onChanged: () -> Unit) {
+fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var rows by remember { mutableStateOf<List<InviteRow>>(emptyList()) }
@@ -177,31 +174,29 @@ fun InvitationsCard(status: NodeStatus, people: Map<String, Person>, onChanged: 
         }
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Invitations", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(if (status.invites == 1) "1 left" else "${status.invites} left", style = MaterialTheme.typography.bodyMedium)
-            }
-            when {
-                canSendInvite(status.invites, status.period) ->
-                    Button(onClick = { message = null; dialog = InviteDialog.New }, enabled = busy == null) { Text("Invite someone") }
-                status.invites == 0 -> Text(
-                    "No invitation to send. Verified and Human identities receive invitations at each validation.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                else -> Text("Invitations are sent outside the validation.", style = MaterialTheme.typography.bodySmall)
-            }
-            busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            rows.forEach { row ->
-                key(row.sent?.txHash ?: row.address) {
-                    HorizontalDivider()
-                    InviteRowView(row, people, canCancel = busy == null && canCancelInvite(row.state, status.period), onCancel = { askCancel(row) })
-                }
-            }
-            TextButton(onClick = { message = null; dialog = InviteDialog.Spoil }, enabled = busy == null) { Text("Spoil a public code") }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Invitations", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(if (status.invites == 1) "1 left" else "${status.invites} left", style = MaterialTheme.typography.bodyMedium)
         }
+        when {
+            canSendInvite(status.invites, status.period) ->
+                Button(onClick = { message = null; dialog = InviteDialog.New }, enabled = busy == null) { Text("Invite someone") }
+            status.invites == 0 -> Text(
+                "No invitation to send. Verified and Human identities receive invitations at each validation.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            else -> Text("Invitations are sent outside the validation.", style = MaterialTheme.typography.bodySmall)
+        }
+        busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        rows.forEach { row ->
+            key(row.sent?.txHash ?: row.address) {
+                HorizontalDivider()
+                InviteRowView(row, people, canCancel = busy == null && canCancelInvite(row.state, status.period), onCancel = { askCancel(row) })
+            }
+        }
+        TextButton(onClick = { message = null; dialog = InviteDialog.Spoil }, enabled = busy == null) { Text("Spoil a public code") }
     }
 
     when (val current = dialog) {
