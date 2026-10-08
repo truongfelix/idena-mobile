@@ -10,7 +10,7 @@ go 1.26.8
 // kill during a database flush, bounded sync passes, snapshot choice by peer count, a peer's height counted
 // only up to the blocks it serves, peer and IPFS connection limit flags, the oracle voting RPCs,
 // dna_identityHistory, iavl from truongfelix/iavl, bcn_contractCalls with each call's success).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20261007201411-4b2172e37c19
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20261008114908-30eafe21d6df
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
