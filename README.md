@@ -48,7 +48,8 @@ meant to be delegated to a pool, such as a desktop node.
 - **Profile** (the first card of the Node tab): identity state and age, the address with its robot avatar;
   the next validation (below); the invitation that applies: for an address without an identity, an
   **invitation code** field (activation, no fee), an invitation sent to the address to accept, or the
-  invitations to send (below); then My flips, Practice validation and History.
+  invitations to send (below); then My flips, Practice validation, History and Oracle votings (with how many
+  wait for the identity's vote).
 - **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee
   estimate, then a confirmation), Add stake (the stake after, how much of it the identity keeps if it
   misses or fails the next validation, the network's minimum stake, that stake cannot be withdrawn).
@@ -63,6 +64,11 @@ meant to be delegated to a pool, such as a desktop node.
   flip**: an unused keyword pair, four pictures (camera, gallery, or an opt-in DuckDuckGo image search), an
   anti-AI frame in a random place, the shuffled story, then the node encrypts and publishes it. Flips are
   sent only while the node is synced, and until the flip lottery (5 minutes before the validation).
+- **Oracle votings** (from the Profile): the votings of the identity's committees to vote in, ongoing and
+  closed, and every voting, from the node's own index; a voting's question, times, committee, rewards and
+  options. **Vote**: an option, then a confirmation with the payment and the fee; the secret vote is sent at
+  once, and the node keeps the vote itself and sends it at the end of the secret voting, so sync must be on
+  then. Creating, prolonging and finishing a voting are not in the app yet.
 - **Key**: import the private key exported from the Idena app or app.idena.io (encrypted, with its
   password). Sync stays off until a key is imported. The app keeps the key on the phone and out of
   Android backups.
