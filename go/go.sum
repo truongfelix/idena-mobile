@@ -1348,8 +1348,8 @@ github.com/truongfelix/go-libp2p-kad-dht v0.41.1-0.20260924080750-83f1403bcb17 h
 github.com/truongfelix/go-libp2p-kad-dht v0.41.1-0.20260924080750-83f1403bcb17/go.mod h1:2qc4QGLvmIdznYbNg++FF76vp4q2SaBZyr76jHV8xgs=
 github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e h1:4pvmOpoek6x617ukQ7zX/j8ifKtezhvWl46NbZtqfR0=
 github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e/go.mod h1:++H8jTv9JFwzyZ55ahnGcGCDjhxJacSYbZKojVdVPOo=
-github.com/truongfelix/idena-go v0.17.2-0.20261008181547-2e58fe89b9da h1:s/c+LJK3j4IOr8+qfR6edPbgQKOf6SOzis0PgtYEslo=
-github.com/truongfelix/idena-go v0.17.2-0.20261008181547-2e58fe89b9da/go.mod h1:YzBS6jpXBGHTiMDUv64JngV1npUijftJwG1O3bqtG70=
+github.com/truongfelix/idena-go v0.17.2-0.20261008193743-1f3378ac7e3b h1:kKO+kFZprUY7A03vv5ygDM49DpT5d+8Dw/R5qqpux34=
+github.com/truongfelix/idena-go v0.17.2-0.20261008193743-1f3378ac7e3b/go.mod h1:YzBS6jpXBGHTiMDUv64JngV1npUijftJwG1O3bqtG70=
 github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31/go.mod h1:onvgF043R+lC5RZ8IT9rBXDaEDnpnw/Cl+HFiw+v/7Q=
 github.com/tv42/httpunix v0.0.0-20150427012821-b75d8614f926/go.mod h1:9ESjWnEqriFuLhtthL60Sar/7RFoluCcXsuvEwTV5KM=
 github.com/tv42/httpunix v0.0.0-20191220191345-2ba4b9c3382c/go.mod h1:hzIxponao9Kjc7aWznkXaL4U4TWaDSs8zcsY4Ka08nM=
