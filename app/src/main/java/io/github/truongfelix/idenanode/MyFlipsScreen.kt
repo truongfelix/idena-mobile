@@ -129,10 +129,10 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
             }
             busy = null
             deleting = deleting + row.cid
-            waitUntilMined(context, hash)
-            withContext(Dispatchers.IO) { MadeFlipStore.remove(context, row.cid) }
+            val mined = waitUntilMined(context, hash)
+            if (mined) withContext(Dispatchers.IO) { MadeFlipStore.remove(context, row.cid) }
             deleting = deleting - row.cid
-            message = "Flip deleted: its words can be used for a new flip."
+            message = if (mined) "Flip deleted: its words can be used for a new flip." else "The flip is not deleted: $NOT_SENT"
             reads++
         }
     }

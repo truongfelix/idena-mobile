@@ -74,12 +74,13 @@ class NodeTxLookup(private val rpc: NodeRpc) : TxLookup {
     override fun receipt(hash: String): JSONObject? = rpc.call("bcn_txReceipt", JSONArray().put(hash)) as? JSONObject
 }
 
-/** Waits until the node has the transaction in a block, asking every 10 seconds. */
-internal suspend fun waitUntilMined(context: Context, hash: String) {
-    while (!withContext(Dispatchers.IO) {
-            runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).isMined(hash) }.getOrDefault(false)
-        }
-    ) {
-        delay(10_000)
-    }
+/** How a screen ends its message when the node no longer has a sent transaction ([waitUntilMined] false). */
+const val NOT_SENT = "the node no longer has the transaction. Try again."
+
+/**
+ * Waits until the node has the transaction [hash] in a block ([waitForBlock]): true then, false once the node
+ * no longer has it (it never came in a block).
+ */
+internal suspend fun waitUntilMined(context: Context, hash: String): Boolean = withContext(Dispatchers.IO) {
+    waitForBlock(NodeTxLookup(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))), hash) != null
 }

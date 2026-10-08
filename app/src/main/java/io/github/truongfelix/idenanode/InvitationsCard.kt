@@ -165,9 +165,9 @@ fun InvitationsCard(status: NodeStatus, people: Map<String, Person>, onChanged: 
                 return@launch
             }
             busy = "Cancelled: waiting for a block…"
-            waitUntilMined(context, hash)
+            val mined = waitUntilMined(context, hash)
             busy = null
-            message = "Invitation cancelled."
+            message = if (mined) "Invitation cancelled." else "The invitation is not cancelled: $NOT_SENT"
             reads++
             onChanged()
         }
@@ -434,7 +434,11 @@ fun ActivateCodeSection(status: NodeStatus, onChanged: () -> Unit) {
                 return@launch
             }
             busy = "Activated: waiting for a block…"
-            waitUntilMined(context, hash)
+            if (!waitUntilMined(context, hash)) {
+                busy = null
+                message = "The code is not activated: $NOT_SENT"
+                return@launch
+            }
             busy = null
             text = ""
             message = "Invitation activated: the identity is a candidate for the next validation."
