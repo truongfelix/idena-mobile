@@ -1,0 +1,219 @@
+package io.github.truongfelix.idenanode
+
+import android.content.Context
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.IOException
+import java.time.Instant
+
+/** A voting as its screen shows it: the node's view relative to the identity, the vote sent from this phone, the opened vote. */
+private data class VotingView(val voting: OracleVoting, val sent: SentVote?, val opened: Int?)
+
+private fun readVotingView(context: Context, contract: String, me: String): VotingView {
+    val node = votingNode(context)
+    val voting = node.voting(contract, me)
+    val opened = if (voting.state == VotingState.PENDING || voting.state == VotingState.OPEN) null else node.openedVote(contract, me)
+    return VotingView(voting, SentVotes.of(context, me, contract), opened)
+}
+
+/** "8 Oct 2026, 18:30 (in 2 days)" ([dateFormat], as My flips). */
+private fun dateText(time: Instant): String = "${dateFormat.format(time)} (${timeUntil(Instant.now(), time)})"
+
+/**
+ * One voting: its question, times, committee and rewards, the options, and the identity's vote. While the identity
+ * may vote, an option and Vote, then a confirmation with the cost, send it ([OracleVotingNode.plan], [OracleVotingNode.send]).
+ */
+@Composable
+fun OracleVotingScreen(contract: String, me: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var reads by remember { mutableIntStateOf(0) }
+    var loaded by remember { mutableStateOf<Result<VotingView>?>(null) }
+    var option by rememberSaveable { mutableStateOf<Int?>(null) }
+    var plan by remember { mutableStateOf<VotePlan?>(null) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(reads) { loaded = withContext(Dispatchers.IO) { runCatching { readVotingView(context, contract, me) } } }
+    val view = loaded?.getOrNull()
+
+    // A secret vote sent from this phone and not in a block yet: followed until it is, or the node drops it.
+    val pending = view?.sent?.takeIf { view.voting.state == VotingState.OPEN }
+    LaunchedEffect(pending) {
+        if (pending == null) return@LaunchedEffect
+        val inBlock = withContext(Dispatchers.IO) { waitForBlock(NodeTxLookup(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))), pending.secretVoteTx) }
+        when {
+            inBlock == null -> message = "Your vote was not sent: $NOT_SENT"
+            inBlock.error != null -> message = "The voting refused your vote: ${inBlock.error}."
+        }
+        if (inBlock == null || inBlock.error != null) withContext(Dispatchers.IO) { runCatching { SentVotes.remove(context, pending) } }
+        reads++
+    }
+
+    Column(
+        modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ScreenTitle("Oracle voting", onClose)
+        val current = loaded
+        when {
+            current == null -> CircularProgressIndicator()
+            view == null -> {
+                Text("The node did not answer: ${current.exceptionOrNull()?.message}")
+                Button(onClick = { reads++ }) { Text("Try again") }
+            }
+            else -> {
+                VotingDetails(view.voting)
+                HorizontalDivider()
+                val voting = view.voting
+                val choosing = voting.canVote && pending == null
+                val canVote = choosing && busy == null
+                Options(voting, selected = option.takeIf { choosing }, choosing = choosing, enabled = canVote) { option = it }
+                yourVoteText(voting, view.sent, view.opened, ::dateText)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                when {
+                    voting.state == VotingState.PENDING -> Note("The voting has not started yet.")
+                    voting.state == VotingState.OPEN && !voting.isOracle -> Note("Your identity is not in this voting's committee: you can read it, not vote.")
+                }
+                message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+                busy?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(Modifier.padding(4.dp))
+                        Text(it, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                if (voting.canVote && pending == null) {
+                    Button(
+                        onClick = {
+                            val chosen = option ?: return@Button
+                            message = null
+                            busy = "Checking the vote with the node…"
+                            scope.launch {
+                                val made = withContext(Dispatchers.IO) { runCatching { planVote(context, me, contract, chosen) } }
+                                busy = null
+                                made.onSuccess { plan = it }.onFailure { message = "The vote cannot be sent: ${it.message}" }
+                            }
+                        },
+                        enabled = canVote && option != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Vote") }
+                }
+                plan?.let { ready ->
+                    VoteConfirmDialog(voting, ready, onDismiss = { plan = null }) {
+                        plan = null
+                        busy = "Sending the vote…"
+                        scope.launch {
+                            val sent = withContext(Dispatchers.IO) {
+                                runCatching { votingNode(context).send(ready) }.onSuccess { hash ->
+                                    // Without the record the screen still shows the vote once the node has it in a block.
+                                    runCatching {
+                                        SentVotes.save(context, SentVote(me, contract, ready.option, hash, ready.voteBlock, System.currentTimeMillis()))
+                                    }
+                                }
+                            }
+                            busy = null
+                            sent.onFailure { message = "The vote was not sent: ${it.message}" }
+                            reads++
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Plans the vote once the node is synced: a node behind the chain has old committees and an old epoch. */
+private fun planVote(context: Context, me: String, contract: String, option: Int): VotePlan {
+    val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
+    if (!rpc.synced()) throw IOException("the node is still syncing; vote once it is synced")
+    val epoch = (rpc.call("dna_epoch") as JSONObject).getInt("epoch")
+    return votingNode(context).plan(me, contract, option, epoch)
+}
+
+@Composable
+private fun VotingDetails(voting: OracleVoting) {
+    Text(votingTitle(voting), style = MaterialTheme.typography.titleMedium)
+    if (voting.fact.desc.isNotBlank()) SelectionContainer { Text(voting.fact.desc, style = MaterialTheme.typography.bodyMedium) }
+    Field("State", votingStateText(voting.state))
+    Field("Author", shortAddress(voting.author))
+    val running = voting.state in listOf(VotingState.OPEN, VotingState.VOTED)
+    if (running) voting.votingEnd?.let { Field("Secret vote", "until ${dateText(it)}") }
+    if (running || voting.state == VotingState.COUNTING || voting.state == VotingState.CAN_BE_PROLONGED) {
+        voting.countingEnd?.let { Field("Counting", "until ${dateText(it)}") }
+    }
+    Field("Committee", "${voting.committeeSize} oracles · ${voting.quorumVotes} votes needed")
+    Field("Votes", "${voting.votesSent} sent · ${voting.votes} opened")
+    if (voting.minPayment.signum() > 0) Field("Payment", "${idna(voting.minPayment.toPlainString())} per vote")
+    if (running) voting.oracleReward?.takeIf { it.signum() > 0 }?.let { reward ->
+        val most = voting.maxOracleReward?.takeIf { it > reward }?.let { " (up to ${idna(it.toPlainString())})" }.orEmpty()
+        Field("Reward", "about ${idna(reward.toPlainString())} per oracle$most")
+    }
+    voting.totalReward?.takeIf { it.signum() > 0 }?.let { Field("Rewards", idna(it.toPlainString())) }
+}
+
+/** The options: to choose one while [choosing] (a tap counts while [enabled]), else each with its opened votes and the result's mark. */
+@Composable
+private fun Options(voting: OracleVoting, selected: Int?, choosing: Boolean, enabled: Boolean, onSelect: (Int) -> Unit) {
+    Text("Options", style = MaterialTheme.typography.titleSmall)
+    if (voting.fact.options.isEmpty()) Note("This voting has no option the app can read.")
+    voting.fact.options.forEach { option ->
+        val votes = voting.optionVotes[option.id] ?: 0
+        val counts = if (voting.votes > 0) " · $votes vote${if (votes == 1L) "" else "s"}" else ""
+        val result = if (voting.result == option.id) " ✓" else ""
+        Row(
+            Modifier.fillMaxWidth().selectable(selected = selected == option.id, enabled = enabled, role = Role.RadioButton) { onSelect(option.id) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (choosing) RadioButton(selected = selected == option.id, onClick = null, enabled = enabled)
+            Text(option.text + counts + result, Modifier.padding(vertical = 8.dp, horizontal = 4.dp), style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+private fun VoteConfirmDialog(voting: OracleVoting, plan: VotePlan, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Send your vote") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(voteConfirmText(voting, plan, ::dateText)) } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Vote") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun Note(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
