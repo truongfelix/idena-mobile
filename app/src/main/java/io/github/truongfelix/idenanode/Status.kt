@@ -44,7 +44,7 @@ const val PEER_GRACE_MS = 20 * 60_000L
  */
 fun nodeBarState(input: NodeBarInput): BarState {
     if (input.startError != null) return BarState(Health.Bad, "The node could not start")
-    if (!input.syncEnabled) return BarState(Health.Off, if (input.hasKey) "Sync off" else "Sync off: import a key first")
+    if (!input.syncEnabled) return BarState(Health.Off, if (input.hasKey) "Sync off" else "Sync off: create or import a key first")
     val starting = input.runningForMs == null || input.runningForMs < PEER_GRACE_MS
     val node = input.node
         ?: return if (starting) BarState(Health.Warn, "Starting the node…") else BarState(Health.Bad, "The node does not answer")

@@ -60,7 +60,7 @@ fun NodeCard(
                             status != null && status.syncing -> "Running, syncing"
                             status != null -> "Running, synced"
                             state.syncEnabled -> "Starting…"
-                            !state.hasKey -> "Stopped: import a key first"
+                            !state.hasKey -> "Stopped: create or import a key first"
                             else -> "Stopped"
                         },
                         style = MaterialTheme.typography.bodyMedium,

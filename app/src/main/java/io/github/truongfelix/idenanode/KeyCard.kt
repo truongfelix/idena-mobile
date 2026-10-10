@@ -1,8 +1,7 @@
 package io.github.truongfelix.idenanode
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,24 +20,68 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/* The Node tab's Key card: import a key. */
+/*
+ * The Node tab's Key card: create a new account or import a key; with a key, back it up or import another one.
+ * A new account's key goes to the node only once its backup is checked (KeyBackup.kt).
+ */
 
+/**
+ * [newKey] and [exportKey] make a backup with a password (Mobile.newKey, Mobile.exportKey; run off the main thread);
+ * [onCreate] gives the node a new account's checked backup, [onImport] a key typed or chosen in a file.
+ */
 @Composable
-fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> Unit) -> Unit) {
+fun KeyCard(
+    state: ScreenState,
+    newKey: (String) -> String,
+    exportKey: (String) -> String,
+    onCreate: (String, String, (Boolean, String) -> Unit) -> Unit,
+    onImport: (String, String, (Boolean, String) -> Unit) -> Unit,
+) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+    var backingUp by remember { mutableStateOf(false) }
     var key by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    val keyFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            withContext(Dispatchers.IO) { runCatching { readBackupFile(context, uri) } }
+                .onSuccess { key = it; message = null }
+                .onFailure { message = "Not read: ${it.message}" }
+        }
+    }
+    if (creating) {
+        KeyBackupDialog(
+            newAccount = true,
+            makeBackup = newKey,
+            onUse = { backup, typed ->
+                creating = false
+                busy = true
+                onCreate(backup, typed) { _, text -> busy = false; message = text }
+            },
+            onClose = { creating = false },
+        )
+    }
+    if (backingUp) KeyBackupDialog(newAccount = false, makeBackup = exportKey, onUse = { _, _ -> }, onClose = { backingUp = false })
     if (state.hasKey && !open) {
-        TextButton(onClick = { open = true; message = null }) { Text("Import another key") }
+        Row {
+            TextButton(onClick = { backingUp = true; message = null }) { Text("Back up my key") }
+            TextButton(onClick = { open = true; message = null }) { Text("Import another key") }
+        }
         message?.let { Text(it) }
         return
     }
@@ -46,14 +89,14 @@ fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Key", style = MaterialTheme.typography.titleMedium)
             if (!open) {
-                Text("Import the private key exported from the Idena app (Settings, Export my private key).")
-                OutlinedButton(onClick = { open = true; message = null }) { Text("Import a key") }
+                Text("No account on this phone yet.")
+                Button(enabled = !busy, onClick = { creating = true; message = null }) { Text("Create a new account") }
+                OutlinedButton(enabled = !busy, onClick = { open = true; message = null }) { Text("Import a key") }
                 Text(
-                    "No Idena account yet? Create one on app.idena.io, export its private key there, then " +
-                        "import it here.",
+                    "Import takes a private key exported from an Idena app (Settings, Private key, Export) or a backup " +
+                        "made here.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                TextButton(onClick = { openWebApp(context) }) { Text("Open app.idena.io") }
             } else {
                 if (state.hasKey) {
                     Text("The current key is kept in a backup file.", style = MaterialTheme.typography.bodySmall)
@@ -73,6 +116,7 @@ fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> 
                     label = { Text("Exported key") },
                     modifier = Modifier.fillMaxWidth(), minLines = 2,
                 )
+                Pill("Choose a file", enabled = !busy) { keyFile.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
                 OutlinedTextField(
                     value = password, onValueChange = { password = it },
                     label = { Text("Password") },
@@ -102,9 +146,4 @@ fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> 
             message?.let { Text(it) }
         }
     }
-}
-
-/** Opens the Idena web app in the browser; nothing happens if the phone has no browser. */
-private fun openWebApp(context: Context) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.idena.io"))) }
 }

@@ -48,7 +48,7 @@ class StatusTest {
     fun errorsAndSwitchesComeFirst() {
         assertEquals(Health.Bad, nodeBarState(running.copy(startError = "database locked")).health)
         assertEquals(BarState(Health.Off, "Sync off"), nodeBarState(running.copy(syncEnabled = false)))
-        assertEquals("Sync off: import a key first", nodeBarState(running.copy(syncEnabled = false, hasKey = false)).label)
+        assertEquals("Sync off: create or import a key first", nodeBarState(running.copy(syncEnabled = false, hasKey = false)).label)
         assertEquals(BarState(Health.Bad, "The phone's clock is wrong"), nodeBarState(running.copy(node = synced.copy(wrongTime = true))))
     }
 
