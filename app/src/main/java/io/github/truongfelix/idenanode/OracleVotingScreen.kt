@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
+import java.math.BigDecimal
 import java.time.Instant
 
 /** A voting as its screen shows it: the node's view relative to the identity, the vote sent from this phone, the opened vote. */
@@ -96,7 +97,8 @@ fun OracleVotingScreen(contract: String, me: String, onClose: () -> Unit, modifi
                 Button(onClick = { reads++ }) { Text("Try again") }
             }
             else -> {
-                VotingDetails(view.voting)
+                VotingDetails(view.voting, me)
+                VotingActionPills(view.voting, me) { reads++ }
                 HorizontalDivider()
                 val voting = view.voting
                 val choosing = voting.canVote && pending == null
@@ -163,11 +165,11 @@ private fun planVote(context: Context, me: String, contract: String, option: Int
 }
 
 @Composable
-private fun VotingDetails(voting: OracleVoting) {
+private fun VotingDetails(voting: OracleVoting, me: String) {
     Text(votingTitle(voting), style = MaterialTheme.typography.titleMedium)
     if (voting.fact.desc.isNotBlank()) SelectionContainer { Text(voting.fact.desc, style = MaterialTheme.typography.bodyMedium) }
     Field("State", votingStateText(voting.state))
-    Field("Author", shortAddress(voting.author))
+    Field("Author", shortAddress(voting.author) + if (voting.author.equals(me, ignoreCase = true)) " (you)" else "")
     val running = voting.state in listOf(VotingState.OPEN, VotingState.VOTED)
     if (running) voting.votingEnd?.let { Field("Secret vote", "until ${dateText(it)}") }
     if (running || voting.state == VotingState.COUNTING || voting.state == VotingState.CAN_BE_PROLONGED) {
@@ -175,6 +177,12 @@ private fun VotingDetails(voting: OracleVoting) {
     }
     Field("Committee", "${voting.committeeSize} oracles · ${voting.quorumVotes} votes needed")
     Field("Votes", "${voting.votesSent} sent · ${voting.votes} opened")
+    if (voting.state == VotingState.PENDING) {
+        val needed = (voting.ownerDeposit ?: BigDecimal.ZERO) + (voting.rewardsFund ?: BigDecimal.ZERO)
+        Field("Funds", "${idna(voting.balance.toPlainString())} · ${idna(needed.toPlainString())} to launch")
+    } else if (voting.state !in CLOSED_STATES) {
+        Field("Funds", idna(voting.balance.toPlainString()))
+    }
     if (voting.minPayment.signum() > 0) Field("Payment", "${idna(voting.minPayment.toPlainString())} per vote")
     if (running) voting.oracleReward?.takeIf { it.signum() > 0 }?.let { reward ->
         val most = voting.maxOracleReward?.takeIf { it > reward }?.let { " (up to ${idna(it.toPlainString())})" }.orEmpty()

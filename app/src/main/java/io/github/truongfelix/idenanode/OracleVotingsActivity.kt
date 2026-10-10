@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,8 +48,8 @@ import java.time.Instant
 
 /**
  * The Oracle votings screen, opened from the Profile card: the votings of the identity's committees (to vote in,
- * ongoing, closed) and every voting, from the app's own node; a voting opens on its own screen, where the identity
- * votes.
+ * ongoing, closed), every voting, and the identity's own (created or voted in), from the app's own node; a voting
+ * opens on its own screen, where the identity votes, and + New opens the New voting form.
  */
 class OracleVotingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +71,7 @@ fun OracleVotingsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(VotingTab.ToVote) }
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
+    var creating by rememberSaveable { mutableStateOf(false) }
     // Back from a voting, the list is read again: a vote moves it to Ongoing.
     var reloads by rememberSaveable { mutableIntStateOf(0) }
     var reads by remember { mutableIntStateOf(0) }
@@ -90,9 +92,25 @@ fun OracleVotingsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         OracleVotingScreen(contract, me, onClose = back, modifier = modifier)
         return
     }
+    if (creating && me != null) {
+        BackHandler { creating = false }
+        NewVotingScreen(
+            me,
+            onClose = { creating = false },
+            onPublished = {
+                creating = false
+                opened = it
+                tab = VotingTab.Mine
+            },
+            modifier = modifier,
+        )
+        return
+    }
     BackHandler(onBack = onClose)
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ScreenTitle("Oracle votings", onClose)
+        ScreenTitle("Oracle votings", onClose) {
+            TextButton(onClick = { creating = true }, enabled = me != null) { Text("+ New") }
+        }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VotingTab.entries.forEach {
                 FilterChip(selected = tab == it, onClick = { tab = it }, label = { Text(it.title) })
@@ -110,15 +128,15 @@ fun OracleVotingsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** The title row of the votings' screens: Close, and the title in the middle. */
+/** The title row of the votings' screens: Close, the title in the middle, and [action] at the right. */
 @Composable
-internal fun ScreenTitle(title: String, onClose: () -> Unit) {
+internal fun ScreenTitle(title: String, onClose: () -> Unit, action: (@Composable () -> Unit)? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onClose) { Text("Close") }
         Spacer(Modifier.weight(1f))
         Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
-        Spacer(Modifier.width(64.dp))
+        Box(Modifier.width(72.dp), contentAlignment = Alignment.CenterEnd) { action?.invoke() }
     }
 }
 
@@ -136,6 +154,7 @@ private val TAB_EMPTY = mapOf(
     VotingTab.Ongoing to "No voting you voted in or being counted.",
     VotingTab.Closed to "No closed voting of your committees.",
     VotingTab.All to "No voting yet.",
+    VotingTab.Mine to "No voting you created or voted in. + New makes one.",
 )
 
 @Composable

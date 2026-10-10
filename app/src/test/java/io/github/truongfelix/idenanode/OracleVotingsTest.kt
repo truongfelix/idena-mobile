@@ -127,6 +127,33 @@ class OracleVotingsTest {
         assertTrue(all.getBoolean("all"))
         assertEquals(VotingState.ALL.size, all.getJSONArray("states").length())
         assertEquals("next", all.getString("continuationToken"))
+        assertFalse(all.has("address"))
+        // Mine: the node's address filter (created or voted in), every state.
+        val mine = votingListParams(VotingTab.Mine, "0xme", null).getJSONObject(0)
+        assertEquals("0xme", mine.getString("address"))
+        assertFalse(mine.getBoolean("all"))
+        assertEquals(VotingState.ALL.size, mine.getJSONArray("states").length())
+    }
+
+    @Test
+    fun theOwnersFieldsAreRead() {
+        val voting = parseVoting(
+            votingJson(
+                "Pending",
+                """, "ownerDeposit": "250.5", "oracleRewardFund": "10", "refundRecipient": "0xREFUND",
+                   "estimatedTerminationTime": "2026-11-01T10:00:00Z"""",
+            ).put("epochWithoutGrowth", 2),
+        )
+        assertEquals(0, BigDecimal("250.5").compareTo(voting.ownerDeposit))
+        assertEquals(0, BigDecimal(10).compareTo(voting.rewardsFund))
+        assertEquals("0xrefund", voting.refundRecipient)
+        assertEquals(Instant.parse("2026-11-01T10:00:00Z"), voting.terminationTime)
+        assertEquals(2, voting.epochWithoutGrowth)
+        val bare = parseVoting(votingJson())
+        assertNull(bare.ownerDeposit)
+        assertNull(bare.rewardsFund)
+        assertNull(bare.refundRecipient)
+        assertNull(bare.terminationTime)
     }
 
     @Test

@@ -26,14 +26,19 @@ object VotingState {
 
 /**
  * The lists of the screen, as the desktop's: the votings of the identity's committees still to vote in, those
- * voted in or being counted, those closed ([all] false: committees only); then every voting.
+ * voted in or being counted, those closed ([all] false: committees only); then every voting, and the votings the
+ * identity created or voted in ([mine]: the node's `address` filter).
  */
-enum class VotingTab(val title: String, val all: Boolean, val states: List<String>) {
+enum class VotingTab(val title: String, val all: Boolean, val states: List<String>, val mine: Boolean = false) {
     ToVote("To vote", false, listOf(VotingState.OPEN)),
     Ongoing("Ongoing", false, listOf(VotingState.VOTED, VotingState.COUNTING, VotingState.CAN_BE_PROLONGED)),
     Closed("Closed", false, listOf(VotingState.ARCHIVE, VotingState.TERMINATED)),
     All("All", true, VotingState.ALL),
+    Mine("Mine", false, VotingState.ALL, mine = true),
 }
+
+/** The states in which a voting takes no more funds or actions but termination. */
+val CLOSED_STATES = listOf(VotingState.ARCHIVE, VotingState.TERMINATED)
 
 /** The most votings one contract_oracleVotings call returns (the node's limit). */
 const val VOTINGS_PER_PAGE = 100
@@ -76,6 +81,15 @@ data class OracleVoting(
     val ownerFee: Int,
     /** The winning option of a closed voting. */
     val result: Int?,
+    /** What the author deposits to launch it (the contract's figure), and the rewards fund it set. */
+    val ownerDeposit: BigDecimal? = null,
+    val rewardsFund: BigDecimal? = null,
+    /** Where the owner's share goes, when not to the author. */
+    val refundRecipient: String? = null,
+    /** From when it can be terminated: estimated until then. */
+    val terminationTime: Instant? = null,
+    /** Prolongations without more votes (the contract refuses a fourth). */
+    val epochWithoutGrowth: Int = 0,
 ) {
     /** Whether the identity can send its vote now. */
     val canVote: Boolean
@@ -89,13 +103,17 @@ data class OracleVoting(
 /** A page of a list, with the token of the next page (null on the last one). */
 data class VotingPage(val votings: List<OracleVoting>, val next: String?)
 
-/** The parameters of contract_oracleVotings for [tab], relative to [oracle], from [token] (null: the first page). */
+/**
+ * The parameters of contract_oracleVotings for [tab], relative to [oracle] (also the address of [VotingTab.Mine]), from
+ * [token] (null: the first page).
+ */
 fun votingListParams(tab: VotingTab, oracle: String, token: String?, limit: Int = VOTINGS_PER_PAGE): JSONArray {
     val args = JSONObject()
         .put("oracle", oracle)
         .put("all", tab.all)
         .put("states", JSONArray(tab.states))
         .put("limit", limit)
+    if (tab.mine) args.put("address", oracle)
     token?.let { args.put("continuationToken", it) }
     return JSONArray().put(args)
 }
@@ -147,6 +165,11 @@ fun parseVoting(json: JSONObject): OracleVoting {
         winnerThreshold = json.optInt("winnerThreshold"),
         ownerFee = json.optInt("ownerFee"),
         result = if (json.isNull("result") || !json.has("result")) null else json.optInt("result"),
+        ownerDeposit = amount(json, "ownerDeposit"),
+        rewardsFund = amount(json, "oracleRewardFund"),
+        refundRecipient = json.takeUnless { it.isNull("refundRecipient") }?.optString("refundRecipient")?.ifEmpty { null }?.lowercase(),
+        terminationTime = time(json, "estimatedTerminationTime") ?: time(json, "terminationTime"),
+        epochWithoutGrowth = json.optInt("epochWithoutGrowth"),
     )
 }
 
