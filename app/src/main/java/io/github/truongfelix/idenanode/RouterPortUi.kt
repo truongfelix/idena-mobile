@@ -38,9 +38,13 @@ import java.time.format.FormatStyle
 sealed interface RouterPortState {
     /** Not on Wi-Fi, or nothing to show (sync off and no opening). */
     data object Hidden : RouterPortState
-    /** The node process looks for the router ([RouterSearch]) since [startedMs]. */
-    data class Searching(val startedMs: Long) : RouterPortState
-    data object NotFound : RouterPortState
+    /**
+     * The node process looks for the router ([RouterSearch]) since [startedMs]; [heard] = the router that answered
+     * without a forwarding service, still listened to.
+     */
+    data class Searching(val startedMs: Long, val heard: String? = null) : RouterPortState
+    /** No forwarding service found; [heard] = the router that answered without one. */
+    data class NotFound(val heard: String? = null) : RouterPortState
     data class Found(
         val gateway: Gateway,
         val phoneIp: String,
@@ -86,8 +90,10 @@ class RouterPortModel(private val context: Context) {
                 state = RouterPortState.Hidden
                 return@withContext
             }
-            val known = gateway
-                ?: RouterNet.knownHere(listOfNotNull(RouterFiles.opening(context)?.gateway) + RouterFiles.known(context))
+            // The opening's router is usually a known one too: asked once (each one not here costs a timeout).
+            val known = gateway ?: RouterNet.knownHere(
+                (listOfNotNull(RouterFiles.opening(context)?.gateway) + RouterFiles.known(context)).distinctBy { it.udn },
+            )
             if (known != null) {
                 gateway = known
                 read(known, syncEnabled)
@@ -97,13 +103,13 @@ class RouterPortModel(private val context: Context) {
             val status = RouterSearch.status(context, now)
             state = when {
                 !syncEnabled -> RouterPortState.Hidden
-                status?.running == true -> RouterPortState.Searching(status.startedMs)
+                status?.running == true -> RouterPortState.Searching(status.startedMs, status.heard)
                 // A router that stopped answering (another Wi-Fi?) is looked for again.
                 (search || state is RouterPortState.Failed) && (status == null || now - status.startedMs > SEARCH_AGAIN_MS) -> {
                     NodeService.searchRouter(context)
                     RouterPortState.Searching(now)
                 }
-                status != null -> RouterPortState.NotFound
+                status != null -> RouterPortState.NotFound(status.heard)
                 else -> RouterPortState.Hidden
             }
         }
@@ -159,6 +165,18 @@ class RouterPortModel(private val context: Context) {
         }
     }
 }
+
+/** What the row says while the node looks for the router, [minutes] after the search started. */
+fun routerSearchingText(heard: String?, minutes: Long): String {
+    val answered = heard?.let { " $it answered, without port opening (UPnP)." }.orEmpty()
+    val soFar = if (minutes > 0) " ($minutes min so far)." else "."
+    return "Looking for the router of this Wi-Fi…$answered Some routers announce themselves only every 15 minutes$soFar"
+}
+
+/** What the row says when the search found no router to open the port on. */
+fun routerNotFoundText(heard: String?): String =
+    heard?.let { "$it offers no port opening (UPnP): it may be turned off in the router's settings" }
+        ?: "No router with UPnP heard on this Wi-Fi"
 
 /** What the row says about a found router, and which buttons it offers. */
 data class RouterPortView(val text: String, val canOpen: Boolean, val canClose: Boolean)
@@ -222,15 +240,10 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
             RouterPortState.Hidden -> Unit
             is RouterPortState.Searching -> {
                 val minutes = (System.currentTimeMillis() - state.startedMs) / 60_000
-                Text(
-                    "Looking for the router of this Wi-Fi… Some routers announce themselves only every 15 minutes" +
-                        if (minutes > 0) " ($minutes min so far)." else ".",
-                    style = small,
-                    color = muted,
-                )
+                Text(routerSearchingText(state.heard, minutes), style = small, color = muted)
             }
-            RouterPortState.NotFound -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("No router with UPnP heard on this Wi-Fi", style = small, color = muted, modifier = Modifier.weight(1f))
+            is RouterPortState.NotFound -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(routerNotFoundText(state.heard), style = small, color = muted, modifier = Modifier.weight(1f))
                 TextButton(onClick = { model.searchAgain() }) { Text("Search again") }
             }
             is RouterPortState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {

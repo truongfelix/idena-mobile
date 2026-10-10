@@ -57,7 +57,10 @@ object RouterSearch {
 
     private fun statusFile(context: Context) = java.io.File(NodeSettings.nodeDir(context), "router_search.json")
 
-    /** The last search: when it started, whether it still runs (not after its longest time), what it found. */
+    /**
+     * The last search: when it started, whether it still runs (not after its longest time), what it found, and the
+     * name of the router that answered without a forwarding service.
+     */
     fun status(context: Context, nowMs: Long = System.currentTimeMillis()): RouterSearchStatus? = runCatching {
         val json = JSONObject(statusFile(context).readText())
         val started = json.getLong("startedMs")
@@ -66,6 +69,7 @@ object RouterSearch {
             // A search whose process ended mid-way stays "running" in the file: not after its longest time.
             running = json.optBoolean("running") && nowMs - started < RouterNet.LISTEN_MS + 60_000,
             foundUdn = json.optString("found").ifEmpty { null },
+            heard = json.optString("heard").ifEmpty { null },
         )
     }.getOrNull()
 
@@ -75,14 +79,23 @@ object RouterSearch {
         try {
             val started = System.currentTimeMillis()
             write(context, JSONObject().put("startedMs", started).put("running", true))
+            var heard = ""
             val gateway = if (RouterNet.onWifi(context)) {
-                runCatching { RouterNet.find(context, RouterFiles.known(context)) }
-                    .onFailure { android.util.Log.w("IdenaNode", "Router search failed: $it") }.getOrNull()
+                runCatching {
+                    RouterNet.find(context, RouterFiles.known(context)) { name ->
+                        heard = name
+                        write(context, JSONObject().put("startedMs", started).put("running", true).put("heard", name))
+                    }
+                }.onFailure { android.util.Log.w("IdenaNode", "Router search failed: $it") }.getOrNull()
             } else {
                 null
             }
             gateway?.let { RouterFiles.remember(context, it) }
-            write(context, JSONObject().put("startedMs", started).put("running", false).put("found", gateway?.udn ?: ""))
+            write(
+                context,
+                JSONObject().put("startedMs", started).put("running", false).put("found", gateway?.udn ?: "")
+                    .put("heard", if (gateway == null) heard else ""),
+            )
         } finally {
             running.set(false)
         }
@@ -96,5 +109,5 @@ object RouterSearch {
     }
 }
 
-/** The last router search ([RouterSearch]). */
-data class RouterSearchStatus(val startedMs: Long, val running: Boolean, val foundUdn: String?)
+/** The last router search ([RouterSearch]); [heard] = the router that answered without a forwarding service. */
+data class RouterSearchStatus(val startedMs: Long, val running: Boolean, val foundUdn: String?, val heard: String? = null)

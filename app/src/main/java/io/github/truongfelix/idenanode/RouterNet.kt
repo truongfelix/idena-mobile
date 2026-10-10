@@ -53,25 +53,38 @@ object RouterNet {
     /**
      * Finds the router's forwarding service: first at the addresses of routers found before ([known]), then by a
      * search, then by listening to announcements for up to [listenMs] (some routers, like the Livebox, never
-     * answer a search). Null when none was found.
+     * answer a search). Null when none was found. When the router answered the search without a forwarding
+     * service, [onHeard] gets its name before the listening starts.
      */
-    fun find(context: Context, known: List<Gateway>, listenMs: Long = LISTEN_MS): Gateway? {
+    fun find(context: Context, known: List<Gateway>, listenMs: Long = LISTEN_MS, onHeard: (String) -> Unit = {}): Gateway? {
         knownHere(known)?.let { return it }
         val lock = (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
             .createMulticastLock("IdenaNode:router").apply { setReferenceCounted(false) }
         return try {
             lock.acquire()
-            search() ?: listen(listenMs)
+            search(routerAddress(context), onHeard) ?: listen(listenMs)
         } finally {
             if (lock.isHeld) lock.release()
         }
     }
 
-    private fun search(): Gateway? {
+    /** The active network's router: the address of its default IPv4 route, or null. */
+    private fun routerAddress(context: Context): String? = runCatching {
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        cm.getLinkProperties(cm.activeNetwork)?.routes
+            ?.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }?.gateway?.hostAddress
+    }.getOrNull()
+
+    /**
+     * Searches for gateways, and for root devices to name the [router] if it has no forwarding service: only the
+     * devices at the router's address are read for that, not every device that answers.
+     */
+    private fun search(router: String?, onHeard: (String) -> Unit): Gateway? {
         val tried = mutableSetOf<String>()
+        var heard: String? = null
         DatagramSocket().use { socket ->
             socket.soTimeout = 500
-            SSDP_SEARCH_TARGETS.forEach { target ->
+            (SSDP_SEARCH_TARGETS + SSDP_ROOT_DEVICE).forEach { target ->
                 val message = ssdpSearch(target).toByteArray()
                 socket.send(DatagramPacket(message, message.size, SSDP_GROUP, SSDP_PORT))
             }
@@ -85,9 +98,15 @@ object RouterNet {
                     continue
                 }
                 val message = parseSsdp(String(packet.data, 0, packet.length, Charsets.ISO_8859_1)) ?: continue
-                if (tried.add(message.location)) runCatching { describe(message.location) }.getOrNull()?.let { return it }
+                val atRouter = router != null && locationHost(message.location) == router
+                if (message.type.equals(SSDP_ROOT_DEVICE, ignoreCase = true) && !atRouter) continue
+                if (!tried.add(message.location)) continue
+                val xml = runCatching { description(message.location) }.getOrNull() ?: continue
+                parseGateway(message.location, xml)?.let { return it }
+                if (atRouter && heard == null) heard = parseDeviceName(xml)
             }
         }
+        heard?.let(onHeard)
         return null
     }
 
@@ -128,9 +147,13 @@ object RouterNet {
             .firstOrNull()
     }.getOrNull()
 
-    private fun describe(location: String, timeoutMs: Int = TIMEOUT_MS): Gateway? {
+    private fun describe(location: String, timeoutMs: Int = TIMEOUT_MS): Gateway? =
+        description(location, timeoutMs)?.let { parseGateway(location, it) }
+
+    /** The device description at [location], or null when the device does not give it. */
+    private fun description(location: String, timeoutMs: Int = TIMEOUT_MS): String? {
         val response = http(location, "GET", emptyMap(), null, timeoutMs).first
-        return if (response.status == 200) parseGateway(location, response.body) else null
+        return if (response.status == 200) response.body else null
     }
 
     /** Sends [action] to the router; returns its answer and the phone's address as the router sees it. */

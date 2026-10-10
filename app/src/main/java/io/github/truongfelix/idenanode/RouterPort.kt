@@ -40,6 +40,23 @@ val SSDP_SEARCH_TARGETS = listOf(
     "urn:schemas-upnp-org:service:WANPPPConnection:1",
 )
 
+/**
+ * Also searched for: every device's root, to name the router when it offers no forwarding service (its UPnP port
+ * opening is off, or it announces it only from time to time).
+ */
+const val SSDP_ROOT_DEVICE = "upnp:rootdevice"
+
+/** The longest router name the row shows. */
+private const val DEVICE_NAME_MAX = 60
+
+/** The name in a device description: its root device's friendly name, else its model; on one line, or null. */
+fun parseDeviceName(xml: String): String? =
+    listOf("friendlyName", "modelName").firstNotNullOfOrNull { name -> tag(xml, name)?.takeIf { it.isNotBlank() } }
+        ?.replace(Regex("\\s+"), " ")?.take(DEVICE_NAME_MAX)
+
+/** The host of a description's address, or null when it has none. */
+fun locationHost(location: String): String? = runCatching { URI(location).host }.getOrNull()
+
 /** An SSDP datagram, or null when it is neither an announcement nor an answer, or has no description address. */
 fun parseSsdp(text: String): SsdpMessage? {
     val lines = text.split("\r\n", "\n")
