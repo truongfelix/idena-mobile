@@ -279,6 +279,18 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
+    // The Sync switch, and a new account once its backup is checked.
+    val setSync: (Boolean) -> Unit = { enabled ->
+        if (enabled) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            NodeService.start(context)
+        } else {
+            NodeService.stop(context)
+        }
+        model.syncChanged(enabled)
+    }
 
     Column(
         modifier
@@ -304,27 +316,31 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
                     onRestart = { NodeService.restart(context) },
                 )
             },
-        ) { enabled ->
-            if (enabled) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                NodeService.start(context)
-            } else {
-                NodeService.stop(context)
-            }
-            model.syncChanged(enabled)
+            onSyncChange = setSync,
+        )
+        val nodeDir = NodeSettings.nodeDir(context).absolutePath
+        val importKey: suspend (String, String) -> String = { key, password ->
+            withContext(Dispatchers.IO) { Mobile.importKey(nodeDir, NodeSettings.nodeConfig(context), key.trim(), password) }
         }
-        KeyCard(state) { key, password, done ->
-            scope.launch {
-                val error = withContext(Dispatchers.IO) {
-                    Mobile.importKey(
-                        NodeSettings.nodeDir(context).absolutePath,
-                        NodeSettings.nodeConfig(context),
-                        key.trim(),
-                        password,
-                    )
+        KeyCard(
+            state,
+            newKey = { Mobile.newKey(it) },
+            exportKey = { Mobile.exportKey(nodeDir, it) },
+            onCreate = { backup, password, done ->
+                scope.launch {
+                    val error = importKey(backup, password)
+                    if (error.isNotEmpty()) {
+                        done(false, "The account was not created: $error")
+                    } else {
+                        setSync(true)
+                        done(true, NEW_ACCOUNT_MESSAGE)
+                    }
+                    refresh()
                 }
+            },
+        ) { key, password, done ->
+            scope.launch {
+                val error = importKey(key, password)
                 if (error.isNotEmpty()) {
                     done(false, error)
                 } else {

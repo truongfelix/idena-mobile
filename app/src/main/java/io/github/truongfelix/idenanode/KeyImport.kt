@@ -32,3 +32,8 @@ const val IMPORT_KEEPS_NODE_NOTE =
 const val MINING_IMPORT_WARNING =
     "This identity mines on this phone. Switch \"Mine on this phone\" off first and wait until it is done: an " +
         "identity left mining with no node is taken offline by the network, with an 8-hour mining penalty."
+
+/** The Key card's message once a new account's checked backup went to the node, which then starts with it. */
+const val NEW_ACCOUNT_MESSAGE =
+    "Account created: the node starts with it. Your address will be in Wallet › Receive; an invitation code goes in " +
+        "the Profile."
