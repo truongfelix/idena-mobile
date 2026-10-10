@@ -69,6 +69,8 @@ data class NewVotingForm(
     val ownerFee: Int = 0,
     val rewardsFund: BigDecimal = BigDecimal.ZERO,
     val refundAddress: String = "",
+    /** The ad an ad review votes on (its IPFS cid), empty for any other voting. */
+    val adCid: String = "",
 ) {
     /** The options the voting gets: the written ones, numbered in order. */
     val writtenOptions: List<VotingOption>
@@ -111,10 +113,11 @@ fun NewVotingForm.problems(): List<String> = buildList {
     if (refundAddress.isNotEmpty() && !ADDRESS.matches(refundAddress)) add("The refund address is not an address.")
 }
 
-/** The contract's fact: hex of JSON {title, desc, options: [{id, value}]}, as the desktop writes it. */
+/** The contract's fact: hex of JSON {title, desc, options: [{id, value}]} and an ad review's adCid, as the desktop writes it. */
 fun factHex(form: NewVotingForm): String {
     val options = JSONArray(form.writtenOptions.map { JSONObject().put("id", it.id).put("value", it.text) })
     val fact = JSONObject().put("title", form.title.trim()).put("desc", form.desc.trim()).put("options", options)
+    if (form.adCid.isNotEmpty()) fact.put("adCid", form.adCid)
     return bytesToHex(fact.toString().toByteArray(Charsets.UTF_8))
 }
 
@@ -178,7 +181,7 @@ data class PublishPlan(val args: JSONArray, val stake: BigDecimal, val cost: TxC
 /** What the confirmation says before publishing [form] as [plan]. [date] writes a time. */
 fun publishConfirmText(form: NewVotingForm, plan: PublishPlan, date: (Instant) -> String): String = buildString {
     val launch = idna(plan.launchAmount.toPlainString())
-    append("Publish “${form.title.trim()}”? It stakes ${idna(plan.stake.toPlainString())}, which comes back to you when the voting is terminated.")
+    append("Publish “${form.title.trim()}”? It stakes ${idna(plan.stake.toPlainString())}: half of it comes back to you when the voting is terminated, the other half is burned.")
     if (launchesAtOnce(form)) {
         append("\n\nThen a second transaction launches it, with its own fee: $launch to the voting (the owner deposit and the rewards fund).")
     } else {

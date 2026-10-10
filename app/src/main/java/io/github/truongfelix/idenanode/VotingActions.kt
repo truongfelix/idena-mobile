@@ -107,12 +107,15 @@ fun actionConfirmText(action: VotingAction, voting: OracleVoting, me: String, am
                 "who voted, when no option wins), sends the owner's share (the deposit back and the owner fee) to " +
                 "${ownerShareTo(voting, me)}, and burns what is left."
         VotingAction.Terminate -> "Terminate $title? " + when {
-            voting.state == VotingState.PENDING -> "It never started: the contract sends the $held it holds to you, and its stake back to its author."
-            voting.balance.signum() == 0 -> "The contract removes it and sends its stake back to its author."
+            voting.state == VotingState.PENDING ->
+                "It never started: the contract sends the $held it holds to you, and half of its stake back to its author " +
+                    "(the other half is burned)."
+            voting.balance.signum() == 0 ->
+                "The contract removes it and sends half of its stake back to its author (the other half is burned)."
             else ->
                 "The contract closes it: the owner's share (the deposit back and the owner fee) goes to " +
                     "${ownerShareTo(voting, me)}, the rest of its $held to the oracles who voted (to you, when nobody " +
-                    "voted), and its stake back to its author."
+                    "voted), and half of its stake back to its author (the other half is burned)."
         }
         VotingAction.AddFunds -> return addFundsConfirmText(voting, amount, cost.fee)
     }

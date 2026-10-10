@@ -165,7 +165,7 @@ class NewVotingTest {
         val plan = PublishPlan(JSONArray(), BigDecimal("0.003"), TxCost(BigDecimal("0.123"), BigDecimal("0.246")), "0xc0", BigDecimal("260"))
         val atOnce = publishConfirmText(filled.copy(title = "Best fruit?"), plan) { "DATE" }
         assertEquals(
-            "Publish “Best fruit?”? It stakes 0.003 iDNA, which comes back to you when the voting is terminated." +
+            "Publish “Best fruit?”? It stakes 0.003 iDNA: half of it comes back to you when the voting is terminated, the other half is burned." +
                 "\n\nThen a second transaction launches it, with its own fee: 260 iDNA to the voting (the owner deposit and the rewards fund)." +
                 "\n\nSecret voting 1 day, then counting 12 h.\n\nFee: about 0.13 iDNA (at most 0.25).",
             atOnce,
