@@ -57,6 +57,7 @@ fun KeyCard(state: ScreenState, onImport: (String, String, (Boolean, String) -> 
             } else {
                 if (state.hasKey) {
                     Text("The current key is kept in a backup file.", style = MaterialTheme.typography.bodySmall)
+                    Text(IMPORT_KEEPS_NODE_NOTE, style = MaterialTheme.typography.bodySmall)
                 }
                 if (state.status?.let { it.online && it.delegatee == null } == true) {
                     Text(MINING_IMPORT_WARNING, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

@@ -248,4 +248,47 @@ class RouterPortTest {
         assertEquals("Port 40405 on Orange Livebox goes to another device (192.168.1.9)", other.text)
         assertFalse(other.canOpen || other.canClose)
     }
+
+    @Test
+    fun aRouterWithoutForwardingServiceIsNamed() {
+        // A Speedport Smart 4 (2026-10-09) answers the root device search, but its UPnP port opening is off:
+        // its description holds no forwarding service, only its name.
+        val answer = "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nST: upnp:rootdevice\r\n" +
+            "LOCATION: http://192.168.2.1:34199/rootDesc.xml\r\nUSN: uuid:x::upnp:rootdevice\r\n\r\n"
+        val message = parseSsdp(answer)!!
+        assertEquals(SSDP_ROOT_DEVICE, message.type)
+        assertEquals("192.168.2.1", locationHost(message.location))
+        val speedport = sample("speedport-description.xml")
+        assertNull(parseGateway(message.location, speedport))
+        assertEquals("Speedport Smart 4 Typ B", parseDeviceName(speedport))
+        assertEquals("Orange Livebox", parseDeviceName(sample("livebox-description.xml")))
+    }
+
+    @Test
+    fun aDeviceNameIsOneShortLine() {
+        assertEquals("Box 7590 & Co", parseDeviceName("<friendlyName>  Box\n  7590 &amp; Co </friendlyName>"))
+        assertEquals("Model only", parseDeviceName("<friendlyName> </friendlyName><modelName>Model only</modelName>"))
+        assertEquals(60, parseDeviceName("<friendlyName>${"x".repeat(200)}</friendlyName>")!!.length)
+        assertNull(parseDeviceName("<root><device></device></root>"))
+        assertEquals("192.168.2.1", locationHost("http://192.168.2.1:0/agent.xml"))
+        assertNull(locationHost("not a url"))
+    }
+
+    @Test
+    fun theRowNamesTheRouterThatAnsweredWithoutPortOpening() {
+        assertEquals(
+            "Looking for the router of this Wi-Fi… Some routers announce themselves only every 15 minutes.",
+            routerSearchingText(null, 0),
+        )
+        assertEquals(
+            "Looking for the router of this Wi-Fi… Speedport Smart 4 Typ B answered, without port opening (UPnP). " +
+                "Some routers announce themselves only every 15 minutes (3 min so far).",
+            routerSearchingText("Speedport Smart 4 Typ B", 3),
+        )
+        assertEquals("No router with UPnP heard on this Wi-Fi", routerNotFoundText(null))
+        assertEquals(
+            "Speedport Smart 4 Typ B offers no port opening (UPnP): it may be turned off in the router's settings",
+            routerNotFoundText("Speedport Smart 4 Typ B"),
+        )
+    }
 }
