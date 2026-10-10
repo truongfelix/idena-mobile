@@ -141,7 +141,7 @@ fun NewVotingScreen(me: String, onClose: () -> Unit, onPublished: (String) -> Un
                 TextButton(onClick = {
                     plan = null
                     scope.launch {
-                        val outcome = publishAndLaunch(context, me, form, ready) { busy = it }
+                        val outcome = publishAndLaunch(rpc(context), me, form, ready) { busy = it }
                         busy = null
                         published = outcome.contract
                         message = outcome.message
@@ -167,25 +167,33 @@ private fun planPublish(context: Context, me: String, form: NewVotingForm): Publ
 }
 
 /** How a publish ended: the voting, if the deploy made one, and what went wrong (null when all went through). */
-private data class PublishOutcome(val contract: String?, val message: String?)
+internal data class PublishOutcome(val contract: String?, val message: String?)
 
 /**
- * Publishes [plan] and waits for its block; then, when the voting starts now, launches it and waits again. [status]
- * says each step. A launch that fails leaves the voting published, not started: its page offers Launch.
+ * Publishes [plan] and waits for its block ([onDeployed] then gets the voting); then, when the voting starts now,
+ * launches it and waits again. [status] says each step. A launch that fails leaves the voting published, not started:
+ * its page offers Launch.
  */
-private suspend fun publishAndLaunch(context: Context, me: String, form: NewVotingForm, plan: PublishPlan, status: (String) -> Unit): PublishOutcome =
+internal suspend fun publishAndLaunch(
+    rpc: NodeRpc,
+    me: String,
+    form: NewVotingForm,
+    plan: PublishPlan,
+    onDeployed: (String) -> Unit = {},
+    status: (String) -> Unit,
+): PublishOutcome =
     withContext(Dispatchers.IO) {
-        val rpc = rpc(context)
         val node = VotingOwnerNode(rpc)
         status("Publishing…")
         val hash = runCatching { node.publish(me, plan) }.getOrElse { return@withContext PublishOutcome(null, "Not published: ${it.message}") }
         val block = waitForBlock(NodeTxLookup(rpc), hash) ?: return@withContext PublishOutcome(null, "Not published: $NOT_SENT")
         block.error?.let { return@withContext PublishOutcome(null, "The contract refused it: $it.") }
         val contract = runCatching { node.deployed(hash) }.getOrNull() ?: plan.contract
+        onDeployed(contract)
         if (!launchesAtOnce(form)) return@withContext PublishOutcome(contract, null)
         status("Launching…")
         val launched = runCatching {
-            val voting = votingNode(context).voting(contract, me)
+            val voting = OracleVotingNode(rpc).voting(contract, me)
             // The form's rewards fund too: the contract keeps it only with an owner fee.
             val amount = maxOf(plan.launchAmount - voting.balance, launchAmount(voting))
             val cost = node.plan(VotingAction.Launch, me, voting, amount)

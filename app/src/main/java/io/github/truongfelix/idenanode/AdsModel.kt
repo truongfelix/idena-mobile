@@ -55,28 +55,9 @@ class AdsModel(private val context: Context) {
         for (burn in rankedBurns(burnt, viewer)) {
             if (shown.size == MAX_ADS) break
             if (shown.any { it.cid == burn.cid }) continue
-            runCatching { approvedAd(rpc, burn) }.getOrNull()?.let { shown += it }
+            runCatching { approvedAd(rpc, burn, ::ipfs, reviewsOver) }.getOrNull()?.let { shown += it }
         }
         return shown
-    }
-
-    /** The ad of [burn] when its author lists it and its review approved it; null otherwise. */
-    private fun approvedAd(rpc: NodeRpc, burn: AdBurn): ChainAd? {
-        val author = rpc.call("dna_identity", JSONArray().put(burn.address)) as? JSONObject ?: return null
-        val profile = ipfs(author.optString("profileHash")) ?: return null
-        val listed = decodeProfileAds(profile).firstOrNull { it.cid == burn.cid } ?: return null
-        if (!Regex("^0x[0-9a-fA-F]{40}$").matches(listed.contract)) return null
-        val review = listed.contract.lowercase() to burn.cid
-        val approved = reviewsOver[review] ?: run {
-            val data = rpc.call("contract_batchReadData", JSONArray().put(listed.contract).put(adReviewKeys())) as? JSONArray
-                ?: return null
-            val result = adReview(data, burn.cid) ?: return null
-            if (result.over) reviewsOver[review] = result.approved
-            result.approved
-        }
-        if (!approved) return null
-        val content = ipfs(burn.cid)?.let(::decodeAd) ?: return null
-        return ChainAd(burn.cid, burn.address, burn.amount, content)
     }
 
     /** The content of [cid] from the phone's files, else through the node; null when not found. */
@@ -85,4 +66,26 @@ class AdsModel(private val context: Context) {
         if (ipfsCid("ipfs://$cid") == null) return null
         return IpfsStore.cached(context, cid) ?: IpfsStore.fetch(context, cid)
     }
+}
+
+/**
+ * The ad of [burn] when its author lists it in the profile and its review approved it; null otherwise. [ipfs] reads a
+ * cid's content; [reviewsOver] keeps the reviews that are over (they no longer change), by contract and ad.
+ */
+fun approvedAd(rpc: NodeRpc, burn: AdBurn, ipfs: (String) -> ByteArray?, reviewsOver: MutableMap<Pair<String, String>, Boolean>): ChainAd? {
+    val author = rpc.call("dna_identity", JSONArray().put(burn.address)) as? JSONObject ?: return null
+    val profile = ipfs(author.optString("profileHash")) ?: return null
+    val listed = decodeProfileAds(profile).firstOrNull { it.cid == burn.cid } ?: return null
+    if (!Regex("^0x[0-9a-fA-F]{40}$").matches(listed.contract)) return null
+    val review = listed.contract.lowercase() to burn.cid
+    val approved = reviewsOver[review] ?: run {
+        val data = rpc.call("contract_batchReadData", JSONArray().put(listed.contract).put(adReviewKeys())) as? JSONArray
+            ?: return null
+        val result = adReview(data, burn.cid) ?: return null
+        if (result.over) reviewsOver[review] = result.approved
+        result.approved
+    }
+    if (!approved) return null
+    val content = ipfs(burn.cid)?.let(::decodeAd) ?: return null
+    return ChainAd(burn.cid, burn.address, burn.amount, content)
 }

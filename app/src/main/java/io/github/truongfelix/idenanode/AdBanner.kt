@@ -137,7 +137,7 @@ private fun ItemDialog(item: BannerItem?, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun BannerText(title: String, line: String, modifier: Modifier) {
+internal fun BannerText(title: String, line: String, modifier: Modifier) {
     Column(modifier.padding(horizontal = 12.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
@@ -151,13 +151,13 @@ private fun BannerText(title: String, line: String, modifier: Modifier) {
 }
 
 @Composable
-private fun Label(text: String) {
+internal fun Label(text: String) {
     Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
 }
 
 /** An ad's image, decoded off the main thread at most [maxSide] pixels; a plain box while missing. */
 @Composable
-private fun AdImage(bytes: ByteArray?, maxSide: Int, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
+internal fun AdImage(bytes: ByteArray?, maxSide: Int, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
     val image by produceState<ImageBitmap?>(null, bytes) {
         value = bytes?.let { withContext(Dispatchers.Default) { decodeScaled(it, maxSide) } }
     }

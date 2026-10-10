@@ -80,7 +80,7 @@ internal fun decodeUpright(bytes: ByteArray, minSide: Int): Bitmap? {
 }
 
 /** [source] with its longer side at most [maxSide]. */
-private fun scaled(source: Bitmap, maxSide: Int): Bitmap {
+internal fun scaled(source: Bitmap, maxSide: Int): Bitmap {
     val longer = maxOf(source.width, source.height)
     if (longer <= maxSide) return source
     val factor = maxSide.toFloat() / longer
@@ -88,7 +88,7 @@ private fun scaled(source: Bitmap, maxSide: Int): Bitmap {
 }
 
 @Suppress("DEPRECATION")
-private fun encodeWebp(bitmap: Bitmap): ByteArray {
+internal fun encodeWebp(bitmap: Bitmap): ByteArray {
     // Before Android 11, WEBP below quality 100 is the lossy encoder.
     val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP
     val out = ByteArrayOutputStream()

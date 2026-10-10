@@ -104,6 +104,7 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
             if (!validating) ProfileLink("Practice validation") { context.startActivity(Intent(context, CeremonyActivity::class.java)) }
             if (ready != null) ProfileLink("History") { context.startActivity(Intent(context, HistoryActivity::class.java)) }
             if (ready != null && !validating) OracleVotingsLink(ready)
+            if (ready != null && !validating) ProfileLink("My ads") { context.startActivity(Intent(context, MyAdsActivity::class.java)) }
         }
     }
 }

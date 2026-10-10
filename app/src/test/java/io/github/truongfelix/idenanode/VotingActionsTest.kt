@@ -114,18 +114,18 @@ class VotingActionsTest {
         val mine = voting(VotingState.COUNTING, "refundRecipient" to "0xME")
         assertEquals(true, actionConfirmText(VotingAction.Finish, mine, "0xme", BigDecimal.ZERO, cost).contains("fee) to you, and burns"))
         assertEquals(
-            "Terminate “Best fruit?”? It never started: the contract sends the 100 iDNA it holds to you, and its stake " +
-                "back to its author.$fee",
+            "Terminate “Best fruit?”? It never started: the contract sends the 100 iDNA it holds to you, and half of its " +
+                "stake back to its author (the other half is burned).$fee",
             actionConfirmText(VotingAction.Terminate, pending, "0xme", BigDecimal.ZERO, cost),
         )
         assertEquals(
-            "Terminate “Best fruit?”? The contract removes it and sends its stake back to its author.$fee",
+            "Terminate “Best fruit?”? The contract removes it and sends half of its stake back to its author (the other half is burned).$fee",
             actionConfirmText(VotingAction.Terminate, voting(VotingState.ARCHIVE, "balance" to "0"), "0xme", BigDecimal.ZERO, cost),
         )
         assertEquals(
             "Terminate “Best fruit?”? The contract closes it: the owner's share (the deposit back and the owner fee) " +
                 "goes to 0xauth…thor, the rest of its 100 iDNA to the oracles who voted (to you, when nobody voted), and " +
-                "its stake back to its author.$fee",
+                "half of its stake back to its author (the other half is burned).$fee",
             actionConfirmText(VotingAction.Terminate, voting(VotingState.COUNTING), "0xme", BigDecimal.ZERO, cost),
         )
         assertEquals(
