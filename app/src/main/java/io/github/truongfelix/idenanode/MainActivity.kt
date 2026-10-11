@@ -134,6 +134,7 @@ private fun MainScreen(modifier: Modifier = Modifier) {
             Column(Modifier.fillMaxSize()) {
                 // One row: the title, the Node | Social switch and the status (a dot with the peers; ⓘ has the
                 // details): the node's on the Node tab, the scan's on the Social tab, where the feed slides it away.
+                // The peers are the node's last read on both.
                 val unread = social.unread.size
                 val titleBar: @Composable () -> Unit = {
                     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
@@ -142,8 +143,8 @@ private fun MainScreen(modifier: Modifier = Modifier) {
                             Spacer(Modifier.width(14.dp))
                             TabSwitch(tab, unread) { tab = it }
                             Spacer(Modifier.weight(1f))
-                            val health = if (tab == MainTab.Node) node.bar.health else social.status.health
-                            val peers = (if (tab == MainTab.Social) social.node?.peers else null) ?: node.view?.peers
+                            val peers = node.view?.peers
+                            val health = if (tab == MainTab.Node) node.bar.health else social.status(peers).health
                             val onInfo = { if (tab == MainTab.Node) nodeInfo = true else socialInfo = true }
                             Row(Modifier.clickable(onClick = onInfo).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 StatusDot(health)
@@ -181,7 +182,7 @@ private fun MainScreen(modifier: Modifier = Modifier) {
             )
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
-        if (socialInfo) SocialInfoDialog(social) { socialInfo = false }
+        if (socialInfo) SocialInfoDialog(social, node.view?.peers) { socialInfo = false }
     }
 }
 

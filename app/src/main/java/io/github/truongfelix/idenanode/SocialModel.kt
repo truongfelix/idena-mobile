@@ -76,7 +76,7 @@ enum class ProfileTab(val title: String) {
  * While "Scan blocks" is on, [run] scans the blocks after the newest scanned one up to the node's head,
  * then the history back to the contract's first block (once), then follows the head. On the Node tab it
  * only follows the head, and only when a kind of notification is on. Nothing is scanned while the app is
- * hidden, the node syncs or a validation runs.
+ * hidden, the node syncs or a validation runs; the first scan also waits for the node's newest blocks.
  */
 class SocialModel(private val context: Context, private val scope: CoroutineScope) {
     var cache by mutableStateOf<SocialCache?>(null)
@@ -104,9 +104,14 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var nodeFailed by mutableStateOf(false)
         private set
 
-    /** The status bar's dot and line. */
-    val status: BarState
-        get() = if (node == null && !nodeFailed) BarState(Health.Off, "Connecting to the node…") else scanState(node, scanning, head, cache)
+    /**
+     * The status bar's dot and line, with the node's [peers] as the title row reads them every few seconds: the scan
+     * reads them only at each step, minutes apart while it scans. Null [peers]: the scan's.
+     */
+    fun status(peers: Int?): BarState {
+        val view = node?.let { if (peers != null) it.copy(peers = peers) else it }
+        return if (view == null && !nodeFailed) BarState(Health.Off, "Connecting to the node…") else scanState(view, scanning, head, cache)
+    }
     var scanning by mutableStateOf(SocialStore.isScanning(context))
         private set
     /** The node's account (lowercase), read at each scan step; null before the first. */
@@ -383,11 +388,16 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                         continue
                     }
                     val source = NodeSocialSource(rpc(context))
-                    val nodeHead = withContext(Dispatchers.IO) { source.head() }
+                    val (nodeHead, headTime) = withContext(Dispatchers.IO) { source.headBlock() }
                     head = nodeHead
                     val current = cache
                     val wantsNew = scanningFlag.get() || scanNewOnce.get()
+                    val startWait = scanStartWait(nodeHead, headTime, System.currentTimeMillis() / 1000)
                     when {
+                        current == null && wantsNew && startWait != null -> {
+                            scanStatus = startWait
+                            pause(30_000)
+                        }
                         // The first time, the scan starts at the head: nothing to read yet.
                         current == null && wantsNew -> {
                             scanStatus = "Starting at the node's block…"

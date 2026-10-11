@@ -804,10 +804,15 @@ data class SocialCache(
 
         private fun authorsFrom(json: JSONObject): Map<Long, String> = json.keys().asSequence().associate { it.toLong() to json.getString(it) }
 
-        /** The cache from its JSON; null when it is for another contract or an unknown version. */
+        /**
+         * The cache from its JSON; null when it is for another contract or an unknown version, or when its scan
+         * started below the history's first block: at the node's first block, before its sync (0.1.73 and earlier,
+         * [scanStartWait]), it walks millions of blocks and takes the history as read.
+         */
         fun fromJson(json: JSONObject): SocialCache? {
             if (!json.optString("contract").equals(SOCIAL_CONTRACT, ignoreCase = true)) return null
             if (json.optInt("version", 1) !in 3..VERSION) return null
+            if (json.getLong("low") < HISTORY_START) return null
             val postArray = json.getJSONArray("posts")
             val tipArray = json.optJSONArray("tips") ?: JSONArray()
             val olderObject = json.optJSONObject("olderAuthors") ?: JSONObject()
@@ -838,6 +843,30 @@ data class NodeView(
 
 /** Blocks the scan may lag the node's head and still be up to date: a block comes about every 20 s. */
 const val UP_TO_DATE_LAG = 3
+
+/** The oldest the node's head block may be for the first scan to start at it: a synced node's is about 20 s old. */
+const val MAX_START_BLOCK_AGE_SECONDS = 3_600L
+
+/**
+ * Why the first scan waits rather than start at the node's head block [height], made at [time], when the phone's
+ * clock reads [now] (both in seconds); null when it can start. A new node can report itself synced for a moment
+ * while still at its first block (4,871,137 on mainnet, from 2022): a scan started there walks millions of blocks
+ * before reaching the posts, and takes the history as read ([SocialCache.historyDone]).
+ */
+fun scanStartWait(height: Long, time: Long, now: Long): String? {
+    val age = now - time
+    return when {
+        height < SOCIAL_FIRST_BLOCK -> "Waiting for the node's newest blocks: it is at block ${blockNumber.format(height)}, before idena.social."
+        age > MAX_START_BLOCK_AGE_SECONDS -> "Waiting for the node's newest blocks: its newest one is ${ageText(age)} old."
+        else -> null
+    }
+}
+
+private fun ageText(seconds: Long): String = when {
+    seconds >= 2 * 86_400 -> "${seconds / 86_400} days"
+    seconds >= 2 * 3_600 -> "${seconds / 3_600} h"
+    else -> "${seconds / 60} min"
+}
 
 /**
  * The status of the Social tab from the node ([node] null when it does not answer) and the scan: down
