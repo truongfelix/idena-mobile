@@ -201,7 +201,7 @@ class NodeService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_node)
+            .setSmallIcon(R.drawable.ic_idena)
             .setContentTitle("Idena node")
             .setContentText(text)
             .setContentIntent(open)
