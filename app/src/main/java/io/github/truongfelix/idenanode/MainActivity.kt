@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -47,6 +48,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,15 +74,25 @@ import java.math.RoundingMode
 import java.time.Instant
 
 class MainActivity : ComponentActivity() {
+    // The taps on the Social notification ([SocialBadge]): each opens the Social tab's Inbox.
+    private var showActivity by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null && intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
         setContent {
             AppTheme {
                 Scaffold { padding ->
-                    MainScreen(Modifier.padding(padding))
+                    MainScreen(showActivity, Modifier.padding(padding))
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
     }
 }
 
@@ -88,7 +100,7 @@ class MainActivity : ComponentActivity() {
 private enum class MainTab(val title: String) { Node("Node"), Social("Social") }
 
 @Composable
-private fun MainScreen(modifier: Modifier = Modifier) {
+private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.Node) }
     // The Social tab's state lives while the app runs, so that its notifications work from the Node tab.
@@ -108,6 +120,12 @@ private fun MainScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(tab) {
         social.visible = tab == MainTab.Social
         node.nodeTabVisible = tab == MainTab.Node
+    }
+    LaunchedEffect(showActivity) {
+        if (showActivity > 0) {
+            tab = MainTab.Social
+            social.showActivity()
+        }
     }
     // Back on the Social tab, once it has nothing to close, shows the Node tab instead of leaving the app
     // (the Social tab's own Back, composed later, comes first).
