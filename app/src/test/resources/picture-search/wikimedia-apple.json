@@ -1,0 +1,61 @@
+{
+ "batchcomplete": "",
+ "query": {
+  "pages": {
+   "69553418": {
+    "pageid": 69553418,
+    "ns": 6,
+    "title": "File:Aerial view of Apple Park dllu.jpg",
+    "index": 6,
+    "imageinfo": [
+     {
+      "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Aerial_view_of_Apple_Park_dllu.jpg/330px-Aerial_view_of_Apple_Park_dllu.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "thumbwidth": 320,
+      "thumbheight": 214,
+      "responsiveUrls": {
+       "2": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Aerial_view_of_Apple_Park_dllu.jpg/960px-Aerial_view_of_Apple_Park_dllu.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+      },
+      "thumbattribs": {
+       "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Aerial_view_of_Apple_Park_dllu.jpg/330px-Aerial_view_of_Apple_Park_dllu.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+       "decoding": "async",
+       "loading": "lazy",
+       "width": 320,
+       "height": 214,
+       "srcset": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Aerial_view_of_Apple_Park_dllu.jpg/960px-Aerial_view_of_Apple_Park_dllu.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail 2x"
+      },
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Aerial_view_of_Apple_Park_dllu.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Aerial_view_of_Apple_Park_dllu.jpg",
+      "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=69553418"
+     }
+    ]
+   },
+   "82041220": {
+    "pageid": 82041220,
+    "ns": 6,
+    "title": "File:Apple-3040132 640.jpg",
+    "index": 27,
+    "imageinfo": [
+     {
+      "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Apple-3040132_640.jpg/330px-Apple-3040132_640.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "thumbwidth": 320,
+      "thumbheight": 213,
+      "responsiveUrls": {
+       "2": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Apple-3040132_640.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+      },
+      "thumbattribs": {
+       "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Apple-3040132_640.jpg/330px-Apple-3040132_640.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+       "decoding": "async",
+       "loading": "lazy",
+       "width": 320,
+       "height": 213,
+       "srcset": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Apple-3040132_640.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled 2x"
+      },
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Apple-3040132_640.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Apple-3040132_640.jpg",
+      "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=82041220"
+     }
+    ]
+   }
+  }
+ }
+}

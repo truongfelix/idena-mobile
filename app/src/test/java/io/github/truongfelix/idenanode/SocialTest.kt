@@ -334,6 +334,7 @@ class SocialTest {
         assertEquals(BarState(Health.Good, "Up to date"), scanState(node, true, 11_000_000, done))
         assertEquals("a few blocks behind is still up to date", Health.Good, scanState(node, true, 11_000_000L + UP_TO_DATE_LAG, done).health)
         assertEquals(BarState(Health.Warn, "4 blocks behind"), scanState(node, true, 11_000_004, done))
+        assertEquals("grouped as the other numbers", "${blockNumber.format(6_553_322)} blocks behind", scanState(node, true, 17_553_322, done).label)
         assertEquals(BarState(Health.Bad, "No peers"), scanState(node.copy(peers = 0), true, 11_000_000, done))
         assertEquals(Health.Bad, scanState(null, true, null, done).health)
         assertEquals(Health.Warn, scanState(node.copy(syncing = true), true, 11_000_000, done).health)

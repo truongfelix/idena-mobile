@@ -360,6 +360,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         withContext(Dispatchers.IO) { SocialStore.load(context) }?.let { show(it) }
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
+                // The Social tab on screen shows the news: the icon's notification goes ([SocialBadge]).
+                if (visible) SocialBadge.clear(context)
                 try {
                     // On the Node tab, only the new blocks for the notifications; else nothing is asked.
                     if (!visible && !(scanning && notify.isNotEmpty() && cache != null)) {

@@ -37,6 +37,7 @@ class NodeService : Service() {
     private val executor = Executors.newSingleThreadExecutor()
     private val routerExecutor = Executors.newSingleThreadExecutor()
     private val searchExecutor = Executors.newSingleThreadExecutor()
+    private val socialExecutor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var started = false
     private var wakeLock: PowerManager.WakeLock? = null
@@ -89,6 +90,17 @@ class NodeService : Service() {
         }
         handler.post(updateNotification)
         handler.postDelayed(routerUpkeep, ROUTER_UPKEEP_FIRST_MS)
+        handler.postDelayed(socialCheck, SOCIAL_CHECK_FIRST_MS)
+    }
+
+    /** The Social news on the app's icon while the app is not on screen ([SocialBadge]). */
+    private val socialCheck: Runnable = object : Runnable {
+        override fun run() {
+            socialExecutor.execute {
+                runCatching { SocialBadge.check(this@NodeService) }.onFailure { Log.w(TAG, "Social check: $it") }
+            }
+            handler.postDelayed(this, SOCIAL_CHECK_INTERVAL_MS)
+        }
     }
 
     /** Keeps the router opening the user made in the app ([RouterPortUpkeep]) while the node runs. */
@@ -128,6 +140,7 @@ class NodeService : Service() {
     private fun stopNode() {
         handler.removeCallbacks(updateNotification)
         handler.removeCallbacks(routerUpkeep)
+        handler.removeCallbacks(socialCheck)
         releaseLocks()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -166,9 +179,16 @@ class NodeService : Service() {
     }
 
     private fun createChannel() {
+        val manager = getSystemService(NotificationManager::class.java)
+        // The channel of 0.1.74 and earlier counted the node's notification on the app's icon; a channel's badge
+        // cannot be changed once made.
+        manager.deleteNotificationChannel(OLD_CHANNEL_ID)
         val channel = NotificationChannel(CHANNEL_ID, "Node", NotificationManager.IMPORTANCE_LOW)
         channel.description = "Shows the node while it syncs"
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        // The icon counts the Social news only.
+        channel.setShowBadge(false)
+        manager.createNotificationChannel(channel)
+        SocialBadge.createChannel(this)
     }
 
     private fun notification(text: String): Notification {
@@ -193,11 +213,14 @@ class NodeService : Service() {
 
     companion object {
         private const val TAG = "IdenaNode"
-        private const val CHANNEL_ID = "node"
+        private const val CHANNEL_ID = "node_status"
+        private const val OLD_CHANNEL_ID = "node"
         private const val NOTIFICATION_ID = 1
         private const val UPDATE_INTERVAL_MS = 15_000L
         private const val ROUTER_UPKEEP_FIRST_MS = 60_000L
         private const val ROUTER_UPKEEP_INTERVAL_MS = 5 * 60_000L
+        private const val SOCIAL_CHECK_FIRST_MS = 3 * 60_000L
+        private const val SOCIAL_CHECK_INTERVAL_MS = 10 * 60_000L
         const val ACTION_STOP = "io.github.truongfelix.idenanode.STOP"
         const val ACTION_ROUTER_SEARCH = "io.github.truongfelix.idenanode.ROUTER_SEARCH"
 

@@ -881,7 +881,7 @@ fun scanState(node: NodeView?, scanning: Boolean, head: Long?, cache: SocialCach
     if (cache == null) return if (scanning) BarState(Health.Warn, "Starting the scan") else BarState(Health.Off, "Scan off")
     if (!scanning) return BarState(Health.Off, "Scan off")
     val behind = (head ?: cache.authorsHeight) - cache.authorsHeight
-    if (behind > UP_TO_DATE_LAG) return BarState(Health.Warn, if (behind == 1L) "1 block behind" else "$behind blocks behind")
+    if (behind > UP_TO_DATE_LAG) return BarState(Health.Warn, if (behind == 1L) "1 block behind" else "${blockNumber.format(behind)} blocks behind")
     if (!cache.historyDone) return BarState(Health.Warn, "Reading older posts: ${(cache.scannedShare * 100).toInt()}%")
     return BarState(Health.Good, "Up to date")
 }

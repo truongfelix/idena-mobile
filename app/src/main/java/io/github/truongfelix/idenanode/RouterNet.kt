@@ -31,6 +31,9 @@ object RouterNet {
     private const val TIMEOUT_MS = 5_000
     private const val MAX_RESPONSE = 256 * 1024
 
+    /** How long a search waits for answers. */
+    private const val SEARCH_MS = 3_000L
+
     /**
      * How long the node listens for a router's own announcements when none answers a search: UPnP has a device
      * announce itself again within half its announcements' lifetime (the Livebox: max-age 1800 s, so 15 min).
@@ -84,13 +87,22 @@ object RouterNet {
         var heard: String? = null
         DatagramSocket().use { socket ->
             socket.soTimeout = 500
-            (SSDP_SEARCH_TARGETS + SSDP_ROOT_DEVICE).forEach { target ->
+            fun send() = (SSDP_SEARCH_TARGETS + SSDP_ROOT_DEVICE).forEach { target ->
                 val message = ssdpSearch(target).toByteArray()
                 socket.send(DatagramPacket(message, message.size, SSDP_GROUP, SSDP_PORT))
             }
-            val deadline = System.currentTimeMillis() + 3_000
+            send()
+            val start = System.currentTimeMillis()
+            val deadline = start + SEARCH_MS
+            // UDP loses a search or an answer now and then (the Speedport's root device answer: 1 search in 17,
+            // 2026-10-10): as UPnP asks of control points, each search goes out twice, as the desktop's.
+            var sentAgain = false
             val buffer = ByteArray(8192)
             while (System.currentTimeMillis() < deadline) {
+                if (!sentAgain && System.currentTimeMillis() >= start + SEARCH_MS / 3) {
+                    send()
+                    sentAgain = true
+                }
                 val packet = DatagramPacket(buffer, buffer.size)
                 try {
                     socket.receive(packet)

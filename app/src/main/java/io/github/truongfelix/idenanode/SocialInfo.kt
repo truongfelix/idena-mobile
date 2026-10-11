@@ -82,7 +82,7 @@ private fun newestText(cache: SocialCache?, head: Long?): String {
     val behind = (head ?: return scanned) - cache.high
     if (behind <= 0) return scanned
     val minutes = behind * 20 / 60
-    val time = if (minutes >= 120) "about ${minutes / 60} h" else "about $minutes min"
+    val time = if (minutes >= 120) "about ${blockNumber.format(minutes / 60)} h" else "about $minutes min"
     return "$scanned (${blockNumber.format(behind)} behind, $time)"
 }
 
