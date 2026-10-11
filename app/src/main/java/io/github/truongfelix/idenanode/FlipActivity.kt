@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -303,7 +304,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                             // Kept before anything else: the flip counts from now on, even if the app stops.
                             FlipDraftStore.setSent(context, flip)
                             sent = flip
-                            FlipDraftStore.clear(context)
+                            FlipDraftStore.clear(context, current.words)
                             draft = null
                             protected = null
                             protectedFor = null
@@ -530,7 +531,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Image search", style = MaterialTheme.typography.titleSmall)
-                Text("DuckDuckGo, pictures only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("DuckDuckGo, Openverse, Wikimedia · pictures only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = searchOn, onCheckedChange = { on ->
                 if (on) askSearch = true else { searchOn = false; FlipDraftStore.setSearchOn(context, false) }
@@ -554,9 +555,10 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
             title = { Text("Turn on image search?") },
             text = {
                 Text(
-                    "The search asks DuckDuckGo directly from this phone: DuckDuckGo sees the phone's internet address " +
-                        "and the words searched. Only pictures are shown, never web pages, and they come through " +
-                        "DuckDuckGo only. Everything else in the app talks only to your own node.",
+                    "The search asks three services directly from this phone: DuckDuckGo, Openverse and Wikimedia " +
+                        "Commons. Each sees the phone's internet address and the words searched. Only pictures are " +
+                        "shown, never web pages, and each comes from the service that found it. Everything else in the " +
+                        "app talks only to your own node.",
                 )
             },
             confirmButton = {
@@ -581,22 +583,41 @@ private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
     return draft.copy(frames = frames, adversarial = adversarial, shuffled = null)
 }
 
-/** The search: the words (or a text) to DuckDuckGo, a grid of pictures; a tap takes one for the selected frame. */
+/**
+ * The search: the words (or a text) to the three sources at once ([PictureSearch]), a grid of pictures that grows as
+ * each answers; a tap takes one for the selected frame.
+ */
 @Composable
 private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSources: (List<ByteArray>) -> Unit) {
+    val context = LocalContext.current
+    val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "0" }
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf(words.firstOrNull()?.name.orEmpty()) }
     var results by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pending by remember { mutableStateOf<Set<PictureSource>>(emptySet()) }
+    var failed by remember { mutableStateOf<Map<PictureSource, String>>(emptyMap()) }
+    var searched by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
+    val searches = remember { mutableListOf<Job>() }
     val thumbnails = remember { HashMap<String, ByteArray>() }
 
     fun search(text: String) {
         query = text
-        status = "Searching…"
-        scope.launch {
-            withContext(Dispatchers.IO) { runCatching { DuckSearch.search(text) } }
-                .onSuccess { results = it; status = if (it.isEmpty()) "No pictures found." else null }
-                .onFailure { status = "The search failed: ${it.message}" }
+        // A new search drops what the last one has not given yet.
+        searches.forEach { it.cancel() }
+        searches.clear()
+        results = emptyList()
+        failed = emptyMap()
+        pending = PictureSource.entries.toSet()
+        searched = true
+        status = null
+        PictureSource.entries.forEach { source ->
+            searches += scope.launch {
+                withContext(Dispatchers.IO) { runCatching { PictureSearch.search(source, text, appVersion) } }
+                    .onSuccess { found -> results = (results + found).distinct() }
+                    .onFailure { failed = failed + (source to pictureSearchError(it)) }
+                pending = pending - source
+            }
         }
     }
 
@@ -609,6 +630,7 @@ private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSou
             OutlinedTextField(value = query, onValueChange = { query = it.take(100) }, singleLine = true, modifier = Modifier.weight(1f), label = { Text("Search pictures") })
             Button(onClick = { search(query) }, enabled = query.isNotBlank()) { Text("Search") }
         }
+        (if (searched) pictureSearchStatus(pending, failed, results.size) else null)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (results.isNotEmpty()) {
             Text("Tap a picture to use it. \"Use for anti-AI\" takes 8 of these for the nonsense picture.", style = MaterialTheme.typography.bodySmall)
@@ -616,7 +638,7 @@ private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSou
                 status = "Getting pictures for the anti-AI picture…"
                 scope.launch {
                     val picked = withContext(Dispatchers.IO) {
-                        results.shuffled().take(12).mapNotNull { url -> thumbnails[url] ?: runCatching { DuckSearch.thumbnail(url) }.getOrNull() }.take(8)
+                        results.shuffled().take(12).mapNotNull { url -> thumbnails[url] ?: runCatching { PictureSearch.thumbnail(url, appVersion) }.getOrNull() }.take(8)
                     }
                     status = if (picked.size >= FLIP_FRAMES) null else "Not enough pictures could be read."
                     if (picked.size >= FLIP_FRAMES) onSources(picked)
@@ -630,7 +652,7 @@ private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSou
             ) {
                 items(results, key = { it }) { url ->
                     val bytes by produceState(thumbnails[url], url) {
-                        if (value == null) value = withContext(Dispatchers.IO) { runCatching { DuckSearch.thumbnail(url) }.getOrNull() }?.also { thumbnails[url] = it }
+                        if (value == null) value = withContext(Dispatchers.IO) { runCatching { PictureSearch.thumbnail(url, appVersion) }.getOrNull() }?.also { thumbnails[url] = it }
                     }
                     FrameImage(bytes, Modifier.fillMaxWidth().clickable(enabled = bytes != null) { bytes?.let(onPick) })
                 }

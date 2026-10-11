@@ -8,13 +8,10 @@ import android.graphics.Rect
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 
 /*
  * The Android side of making a flip: frames from photos (cut to 4:3), JPEG, the drafts kept in the app's
- * files, and the opt-in image search (DuckDuckGo only, see FlipMaking.kt).
+ * files, and the choice of the opt-in picture search ([PictureSearch]).
  */
 
 /** The size of a frame while the flip is made (4:3, cut down to [FLIP_WIDTH] x [FLIP_HEIGHT] at the end). */
@@ -52,59 +49,6 @@ fun jpeg(pixels: IntArray, width: Int, height: Int, toWidth: Int = width, toHeig
 /** A frame of the flip as protected and sent: [FLIP_WIDTH] x [FLIP_HEIGHT], JPEG at [FLIP_JPEG_QUALITY]. */
 fun flipFrameJpeg(protectedPixels: IntArray): ByteArray =
     jpeg(protectedPixels, WORK_WIDTH, WORK_HEIGHT, FLIP_WIDTH, FLIP_HEIGHT, FLIP_JPEG_QUALITY)
-
-/** DuckDuckGo's image search, asked only when the user turned it on (see FlipMaking.kt). */
-object DuckSearch {
-    private const val USER_AGENT = "Mozilla/5.0 (Idena image search)"
-    private val HOSTS = setOf("duckduckgo.com", "external-content.duckduckgo.com")
-    private const val MAX_PAGE = 512 * 1024
-    private const val MAX_RESULTS = 2 * 1024 * 1024
-    private const val MAX_THUMBNAIL = 1024 * 1024
-
-    /** The thumbnails (DuckDuckGo proxy addresses) for [query]; throws when DuckDuckGo does not answer. */
-    fun search(query: String): List<String> {
-        val q = query.trim().take(160)
-        if (q.isEmpty()) return emptyList()
-        val landing = duckLandingUrl(q)
-        val token = duckToken(String(get(landing, MAX_PAGE), Charsets.UTF_8)) ?: throw IOException("DuckDuckGo gave no search token")
-        return duckThumbnails(String(get(duckResultsUrl(q, token), MAX_RESULTS, referer = landing), Charsets.UTF_8))
-    }
-
-    /** A thumbnail found by [search]. */
-    fun thumbnail(url: String): ByteArray = get(url, MAX_THUMBNAIL)
-
-    /** GET [url], only over HTTPS and only from DuckDuckGo, at most [max] bytes. */
-    private fun get(url: String, max: Int, referer: String? = null): ByteArray {
-        val parsed = URL(url)
-        if (parsed.protocol != "https" || parsed.host !in HOSTS) throw IOException("not a DuckDuckGo address")
-        val connection = parsed.openConnection() as HttpURLConnection
-        connection.instanceFollowRedirects = false
-        connection.connectTimeout = 8_000
-        connection.readTimeout = 10_000
-        connection.setRequestProperty("User-Agent", USER_AGENT)
-        connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-        referer?.let { connection.setRequestProperty("Referer", it) }
-        try {
-            val code = connection.responseCode
-            // DuckDuckGo refuses an address for a while after a few quick searches.
-            if (code == 403 || code == 429) throw IOException("DuckDuckGo refuses searches from this connection for now; try again in a few minutes, or use the camera or the gallery")
-            if (code !in 200..299) throw IOException("DuckDuckGo answered $code")
-            return connection.inputStream.use { input ->
-                val out = ByteArrayOutputStream()
-                val buffer = ByteArray(16 * 1024)
-                while (true) {
-                    val n = input.read(buffer)
-                    if (n < 0) break
-                    out.write(buffer, 0, n)
-                    if (out.size() > max) throw IOException("DuckDuckGo's answer is too large")
-                }
-                out.toByteArray()
-            }
-        } finally {
-            connection.disconnect()
-        }
-    }
-}
 
 /**
  * The flip being made for a keyword pair, kept in the app's files ([FlipDrafts]) so that it survives the app: the
@@ -162,14 +106,18 @@ object FlipDraftStore {
         if (sent == null) file.delete() else { file.parentFile?.mkdirs(); file.writeText(sent.toJson().toString()) }
     }
 
-    private const val SEARCH_ON = "search_on"
+    private const val SEARCH_ON = "picture_search_on"
 
-    /** Whether the user turned on the image search (DuckDuckGo); off until then. */
+    // 0.1.74 and earlier: the search asked DuckDuckGo only; that agreement does not cover the three sources.
+    private const val DUCK_SEARCH_ON = "search_on"
+
+    /** Whether the user agreed to the picture search ([PictureSource]: its three sources); off until then. */
     fun searchOn(context: Context): Boolean = File(context.filesDir, "flips/$SEARCH_ON").exists()
 
     fun setSearchOn(context: Context, on: Boolean) {
         val file = File(context.filesDir, "flips/$SEARCH_ON")
         file.parentFile?.mkdirs()
+        File(context.filesDir, "flips/$DUCK_SEARCH_ON").delete()
         if (on) file.createNewFile() else file.delete()
     }
 }

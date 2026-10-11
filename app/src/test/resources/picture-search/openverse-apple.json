@@ -1,0 +1,19 @@
+{
+ "result_count": 240,
+ "results": [
+  {
+   "id": "ae9def31-39f4-4056-8df3-135b19a2ddc7",
+   "title": "Apples",
+   "url": "https://live.staticflickr.com/6117/6284756738_c53e17e6bc_b.jpg",
+   "thumbnail": "https://api.openverse.org/v1/images/ae9def31-39f4-4056-8df3-135b19a2ddc7/thumb/",
+   "source": "flickr"
+  },
+  {
+   "id": "abe939b0-9741-4d30-b63e-19b08b3baf71",
+   "title": "Apples",
+   "url": "https://live.staticflickr.com/8035/8074168006_dd24e474ac_b.jpg",
+   "thumbnail": "https://api.openverse.org/v1/images/abe939b0-9741-4d30-b63e-19b08b3baf71/thumb/",
+   "source": "flickr"
+  }
+ ]
+}

@@ -136,9 +136,8 @@ fun flipRefusal(message: String): String = when {
 }
 
 /*
- * Image search (opt-in): DuckDuckGo's image search, as idena-desktop's main/image-search.js asks it, but
- * thumbnails only and always through DuckDuckGo's own image proxy, so that the phone contacts no other
- * site. DuckDuckGo sees the phone's address and the words searched.
+ * DuckDuckGo's part of the picture search ([PictureSearch]), as idena-desktop's main/image-search.js asks it, but
+ * thumbnails only and always through DuckDuckGo's own image proxy.
  */
 
 /** The page that gives the search token. */
