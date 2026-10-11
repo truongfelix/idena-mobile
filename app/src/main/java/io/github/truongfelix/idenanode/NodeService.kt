@@ -22,6 +22,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import io.github.truongfelix.idenanode.go.mobile.Mobile
+import java.io.File
 import java.text.NumberFormat
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
@@ -80,7 +81,7 @@ class NodeService : Service() {
         // The screen compares them with the user's choices: a change applies from the next start.
         val options = NodeSettings.options(this)
         NodeSettings.setRunningOptions(this, options)
-        val error = Mobile.start(dir.absolutePath, NodeSettings.nodeConfig(this, options))
+        val error = startNode(dir, NodeSettings.nodeConfig(this, options))
         if (error.isNotEmpty()) {
             Log.e(TAG, "Node start failed: $error")
             NodeSettings.startErrorFile(this).writeText(error)
@@ -91,6 +92,20 @@ class NodeService : Service() {
         handler.post(updateNotification)
         handler.postDelayed(routerUpkeep, ROUTER_UPKEEP_FIRST_MS)
         handler.postDelayed(socialCheck, SOCIAL_CHECK_FIRST_MS)
+    }
+
+    /** Starts the node with its key ([NodeKeys]); the error, empty once the node runs. */
+    private fun startNode(dir: File, config: String): String {
+        val key = try {
+            NodeKeys.files(this).read() ?: return "There is no node key."
+        } catch (e: Exception) {
+            return "The node key was not read: ${e.message ?: e}"
+        }
+        return try {
+            Mobile.start(dir.absolutePath, config, key)
+        } finally {
+            key.fill(0)
+        }
     }
 
     /** The Social news on the app's icon while the app is not on screen ([SocialBadge]). */

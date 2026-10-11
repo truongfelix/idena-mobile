@@ -1,17 +1,18 @@
 package mobile
 
 import (
+	"bytes"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/idena-network/idena-go/config"
 	"github.com/idena-network/idena-go/crypto"
 )
 
-func TestNewKeyImportsAsTheSameAddress(t *testing.T) {
+func TestNewKeyOpensAsTheSameAddress(t *testing.T) {
 	backup, err := NewKey("correct horse battery")
 	if err != nil {
 		t.Fatal(err)
@@ -24,16 +25,12 @@ func TestNewKeyImportsAsTheSameAddress(t *testing.T) {
 	if again, err := KeyAddress(" "+backup+"\r\n", "correct horse battery"); err != nil || again != address {
 		t.Fatalf("with spaces around: %q, %v", again, err)
 	}
-	dir := t.TempDir()
-	if HasKey(dir) {
-		t.Fatal("a key before the import")
+	opened, err := OpenKey(backup+"\n", "correct horse battery")
+	if err != nil {
+		t.Fatal(err)
 	}
-	// The node's own import (dna_importKey and the desktop use the same function).
-	if res := ImportKey(dir, "{}", backup, "correct horse battery"); res != "" {
-		t.Fatal(res)
-	}
-	if got := Address(dir); got != address {
-		t.Fatalf("imported %s, backup opens as %s", got, address)
+	if len(opened) != 32 || PrivateKeyAddress(opened) != address {
+		t.Fatalf("opened %d bytes as %s, backup opens as %s", len(opened), PrivateKeyAddress(opened), address)
 	}
 }
 
@@ -47,13 +44,21 @@ func TestNewKeyIsNewEachTime(t *testing.T) {
 	}
 }
 
-func TestKeyAddressRefusesAWrongPasswordOrText(t *testing.T) {
+func TestOpenKeyRefusesAWrongPasswordOrText(t *testing.T) {
 	backup, _ := NewKey("the right password")
-	if _, err := KeyAddress(backup, "the wrong password"); err == nil ||
+	if _, err := OpenKey(backup, "the wrong password"); err == nil ||
 		err.Error() != "the password does not open this key" {
 		t.Fatalf("wrong password: %v", err)
 	}
-	for _, text := range []string{"", "not hex", "abcd", backup[:len(backup)-2]} {
+	if _, err := KeyAddress(backup, "the wrong password"); err == nil {
+		t.Fatal("KeyAddress took a wrong password")
+	}
+	// A 31-byte key, encrypted as an export.
+	short, _ := crypto.Encrypt(make([]byte, 31), "the right password")
+	for _, text := range []string{"", "not hex", "abcd", backup[:len(backup)-2], hex.EncodeToString(short)} {
+		if opened, err := OpenKey(text, "the right password"); err == nil {
+			t.Fatalf("%q opened as %x", text, opened)
+		}
 		if address, err := KeyAddress(text, "the right password"); err == nil {
 			t.Fatalf("%q opened as %s", text, address)
 		}
@@ -63,38 +68,68 @@ func TestKeyAddressRefusesAWrongPasswordOrText(t *testing.T) {
 	}
 }
 
-func TestExportKeyBacksUpTheNodeKey(t *testing.T) {
-	dir := t.TempDir()
-	if _, err := ExportKey(dir, "a long password"); err == nil {
-		t.Fatal("exported a key that is not there")
-	}
+func TestExportKeyBacksUpTheKey(t *testing.T) {
 	key, _ := crypto.GenerateKey()
-	file := nodeKeyFile(dir)
-	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+	raw := crypto.FromECDSA(key)
+	given := bytes.Clone(raw)
+	backup, err := ExportKey(given, "a long password")
+	if err != nil {
 		t.Fatal(err)
 	}
+	// The app's copy of the key is left as it is (gomobile passes byte arrays by reference).
+	if !bytes.Equal(given, raw) {
+		t.Fatal("ExportKey changed the key it was given")
+	}
+	opened, err := OpenKey(backup, "a long password")
+	if err != nil || !bytes.Equal(opened, raw) {
+		t.Fatalf("backup opens as %x (%v)", opened, err)
+	}
+	if _, err := ExportKey(raw, ""); err == nil {
+		t.Fatal("an empty password was taken")
+	}
+	for _, bad := range [][]byte{nil, raw[:31], make([]byte, 32)} {
+		if _, err := ExportKey(bad, "a long password"); err == nil {
+			t.Fatalf("exported %x", bad)
+		}
+	}
+	if PrivateKeyAddress(nil) != "" || PrivateKeyAddress(raw) != crypto.PubkeyToAddress(key.PublicKey).Hex() {
+		t.Fatal("PrivateKeyAddress")
+	}
+}
+
+func TestReadKeyFileReadsTheNodesKeyFiles(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := ReadKeyFile(filepath.Join(dir, "nodekey")); err == nil {
+		t.Fatal("read a key that is not there")
+	}
+	key, _ := crypto.GenerateKey()
+	file := filepath.Join(dir, "nodekey")
 	if err := crypto.SaveECDSA(file, key); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := ExportKey(dir, "a long password")
-	if err != nil {
+	read, err := ReadKeyFile(file)
+	if err != nil || !bytes.Equal(read, crypto.FromECDSA(key)) {
+		t.Fatalf("read %x (%v)", read, err)
+	}
+	// The official app's key file may end with a line break.
+	if err := os.WriteFile(file, []byte(hex.EncodeToString(crypto.FromECDSA(key))+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	address, err := KeyAddress(backup, "a long password")
-	if err != nil || address != crypto.PubkeyToAddress(key.PublicKey).Hex() {
-		t.Fatalf("backup opens as %s (%v)", address, err)
+	if read, err := ReadKeyFile(file); err != nil || !bytes.Equal(read, crypto.FromECDSA(key)) {
+		t.Fatalf("with a line break: %x (%v)", read, err)
 	}
-	if _, err := ExportKey(dir, ""); err == nil {
-		t.Fatal("an empty password was taken")
+}
+
+func TestStartRefusesAMissingKey(t *testing.T) {
+	dir := t.TempDir()
+	for _, key := range [][]byte{nil, make([]byte, 31)} {
+		if res := Start(dir, "{}", key); res != "the node key is not valid" {
+			t.Fatalf("Start with %x: %q", key, res)
+		}
 	}
-	// The node reads the same file the export read.
-	c, err := config.MakeMobileConfig(dir, "{}")
-	if err != nil {
-		t.Fatal(err)
-	}
-	nodeKey, err := c.NodeKey()
-	if err != nil || crypto.PubkeyToAddress(nodeKey.PublicKey).Hex() != address {
-		t.Fatalf("the node's key differs: %v", err)
+	// Nothing was written: no random key file, no data.
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("Start wrote %v", entries)
 	}
 }
 

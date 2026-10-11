@@ -1,6 +1,7 @@
 package mobile
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -13,10 +14,10 @@ import (
 )
 
 // The app's key backup: a key in the Idena export format, the hex of the private key encrypted with a password
-// (crypto.Encrypt), as dna_exportKey writes it and ImportKey and the desktop take it.
+// (crypto.Encrypt), as dna_exportKey writes it and OpenKey and the desktop take it.
 
 // NewKey makes a new private key and returns it in the export format, encrypted with password. Nothing is
-// written: the app saves and checks the backup first, then gives it to ImportKey.
+// written: the app saves and checks the backup first, then opens it with OpenKey.
 func NewKey(password string) (string, error) {
 	if password == "" {
 		return "", errors.New("the password is empty")
@@ -28,36 +29,63 @@ func NewKey(password string) (string, error) {
 	return encryptKey(crypto.FromECDSA(key), password)
 }
 
-// ExportKey returns the node key in dir in the export format, encrypted with password. It reads the key file,
-// so the node need not run.
-func ExportKey(dir string, password string) (string, error) {
+// ExportKey returns the private key key (32 bytes) in the export format, encrypted with password. key is left as
+// it is.
+func ExportKey(key []byte, password string) (string, error) {
 	if password == "" {
 		return "", errors.New("the password is empty")
 	}
-	key, err := crypto.LoadECDSA(nodeKeyFile(dir))
-	if err != nil {
-		return "", err
+	if _, err := crypto.ToECDSA(key); err != nil {
+		return "", errors.New("the node key is not valid")
 	}
-	return encryptKey(crypto.FromECDSA(key), password)
+	return encryptKey(bytes.Clone(key), password)
 }
 
-// KeyAddress opens a key in the export format with password and returns its address; nothing is written.
-// Spaces and line breaks around the key are ignored, as a file or a paste may hold them.
-func KeyAddress(key string, password string) (string, error) {
+// OpenKey opens a key in the export format with password and returns its private key (32 bytes): the app keeps it
+// encrypted as the node key. Spaces and line breaks around the key are ignored, as a file or a paste may hold them.
+func OpenKey(key string, password string) ([]byte, error) {
 	data, err := hex.DecodeString(strings.TrimSpace(key))
 	if err != nil {
-		return "", errors.New("this is not an exported key")
+		return nil, errors.New("this is not an exported key")
 	}
 	decrypted, err := crypto.Decrypt(data, password)
 	if err != nil {
-		return "", errors.New("the password does not open this key")
+		return nil, errors.New("the password does not open this key")
 	}
-	defer clear(decrypted)
-	ecdsaKey, err := crypto.ToECDSA(decrypted)
+	if _, err := crypto.ToECDSA(decrypted); err != nil {
+		clear(decrypted)
+		return nil, errors.New("this is not an exported key")
+	}
+	return decrypted, nil
+}
+
+// KeyAddress opens a key in the export format with password and returns its address; nothing is written.
+func KeyAddress(key string, password string) (string, error) {
+	opened, err := OpenKey(key, password)
 	if err != nil {
-		return "", errors.New("this is not an exported key")
+		return "", err
 	}
-	return crypto.PubkeyToAddress(ecdsaKey.PublicKey).Hex(), nil
+	defer clear(opened)
+	return PrivateKeyAddress(opened), nil
+}
+
+// PrivateKeyAddress returns the address of the private key key (32 bytes), or an empty string if it is not one.
+func PrivateKeyAddress(key []byte) string {
+	ecdsaKey, err := crypto.ToECDSA(key)
+	if err != nil {
+		return ""
+	}
+	return crypto.PubkeyToAddress(ecdsaKey.PublicKey).Hex()
+}
+
+// ReadKeyFile returns the private key (32 bytes) in a key file the node wrote, the hex of the key: the node key of
+// the versions before 0.1.76 and the backups their imports left. The app encrypts it, then deletes the file.
+func ReadKeyFile(path string) ([]byte, error) {
+	key, err := crypto.LoadECDSA(path)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.FromECDSA(key), nil
 }
 
 // SuggestPassword returns passwordWords words drawn at random from the flip keywords, joined by hyphens: 6 of

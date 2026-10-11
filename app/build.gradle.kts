@@ -30,7 +30,8 @@ android {
             // the imported key (a new signing key would need an uninstall, which deletes both).
             signingConfig = signingConfigs.getByName("debug")
             // Test phase: keeps `adb run-as` for logs and data. Remove before giving the APK to others,
-            // with USB debugging on it lets an authorized computer read the node key.
+            // with USB debugging on it lets an authorized computer run code as the app, which can open the node
+            // key with the app's Keystore key.
             isDebuggable = true
         }
     }

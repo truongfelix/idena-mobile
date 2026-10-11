@@ -18,8 +18,7 @@ object NodeSettings {
     /** The directory given to the node; it keeps its data in `datadir` inside it. */
     fun nodeDir(context: Context): File = File(context.filesDir, "node").also { it.mkdirs() }
 
-    fun hasKey(context: Context): Boolean =
-        File(nodeDir(context), "datadir/keystore/nodekey").exists()
+    fun hasKey(context: Context): Boolean = NodeKeys.files(context).hasKey()
 
     /** The last error of a node start, written by the node process for the screen. */
     fun startErrorFile(context: Context): File = File(nodeDir(context), "start_error.txt")
