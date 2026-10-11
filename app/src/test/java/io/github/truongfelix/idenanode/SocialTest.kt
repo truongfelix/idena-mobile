@@ -375,12 +375,40 @@ class SocialTest {
 
     @Test
     fun aScanWithoutTipsIsDoneAgain() {
-        val cache = SocialCache(1, 2, emptyList(), emptyMap(), 2, listOf(tip("t", a, "1", "1", "1", 2)))
+        val cache = SocialCache(SOCIAL_FIRST_BLOCK, SOCIAL_FIRST_BLOCK + 1, emptyList(), emptyMap(), SOCIAL_FIRST_BLOCK + 1, listOf(tip("t", a, "1", "1", "1", SOCIAL_FIRST_BLOCK + 1)))
         assertEquals(cache, SocialCache.fromJson(JSONObject(cache.toJson().toString())))
         assertNull("version 1 dropped the tips", SocialCache.fromJson(cache.toJson().put("version", 1)))
         assertNull("version 2 dropped the media", SocialCache.fromJson(cache.toJson().put("version", 2)))
         assertNull("no version is version 1", SocialCache.fromJson(cache.toJson().apply { remove("version") }))
         assertNull("a version to come", SocialCache.fromJson(cache.toJson().put("version", SocialCache.VERSION + 1)))
+    }
+
+    @Test
+    fun aScanStartedBelowTheHistoryIsDropped() {
+        // As 0.1.73 and earlier saved it on a new node: started at the node's first block.
+        val walked = SocialCache(low = 4_871_138, high = 6_000_000, posts = emptyList(), authors = emptyMap(), authorsHeight = 4_871_137)
+        assertTrue("it takes the history as read", walked.historyDone)
+        assertNull(SocialCache.fromJson(JSONObject(walked.toJson().toString())))
+        assertNull("one block below", SocialCache.fromJson(walked.copy(low = HISTORY_START - 1).toJson()))
+        val read = walked.copy(low = HISTORY_START, high = 11_000_000, authorsHeight = 11_000_000)
+        assertEquals("a history read to its first block", read, SocialCache.fromJson(JSONObject(read.toJson().toString())))
+    }
+
+    @Test
+    fun theFirstScanWaitsForTheNodesNewestBlocks() {
+        val now = 1_791_710_000L
+        assertNull("a synced node's head", scanStartWait(11_423_708, now - 20, now))
+        assertNull("an hour old at most", scanStartWait(11_423_708, now - MAX_START_BLOCK_AGE_SECONDS, now))
+        assertNull("a phone clock behind the block's", scanStartWait(11_423_708, now + 600, now))
+        // Mainnet's first block for a new node (resources/header.tar in idena-go).
+        assertTrue(scanStartWait(4_871_137, 1_661_760_762, now)!!.startsWith("Waiting"))
+        assertTrue("before the contract, even with a recent time", scanStartWait(SOCIAL_FIRST_BLOCK - 1, now, now)!!.contains("before idena.social"))
+        assertEquals(
+            "Waiting for the node's newest blocks: its newest one is 2 h old.",
+            scanStartWait(11_000_000, now - 2 * 3_600, now),
+        )
+        assertTrue(scanStartWait(11_000_000, now - MAX_START_BLOCK_AGE_SECONDS - 1, now)!!.endsWith("60 min old."))
+        assertTrue(scanStartWait(11_000_000, now - 3 * 86_400, now)!!.endsWith("3 days old."))
     }
 
     @Test

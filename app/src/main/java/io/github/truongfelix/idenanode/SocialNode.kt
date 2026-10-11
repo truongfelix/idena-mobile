@@ -30,7 +30,10 @@ const val BLOCKS_PER_CALL = 8
 class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
     override fun batchSize(): Long = FILTER_BATCH
 
-    override fun head(): Long = (rpc.call("bcn_lastBlock") as JSONObject).getLong("height")
+    override fun head(): Long = headBlock().first
+
+    /** The node's head block: its height and time (seconds). */
+    fun headBlock(): Pair<Long, Long> = (rpc.call("bcn_lastBlock") as JSONObject).let { it.getLong("height") to it.getLong("timestamp") }
 
     override fun calls(from: Long, to: Long, version: SocialVersion): BlockCalls {
         val found = rpc.call(
@@ -202,8 +205,13 @@ object SocialStore {
         notifyOffFile(context).writeText(NotifyKind.entries.filter { it !in kinds }.joinToString("\n") { it.name })
     }
 
-    /** The block through which the Activity was seen; null before the first scan. */
-    fun seenThrough(context: Context): Long? = runCatching { seenFile(context).readText().trim().toLong() }.getOrNull()
+    /**
+     * The block through which the Activity was seen; null before the first scan, and below the history's first block
+     * (seen through a scan started at the node's first block, which [SocialCache.fromJson] drops: its new scan's
+     * history would all be news).
+     */
+    fun seenThrough(context: Context): Long? =
+        runCatching { seenFile(context).readText().trim().toLong() }.getOrNull()?.takeIf { it >= HISTORY_START }
 
     fun setSeenThrough(context: Context, height: Long) {
         seenFile(context).writeText(height.toString())

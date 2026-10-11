@@ -20,17 +20,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.text.NumberFormat
 
-/** The details behind the Social status (title row): the node, the blocks read, the history, the last action, and "Scan blocks". */
+/**
+ * The details behind the Social status (title row): the node, the blocks read, the history, the last action, and "Scan
+ * blocks". [peers]: the node's, as the title row reads them ([SocialModel.status]).
+ */
 @Composable
-fun SocialInfoDialog(model: SocialModel, onDismiss: () -> Unit) {
-    val status = model.status
+fun SocialInfoDialog(model: SocialModel, peers: Int?, onDismiss: () -> Unit) {
+    val status = model.status(peers)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(status.health, size = 14)
                 Spacer(Modifier.width(10.dp))
-                Text(socialBarLabel(status, model.node?.peers))
+                Text(socialBarLabel(status, peers ?: model.node?.peers))
             }
         },
         text = {
@@ -39,8 +42,8 @@ fun SocialInfoDialog(model: SocialModel, onDismiss: () -> Unit) {
                 Text(
                     when {
                         node == null -> "Node: no answer."
-                        node.syncing -> "Node: syncing, block ${blockNumber.format(node.currentBlock)} of ${blockNumber.format(node.highestBlock)} · ${peerText(node.peers)}."
-                        else -> "Node: block ${model.head?.let { blockNumber.format(it) } ?: "…"} · ${peerText(node.peers)}."
+                        node.syncing -> "Node: syncing, block ${blockNumber.format(node.currentBlock)} of ${blockNumber.format(node.highestBlock)} · ${peerText(peers ?: node.peers)}."
+                        else -> "Node: block ${model.head?.let { blockNumber.format(it) } ?: "…"} · ${peerText(peers ?: node.peers)}."
                     },
                 )
                 Text(newestText(model.cache, model.head) + ".")
