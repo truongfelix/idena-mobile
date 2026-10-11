@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -14,7 +13,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /*
- * The Android side of making a flip: frames from photos (cut to 4:3), JPEG, the draft kept in the app's
+ * The Android side of making a flip: frames from photos (cut to 4:3), JPEG, the drafts kept in the app's
  * files, and the opt-in image search (DuckDuckGo only, see FlipMaking.kt).
  */
 
@@ -108,12 +107,14 @@ object DuckSearch {
 }
 
 /**
- * The flip being made, kept in files/flips/draft so that it survives the app: the keyword pair, the
- * frames in story order (JPEG at [WORK_WIDTH] x [WORK_HEIGHT]; the anti-AI one made from [sources]),
+ * The flip being made for a keyword pair, kept in the app's files ([FlipDrafts]) so that it survives the app: the
+ * pair, the frames in story order (JPEG at [WORK_WIDTH] x [WORK_HEIGHT]; the anti-AI one made from [sources]),
  * which frame is the anti-AI one, and the shuffled order.
  */
 data class FlipDraft(
     val pairId: Int,
+    /** The pair's two words: the draft belongs to them. */
+    val words: List<Int>,
     val frames: List<ByteArray?> = List(FLIP_FRAMES) { null },
     val adversarial: Int = randomAdversarialSlot(),
     /** The pictures the anti-AI frame is made from (JPEG, work size), at most 8. */
@@ -125,47 +126,30 @@ data class FlipDraft(
         get() = frames.all { it != null }
 }
 
+/** The flips being made ([FlipDrafts], one per keyword pair), the flip sent last, and the image search choice. */
 object FlipDraftStore {
-    private fun dir(context: Context) = File(context.filesDir, "flips/draft")
+    private fun drafts(context: Context) = FlipDrafts(File(context.filesDir, "flips"))
 
-    /** The order of the writes ([DraftWriteOrder]); a write and a clear never run at the same time. */
-    val order = DraftWriteOrder()
+    // The order of the writes of each pair's draft ([DraftWriteOrder]); a write and a clear never run at the same time.
+    private val orders = HashMap<String, DraftWriteOrder>()
 
-    /** Saves [draft] when [ticket] is still the newest write (see [DraftWriteOrder]). */
+    fun order(words: List<Int>): DraftWriteOrder = synchronized(orders) { orders.getOrPut(draftKey(words)) { DraftWriteOrder() } }
+
+    /** Saves [draft] when [ticket] is still the newest write of its pair (see [DraftWriteOrder]). */
     fun save(context: Context, draft: FlipDraft, ticket: DraftWriteOrder.Ticket) = synchronized(this) {
-        if (order.claim(ticket)) save(context, draft)
+        if (order(draft.words).claim(ticket)) drafts(context).save(draft)
     }
 
-    fun load(context: Context): FlipDraft? = runCatching {
-        val dir = dir(context)
-        val json = JSONObject(File(dir, "draft.json").readText())
-        val shuffled = json.optJSONArray("shuffled")?.let { a -> (0 until a.length()).map { a.getInt(it) } }
-        FlipDraft(
-            pairId = json.getInt("pairId"),
-            frames = (0 until FLIP_FRAMES).map { File(dir, "frame$it.jpg").takeIf { f -> f.exists() }?.readBytes() },
-            adversarial = json.getInt("adversarial"),
-            sources = (0 until json.optInt("sources")).mapNotNull { File(dir, "source$it.jpg").takeIf { f -> f.exists() }?.readBytes() },
-            shuffled = shuffled?.takeIf { it.sorted() == (0 until FLIP_FRAMES).toList() },
-        )
-    }.getOrNull()
+    /** See [FlipDrafts.open]. */
+    fun open(context: Context, free: List<KeywordPair>): FlipDraft? = synchronized(this) { drafts(context).open(free) }
 
-    private fun save(context: Context, draft: FlipDraft) {
-        val dir = dir(context).also { it.mkdirs() }
-        draft.frames.forEachIndexed { i, bytes ->
-            val file = File(dir, "frame$i.jpg")
-            if (bytes == null) file.delete() else file.writeBytes(bytes)
-        }
-        dir.listFiles { f -> f.name.startsWith("source") }?.forEach { it.delete() }
-        draft.sources.forEachIndexed { i, bytes -> File(dir, "source$i.jpg").writeBytes(bytes) }
-        val json = JSONObject().put("pairId", draft.pairId).put("adversarial", draft.adversarial).put("sources", draft.sources.size)
-        draft.shuffled?.let { json.put("shuffled", JSONArray(it)) }
-        File(dir, "draft.json").writeText(json.toString())
-    }
+    /** See [FlipDrafts.switchTo]. */
+    fun switchTo(context: Context, pair: KeywordPair): FlipDraft = synchronized(this) { drafts(context).switchTo(pair) }
 
-    /** Forgets the draft, and every write of it still on its way. */
-    fun clear(context: Context) = synchronized(this) {
-        order.clear()
-        dir(context).deleteRecursively()
+    /** Forgets the draft of the pair [words], and every write of it still on its way. */
+    fun clear(context: Context, words: List<Int>) = synchronized(this) {
+        order(words).clear()
+        drafts(context).clear(words)
     }
 
     private fun sentFile(context: Context) = File(context.filesDir, "flips/sent.json")

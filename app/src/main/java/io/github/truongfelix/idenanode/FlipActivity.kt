@@ -133,12 +133,8 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
     var node by remember { mutableStateOf<Result<FlipNodeState>?>(null) }
     var reads by remember { mutableIntStateOf(0) }
     LaunchedEffect(reads) { node = withContext(Dispatchers.IO) { runCatching { readFlipState(context) } } }
+    // The draft of the keyword pair shown, opened once the node gave the pairs ([FlipDrafts]).
     var draft by remember { mutableStateOf<FlipDraft?>(null) }
-    var draftLoaded by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        draft = withContext(Dispatchers.IO) { FlipDraftStore.load(context) }
-        draftLoaded = true
-    }
     var step by remember { mutableStateOf(FlipStep.Words) }
     // The protected frames (story order) for the shuffle and the submission, made when leaving the pictures,
     // and the fingerprint of the pictures they were made from: they are sent only for those pictures.
@@ -152,7 +148,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
 
     fun update(next: FlipDraft) {
         draft = next
-        val ticket = FlipDraftStore.order.next()
+        val ticket = FlipDraftStore.order(next.words).next()
         scope.launch(Dispatchers.IO) { runCatching { FlipDraftStore.save(context, next, ticket) } }
     }
 
@@ -196,7 +192,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
         }
         val state = node
         when {
-            state == null || !draftLoaded -> { CircularProgressIndicator(); return@Column }
+            state == null -> { CircularProgressIndicator(); return@Column }
             state.isFailure -> {
                 Text("The node did not answer: ${state.exceptionOrNull()?.message}")
                 Button(onClick = { reads++ }) { Text("Try again") }
@@ -221,15 +217,15 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
             return@Column
         }
         val free = nodeState.pairs.filter { !it.used }
-        // A new draft when there is none, or when its pair was used meanwhile (by a flip sent elsewhere).
-        val current = draft?.takeIf { d -> free.any { it.id == d.pairId } }
+        // Opened when there is none yet, or when its pair was used meanwhile (by a flip sent elsewhere): the draft of
+        // the pair worked on last, else of the first free pair. A draft's pictures stay with its pair.
+        val current = draft?.takeIf { d -> free.any { it.words == d.words } }
         if (current == null) {
-            // A draft whose pair is no longer free keeps its pictures under the next free pair.
-            LaunchedEffect(free) { free.firstOrNull()?.let { update(draft?.copy(pairId = it.id) ?: FlipDraft(it.id)) } }
+            LaunchedEffect(free) { draft = withContext(Dispatchers.IO) { FlipDraftStore.open(context, free) } }
             if (free.isEmpty()) Text("The node gave no unused keyword pair.") else CircularProgressIndicator()
             return@Column
         }
-        val pair = free.first { it.id == current.pairId }
+        val pair = free.first { it.words == current.words }
         val words = pairWords(pair, keywords)
         StepRow(step)
         HorizontalDivider()
@@ -246,7 +242,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
             when (step) {
                 FlipStep.Words -> WordsStep(words, otherPairs = free.size - 1, onOther = {
                     val next = free[(free.indexOf(pair) + 1) % free.size]
-                    update(current.copy(pairId = next.id))
+                    scope.launch { draft = withContext(Dispatchers.IO) { FlipDraftStore.switchTo(context, next) } }
                 }, onNext = { step = FlipStep.Frames })
                 FlipStep.Frames -> FramesStep(current, words, ::update, onNext = {
                     working = "Protecting the pictures against AI…"
