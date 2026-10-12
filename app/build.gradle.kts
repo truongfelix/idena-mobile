@@ -26,13 +26,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Same key as the debug builds: the release installs as an update and keeps the chain and
-            // the imported key (a new signing key would need an uninstall, which deletes both).
-            signingConfig = signingConfigs.getByName("debug")
-            // Test phase: keeps `adb run-as` for logs and data. Remove before giving the APK to others,
-            // with USB debugging on it lets an authorized computer run code as the app, which can open the node
-            // key with the app's Keystore key.
-            isDebuggable = true
+            // Unsigned: scripts/sign-release.sh signs it with the release key, which never enters the
+            // repository or GitHub. Not debuggable: with USB debugging on, `adb run-as` would let an authorized
+            // computer run code as the app, which can open the node key with the app's Keystore key.
+            isDebuggable = false
         }
     }
     compileOptions {
