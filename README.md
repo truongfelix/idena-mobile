@@ -4,7 +4,8 @@ An Android app that runs an [Idena](https://idena.io) node on the phone, without
 inside the app while Sync is on, mainly to sync and to take part in the validation ceremony. Mining is
 meant to be delegated to a pool, such as a desktop node.
 
-**Status: test phase.** Tested on a Redmi Note 7 (Android 10, 2.8 GB of RAM). No APK is published yet.
+**Status: beta.** Test builds are on the [releases page](https://github.com/truongfelix/idena-mobile/releases)
+(see [Install](#install)). Tested on two phones, the smaller one with Android 10 and 2.8 GB of RAM.
 
 ## What it does
 
@@ -61,7 +62,7 @@ meant to be delegated to a pool, such as a desktop node.
   task, and the flips: how many are made, what missing ones cost, and Make a flip while some are missing.
 - **My flips**: the flips of the epoch, each with its four pictures, words and state, shown as validators
   will see it on a tap; delete one (fee shown first: the node counts a delete as about 120 KB). **Make a
-  flip**: an unused keyword pair, four pictures (camera, gallery, or an opt-in DuckDuckGo image search), an
+  flip**: an unused keyword pair, four pictures (camera, gallery, or an opt-in image search), an
   anti-AI frame in a random place, the shuffled story, then the node encrypts and publishes it. Flips are
   sent only while the node is synced, and until the flip lottery (5 minutes before the validation).
 - **Oracle votings** (from the Profile): the votings of the identity's committees to vote in, ongoing and
@@ -105,9 +106,20 @@ meant to be delegated to a pool, such as a desktop node.
   approved it; its audience (language, Android, age, stake) must include the identity. Everything comes
   from the phone's own node. A tap shows the ad, who paid for it, and its link, opened only on request.
 
-The app talks only to its own node; the one exception is the opt-in DuckDuckGo image search for flips.
+The app talks only to its own node; the one exception is the opt-in image search for flips, which asks
+DuckDuckGo, Openverse and Wikimedia directly from the phone.
 
-Planned: importing the key from its QR code, private messages, the router port opened by the app (UPnP).
+Planned: importing the key from its QR code, private messages.
+
+## Install
+
+Download the APK from the [releases page](https://github.com/truongfelix/idena-mobile/releases) and check it:
+its SHA-256 is in the release notes, and its signing certificate's SHA-256 fingerprint must be the one listed
+there (`apksigner verify --print-certs <apk>`, from the Android SDK build tools). Android asks once to allow
+installs from the browser or the file manager that opens it.
+
+A new version installs over the previous one and keeps the chain and the key. Uninstalling deletes both: back up
+the key first ("Back up my key" on the Key card), and import it again after a new install.
 
 ## Phone requirements
 
@@ -130,16 +142,17 @@ scripts/build-node-aar.sh       # node (Go, gomobile): app/libs/idena-node.aar
 scripts/build-apk.sh            # app: app/build/outputs/apk/debug/app-debug.apk
 
 scripts/build-apk.sh testDebugUnitTest   # unit tests
-scripts/build-apk.sh assembleRelease     # shrunk release build
+scripts/build-apk.sh assembleRelease     # shrunk release build, unsigned
+scripts/sign-release.sh <keystore> app/build/outputs/apk/release/app-release-unsigned.apk <signed apk>
 ```
 
 The scripts expect the SDK in `~/Android/Sdk`. Put other paths in `scripts/env.local.sh` (not committed),
 for example `ANDROID_HOME=/opt/android-sdk`. On a machine shared with other work, `MEM_MAX=3500M` and
 `NEED_MB=3500` there cap the memory of the build steps (see `scripts/env.sh`).
 
-Release builds are signed with the debug key during the test phase, so they install over debug builds.
-A release key comes before any APK is shared: changing the key later means uninstalling the app, which
-deletes the chain and the imported key.
+Release builds are unsigned and not debuggable; `scripts/sign-release.sh` signs one with the release key,
+which stays offline with the developer. An APK signed with another key does not install over the app: changing
+the key means uninstalling it, which deletes the chain and the imported key.
 
 `scripts/monitor_node.py` logs the node on a connected phone (block, peers, CPU, memory, battery).
 
@@ -169,4 +182,4 @@ deletes the chain and the imported key.
 - The keyword list (`app/src/main/assets/keywords.json`) is idena-go's `keywords/keywords.json`. The flip
   used by the decoding test comes from the test fixtures of
   [idena-desktop](https://github.com/idena-network/idena-desktop) (MIT).
-- License: LGPL-3.0, like idena-go (see `LICENSE`).
+- License: LGPL-3.0, like idena-go (see `LICENSE`; the GNU GPL 3.0 it builds on is in `COPYING`).

@@ -10,11 +10,11 @@ import java.math.BigDecimal
 class WalletTest {
     @Test
     fun addressesAre0xAnd40HexDigits() {
-        assertTrue(isAddress("0x022353d8a3e5852f2eB8DF3e23a7b0f738752536"))
-        assertTrue("spaces around are ignored", isAddress(" 0x022353d8a3e5852f2eB8DF3e23a7b0f738752536 "))
-        assertFalse(isAddress("022353d8a3e5852f2eB8DF3e23a7b0f738752536"))
-        assertFalse(isAddress("0x022353d8a3e5852f2eB8DF3e23a7b0f73875253"))
-        assertFalse(isAddress("0x022353d8a3e5852f2eB8DF3e23a7b0f73875253g"))
+        assertTrue(isAddress("0x5f3a9c1e7b2d4a6f8e0C1B3D5A7F9e2c4b6d8a01"))
+        assertTrue("spaces around are ignored", isAddress(" 0x5f3a9c1e7b2d4a6f8e0C1B3D5A7F9e2c4b6d8a01 "))
+        assertFalse(isAddress("5f3a9c1e7b2d4a6f8e0C1B3D5A7F9e2c4b6d8a01"))
+        assertFalse(isAddress("0x5f3a9c1e7b2d4a6f8e0C1B3D5A7F9e2c4b6d8a0"))
+        assertFalse(isAddress("0x5f3a9c1e7b2d4a6f8e0C1B3D5A7F9e2c4b6d8a0g"))
     }
 
     @Test
