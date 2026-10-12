@@ -69,6 +69,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
@@ -337,14 +338,30 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
             },
             onSyncChange = setSync,
         )
-        val nodeDir = NodeSettings.nodeDir(context).absolutePath
+        // The node key is kept encrypted (NodeKeys); the node reads it at its next start.
         val importKey: suspend (String, String) -> String = { key, password ->
-            withContext(Dispatchers.IO) { Mobile.importKey(nodeDir, NodeSettings.nodeConfig(context), key.trim(), password) }
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val opened = Mobile.openKey(key, password)
+                    try {
+                        NodeKeys.files(context).write(opened)
+                    } finally {
+                        opened.fill(0)
+                    }
+                }.exceptionOrNull()?.let { it.message ?: "$it" } ?: ""
+            }
         }
         KeyCard(
             state,
             newKey = { Mobile.newKey(it) },
-            exportKey = { Mobile.exportKey(nodeDir, it) },
+            exportKey = { password ->
+                val key = NodeKeys.files(context).read() ?: throw IOException("There is no node key.")
+                try {
+                    Mobile.exportKey(key, password)
+                } finally {
+                    key.fill(0)
+                }
+            },
             onCreate = { backup, password, done ->
                 scope.launch {
                     val error = importKey(backup, password)

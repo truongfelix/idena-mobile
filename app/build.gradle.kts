@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.truongfelix.idenanode"
         minSdk = 29
         targetSdk = 35
-        versionCode = 79
-        versionName = "0.1.75"
+        versionCode = 80
+        versionName = "0.1.76"
         ndk {
             // The node library is built for 64-bit ARM only.
             abiFilters += "arm64-v8a"
@@ -30,7 +30,8 @@ android {
             // the imported key (a new signing key would need an uninstall, which deletes both).
             signingConfig = signingConfigs.getByName("debug")
             // Test phase: keeps `adb run-as` for logs and data. Remove before giving the APK to others,
-            // with USB debugging on it lets an authorized computer read the node key.
+            // with USB debugging on it lets an authorized computer run code as the app, which can open the node
+            // key with the app's Keystore key.
             isDebuggable = true
         }
     }

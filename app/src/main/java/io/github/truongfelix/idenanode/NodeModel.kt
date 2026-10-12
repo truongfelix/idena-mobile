@@ -146,9 +146,15 @@ private fun readState(context: Context): ScreenState {
     }
     return readLocal(context, ScreenState(status = status)).copy(
         hasKey = hasKey,
-        // Reading the key needs the node library; only when the node does not answer.
+        // Reading the key needs the Keystore and the node library; only when the node does not answer.
         keyAddress = if (status == null && hasKey) {
-            Mobile.address(NodeSettings.nodeDir(context).absolutePath).ifEmpty { null }
+            runCatching { NodeKeys.files(context).read() }.getOrNull()?.let { key ->
+                try {
+                    Mobile.privateKeyAddress(key)
+                } finally {
+                    key.fill(0)
+                }
+            }?.ifEmpty { null }
         } else {
             null
         },

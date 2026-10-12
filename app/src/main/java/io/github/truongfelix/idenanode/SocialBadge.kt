@@ -65,7 +65,7 @@ object SocialBadge {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_node)
+            .setSmallIcon(R.drawable.ic_idena)
             .setContentTitle("Idena Social")
             .setContentText(text)
             .setNumber(update.count)

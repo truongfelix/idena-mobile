@@ -1,16 +1,18 @@
 module github.com/truongfelix/idena-mobile/go
 
-go 1.26.8
+go 1.26.9
 
-// The node: master of truongfelix/idena-go (4b2172e, 2026-10-07, the compatibility pin after #22):
+// The node: master of truongfelix/idena-go (b3e505f, 2026-10-11, the compatibility pin after #28 and #29):
 // ubiubi18/idena-go ef2107e with our pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for
-// the Social tab and #50 the consensus version on mobile) and truongfelix #1-#22 (--dbwritebuffer, read-only
+// the Social tab and #50 the consensus version on mobile) and truongfelix #1-#29 (--dbwritebuffer, read-only
 // consensus-version read, OpenTelemetry 1.45.0, push tracker, own dependency forks, dna_validationSummary,
 // IPFS datastore write buffer, checked NTP replies, fast sync without the wait for a snapshot, a start after a
 // kill during a database flush, bounded sync passes, snapshot choice by peer count, a peer's height counted
 // only up to the blocks it serves, peer and IPFS connection limit flags, the oracle voting RPCs,
-// dna_identityHistory, iavl from truongfelix/iavl, bcn_contractCalls with each call's success).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20261008193743-1f3378ac7e3b
+// dna_identityHistory, iavl from truongfelix/iavl, bcn_contractCalls with each call's success, a peer kept
+// dialable beside another connection, direct peers, the official node's IPFS folder and key file, the node key
+// given in memory, Go 1.26.9).
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v0.17.2-0.20261011192746-b3e505faf235
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
@@ -264,7 +266,7 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518 // indirect
