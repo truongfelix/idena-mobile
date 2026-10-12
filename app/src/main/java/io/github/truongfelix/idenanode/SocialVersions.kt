@@ -4,8 +4,8 @@ package io.github.truongfelix.idenanode
  * idena.social's contracts. The current one takes the posts since its deployment; each older one, the posts of
  * the blocks before the next one was deployed, as idena.social-ui reads them (breakingChanges in
  * src/logic/asyncUtils.ts). Older posts are read only and get ids of their own in the app ([appId]), so that
- * they never meet the current contract's. Versions, formats and numbers: the workspace's
- * notes/idena-social-contracts.md; the desktop app has the same table (renderer/screens/social/versions.js).
+ * they never meet the current contract's. The desktop app has the same table
+ * (renderer/screens/social/versions.js in truongfelix/idena-desktop).
  */
 
 /**
