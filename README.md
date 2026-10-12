@@ -24,7 +24,7 @@ meant to be delegated to a pool, such as a desktop node.
   - **Peer level**: Eco (up to 7 Idena peers, idena-go's low-power numbers), Normal (default, up to 18,
     idena-go's defaults) or Hub (up to 30: twice the incoming slots, for nodes that reach the phone through
     the router port).
-  - **IPFS connections**: 20, 50, 100 or No limit (default). Idena peers ride on these connections, so a
+  - **IPFS connections**: 20, 50 (default), 100 or No limit. Idena peers ride on these connections, so a
     limit must leave room for the level's peers: 20 needs Eco, 50 Eco or Normal (the app raises a limit that
     is too low when the level changes).
   - The **write buffers** of the node's two databases, each on its own: the chain database (the blockchain)
@@ -49,8 +49,8 @@ meant to be delegated to a pool, such as a desktop node.
 - **Profile** (the first card of the Node tab): identity state and age, the address with its robot avatar;
   the next validation (below); the invitation that applies: for an address without an identity, an
   **invitation code** field (activation, no fee), an invitation sent to the address to accept, or the
-  invitations to send (below); then My flips, Practice validation, History and Oracle votings (with how many
-  wait for the identity's vote).
+  invitations to send (below); then My flips, Practice validation, History, Oracle votings (with how many
+  wait for the identity's vote) and My ads.
 - **Wallet**: Receive (the address and its QR code), Send (to an address or a contact; the node's fee
   estimate, then a confirmation), Add stake (the stake after, how much of it the identity keeps if it
   misses or fails the next validation, the network's minimum stake, that stake cannot be withdrawn).
@@ -63,16 +63,19 @@ meant to be delegated to a pool, such as a desktop node.
 - **My flips**: the flips of the epoch, each with its four pictures, words and state, shown as validators
   will see it on a tap; delete one (fee shown first: the node counts a delete as about 120 KB). **Make a
   flip**: an unused keyword pair, four pictures (camera, gallery, or an opt-in image search), an
-  anti-AI frame in a random place, the shuffled story, then the node encrypts and publishes it. Flips are
-  sent only while the node is synced, and until the flip lottery (5 minutes before the validation).
+  anti-AI frame in a random place, the shuffled story, then the node encrypts and publishes it. A flip in progress
+  is kept as a draft of its keyword pair. Flips are sent only while the node is synced, and until the flip
+  lottery (5 minutes before the validation).
 - **Oracle votings** (from the Profile): the votings of the identity's committees to vote in, ongoing and
   closed, and every voting, from the node's own index; a voting's question, times, committee, rewards and
   options. **Vote**: an option, then a confirmation with the payment and the fee; the secret vote is sent at
   once, and the node keeps the vote itself and sends it at the end of the secret voting, so sync must be on
-  then. Creating, prolonging and finishing a voting are not in the app yet.
-- **Key**: import the private key exported from the Idena app or app.idena.io (encrypted, with its
-  password). Sync stays off until a key is imported. The app keeps the key on the phone and out of
-  Android backups.
+  then. **Create** a voting (title, description, options, times, rewards), then, as on the desktop: launch it,
+  add funds, prolong it, finish it and pay out, terminate it, each when the contract allows it.
+- **Key**: create a new account, or import the private key exported from the Idena app or app.idena.io
+  (encrypted, with its password); "Back up my key" exports it encrypted with a password. Sync stays off until
+  there is a key. The app keeps the key encrypted on the phone (with a key held by the Android Keystore) and out
+  of Android backups.
 - **Validation**: the "Open the validation" button from the flip lottery on. It waits for the short session
   (the flips load meanwhile), shows the node's flips (extra flips replace the ones that did not load, as on
   the desktop), then the long session with the keyword check (the story on the left; on the right the two
@@ -99,11 +102,14 @@ meant to be delegated to a pool, such as a desktop node.
   With the identity: post (an image as WebP without the photo's metadata, the text on IPFS if chosen),
   like, reply, comment, tip, as idena.social writes them; every fee is shown before sending. "Scan blocks"
   reads the new blocks, then the older ones back to the contract's creation (once, kept on the phone);
-  nothing is scanned while the node syncs or a validation runs. Not done yet: private messages.
+  nothing is scanned while the node syncs or a validation runs. While the app is not on screen, a notification
+  (and a badge on the app's icon) counts the new likes, comments and tips on the identity's posts; opening the
+  Social tab removes it. Not done yet: private messages.
 - **Ads**: Idena ads for this identity and a note from the developer: a banner on the Node tab, a card
   after each 5 posts of the feed, and under 2 of each 5 posts opened (picked at random). An ad shows when
   coins were burnt for it over the last day, its author's profile lists it, and the oracles' review vote
-  approved it; its audience (language, Android, age, stake) must include the identity. Everything comes
+  approved it; its audience (language, Android, age, stake) must include the identity. **My ads** (from the
+  Profile): make an ad, send it to the oracles' review, then show it by burning coins. Everything comes
   from the phone's own node. A tap shows the ad, who paid for it, and its link, opened only on request.
 
 The app talks only to its own node; the one exception is the opt-in image search for flips, which asks
@@ -131,7 +137,7 @@ the key first ("Back up my key" on the Key card), and import it again after a ne
 ## Build
 
 Tools: Android SDK (platform 35, build tools 35), Android NDK r27d (27.3.13750724), JDK 17 or newer,
-Go 1.26, Rust through rustup (the version comes from idena-wasm's `rust-toolchain.toml`).
+Go 1.26.9 or newer, Rust through rustup (the version comes from idena-wasm's `rust-toolchain.toml`).
 
 ```sh
 rustup target add aarch64-linux-android
@@ -170,7 +176,7 @@ the key means uninstalling it, which deletes the chain and the imported key.
 - The node on the phone: RPC on 127.0.0.1 only, with a random key and no browser access; the IPFS
   "server" profile is off, because its address filters block peers on the home network; the peer limits and
   the IPFS connection manager's limits come from Advanced settings (by default idena-go's peer limits and
-  no IPFS connection limit).
+  50 IPFS connections).
 
 ## Credits and license
 
