@@ -2,7 +2,7 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.9
 
-// The node: truongfelix/idena-go v1.1.3-beta.2 (master a244775, 2026-10-12, the compatibility pin after #33):
+// The node: truongfelix/idena-go master bf7bf88 (2026-10-15, the compatibility pin after #34):
 // ubiubi18/idena-go ef2107e with our pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for
 // the Social tab and #50 the consensus version on mobile) and truongfelix #1-#29 (--dbwritebuffer, read-only
 // consensus-version read, OpenTelemetry 1.45.0, push tracker, own dependency forks, dna_validationSummary,
@@ -11,8 +11,9 @@ go 1.26.9
 // only up to the blocks it serves, peer and IPFS connection limit flags, the oracle voting RPCs,
 // dna_identityHistory, iavl from truongfelix/iavl, bcn_contractCalls with each call's success, a peer kept
 // dialable beside another connection, direct peers, the official node's IPFS folder and key file, the node key
-// given in memory, Go 1.26.9, a wait for a peer above a stale head instead of consensus at that height).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.2
+// given in memory, Go 1.26.9, a wait for a peer above a stale head instead of consensus at that height,
+// dna_ceremonySummary).
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.2.0.20261014222832-bf7bf8817814
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
