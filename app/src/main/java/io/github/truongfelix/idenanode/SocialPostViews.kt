@@ -167,6 +167,7 @@ fun PostCard(
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PostHeader(post.call, states, onProfile, compact = true)
+            post.topic?.let { TopicTag(it) }
             PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES, mediaMaxHeight = 220.dp)
         }
         ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip, onWho = onWho)

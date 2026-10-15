@@ -32,7 +32,7 @@ data class PostCall(
     val message: String,
     /** The id of the post it replies to, as the contract argument has it; empty for a post. */
     val replyTo: String,
-    /** Empty for the main feed; "discuss:<id>" for a comment on a reply. */
+    /** Empty for the main feed; "discuss:<id>" for a comment on a reply; "r/<name>" for a post in a topic. */
     val channel: String,
     val hasMedia: Boolean,
     /** The first media: "ipfs://<cid>" or inline base64; empty without media or when too large to keep. */
@@ -326,7 +326,8 @@ fun postIds(posts: List<PostCall>, authors: Map<Long, String>, fromOldest: Boole
  * under each post its replies; under each reply its comments, in the channel "discuss:<reply id>"
  * (a main-channel answer to a reply or a comment counts as a comment too). A like (a reply made of
  * [LIKE]) only counts on what it replies to. Each post needs a text or media, an id, and a known,
- * older parent that is not a like; posts in other channels are left out. A tip counts on the post it
+ * older parent that is not a like; a post (not an answer) may also be in a topic's channel ([topicOf]),
+ * posts in other channels are left out. A tip counts on the post it
  * names when its amount is valid and it comes after that post in the chain. [fromOldest]: see [postIds].
  */
 fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<TipCall> = emptyList(), fromOldest: Boolean = false): List<SocialPost> {
@@ -345,6 +346,7 @@ fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<Tip
         val discussId = when {
             post.channel.isEmpty() -> null
             post.channel.startsWith("discuss:") -> post.channel.removePrefix("discuss:").toLongOrNull() ?: continue
+            post.replyTo.isEmpty() && topicOf(post.channel) != null -> null
             else -> continue
         }
         val parentId = post.replyTo.toLongOrNull()

@@ -47,6 +47,9 @@ sealed interface SocialPage {
 
     /** The profile of [address] (lowercase). */
     data class Profile(val address: String) : SocialPage
+
+    /** The posts of topic [name]. */
+    data class Topic(val name: String) : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -163,6 +166,10 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
     var feedFollowing by mutableStateOf(false)
 
+    /** Whether Home shows the topics (the Topics chip) instead of posts. */
+    var feedTopics by mutableStateOf(false)
+        private set
+
     /** The random picks of the posts whose thread shows an ad ([threadShowsAd]), new at each app start. */
     val adSalt = kotlin.random.Random.nextLong()
 
@@ -194,6 +201,16 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setPeople(context, people) } } }
     }
     private val peopleSave = Mutex()
+
+    /** The topics followed (kept on the phone): their posts are in the Following feed. */
+    var followedTopics by mutableStateOf(SocialStore.followedTopics(context))
+        private set
+
+    fun setTopicFollowed(name: String, follow: Boolean) {
+        followedTopics = if (follow) followedTopics + name else followedTopics - name
+        val topics = followedTopics
+        scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setFollowedTopics(context, topics) } } }
+    }
 
     /** [address]'s entry of the People list, or an empty one. */
     fun person(address: String): Person = people[address.lowercase()] ?: Person(address.lowercase())
@@ -278,10 +295,21 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** Shows the feed: all posts, or those of the people followed ([following]), from its top when that changes. */
     fun showFeed(following: Boolean) {
         view = SocialView.Feed
-        if (following == feedFollowing) return
+        if (following == feedFollowing && !feedTopics) return
         feedFollowing = following
+        feedTopics = false
         scope.launch { feedState.scrollToItem(0) }
     }
+
+    /** Shows the topics on Home (the Topics chip), from their top. */
+    fun showTopics() {
+        view = SocialView.Feed
+        if (feedTopics) return
+        feedTopics = true
+        scope.launch { feedState.scrollToItem(0) }
+    }
+
+    fun openTopic(name: String) = open(SocialPage.Topic(name))
 
     /** Orders the feed by [sort], from its top (the place in the other order means nothing here). */
     fun sortFeedBy(sort: FeedSort) {

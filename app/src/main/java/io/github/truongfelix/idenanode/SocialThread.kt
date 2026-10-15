@@ -73,6 +73,7 @@ fun ThreadView(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PostHeader(post.call, states, onProfile)
+                    post.topic?.let { TopicTag(it) }
                     PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true)
                     if (post.isOlder) {
                         Text(

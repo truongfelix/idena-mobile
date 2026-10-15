@@ -108,6 +108,9 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             minLines = 4,
             maxLines = 10,
         )
+        if (draft.target == PostTarget.NEW_POST) {
+            TopicField(model.sending.draftTopic, model.feed) { model.sending.draftTopic = it }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Pill(if (image == null) "🖼 Image" else "🖼 Other image", enabled = imageNote != "Preparing the image…") {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
