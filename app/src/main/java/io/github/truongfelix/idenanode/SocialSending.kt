@@ -19,8 +19,8 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
 /** What the editor writes: the action's name, the editor's title, what it answers and that text. */
 data class Draft(val what: String, val title: String, val target: PostTarget, val answering: PostCall?)
 
-/** What the editor holds: its text, its image and whether the text goes on IPFS. */
-data class EditorContent(val text: String, val image: ImageDraft?, val textOnIpfs: Boolean)
+/** What the editor holds: its text, its image, whether the text goes on IPFS, and the topic typed. */
+data class EditorContent(val text: String, val image: ImageDraft?, val textOnIpfs: Boolean, val topic: String = "")
 
 /**
  * What the editor gets back when the post it sent ([sent]; null for a like or a tip) is dropped by the node or
@@ -81,6 +81,9 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     var draftImage by mutableStateOf<ImageDraft?>(null)
     var textOnIpfs by mutableStateOf(false)
 
+    /** The topic typed for a new post ([typedTopic]); blank for none. */
+    var draftTopic by mutableStateOf("")
+
     // Paid actions: one at a time, a confirmation, and what happened to the last one.
     var busy by mutableStateOf(false)
         private set
@@ -135,7 +138,13 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
         val text = draftText.trim()
         val image = draftImage?.bytes
         val textFile = textOnIpfs && text.isNotEmpty()
+        // A new post may go in a topic: its channel.
+        val channel = if (current.target != PostTarget.NEW_POST || draftTopic.isBlank()) current.target.channel
+        else typedTopic(draftTopic)?.let(::topicChannel)
         prepareWith(current.what) { posting, from ->
+            if (current.target == PostTarget.NEW_POST && draftTopic.isNotBlank() && channel == null) {
+                throw IOException("\"${draftTopic.trim()}\" is not a topic name (a-z, 0-9 and _, 3 to 21 characters)")
+            }
             val files = ArrayList<IpfsFile>()
             fun file(what: String, bytes: ByteArray): IpfsFile {
                 if (bytes.size > MAX_IPFS_FILE) throw IOException("the $what is too large (${bytes.size / 1000} KB, at most ${MAX_IPFS_FILE / 1000} KB)")
@@ -147,7 +156,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             val message = if (textFile) "ipfs://" + file("text", text.toByteArray(Charsets.UTF_8)).cid else text
             val media = image?.let { "ipfs://" + file("image", it).cid }
             val call = SocialPosting.post(
-                makePostArgument(message, current.target.replyTo, current.target.channel, media, media?.let { IMAGE_TYPE }),
+                makePostArgument(message, current.target.replyTo, channel, media, media?.let { IMAGE_TYPE }),
             )
             val fee = posting.estimate(from, call)
             // Every transaction may take up to twice its fee: the balance must cover them all.
@@ -201,12 +210,13 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 return@launch
             }
             busy = false
-            val sentContent = if (pending.fromEditor) EditorContent(draftText, draftImage, textOnIpfs) else null
+            val sentContent = if (pending.fromEditor) EditorContent(draftText, draftImage, textOnIpfs, draftTopic) else null
             if (pending.fromEditor) {
                 draft = null
                 draftText = ""
                 draftImage = null
                 textOnIpfs = false
+                draftTopic = ""
             }
             sent.add(hash, pending.likeOf)
             report("${pending.what} sent, waiting for a block (${hash.take(10)}…)")
@@ -238,6 +248,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             draftText = back.text
             draftImage = back.image
             textOnIpfs = back.textOnIpfs
+            draftTopic = back.topic
         }
         return putBackNote(sent, back != null)
     }

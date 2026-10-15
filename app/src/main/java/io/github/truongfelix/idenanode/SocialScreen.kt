@@ -59,6 +59,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.delay
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
@@ -106,13 +111,30 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             value = System.currentTimeMillis() / 1000
         }
     }
-    CompositionLocalProvider(LocalNames provides model.names, LocalNow provides now, LocalPendingLikes provides model.sending.sent.likes) {
+    CompositionLocalProvider(
+        LocalNames provides model.names,
+        LocalNow provides now,
+        LocalPendingLikes provides model.sending.sent.likes,
+        LocalOpenTopic provides model::openTopic,
+    ) {
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
     val page = model.pages.lastOrNull()
     // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
     if (current != null || page != null || model.view != SocialView.Feed) topBar()
-    Box(Modifier.weight(1f).fillMaxWidth()) {
+    // The bottom bar fades out while the content scrolls down and back in when it scrolls up; it is back on
+    // each new page or list.
+    var barShown by remember { mutableStateOf(true) }
+    val barScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -BAR_SCROLL_STEP) barShown = false else if (available.y > BAR_SCROLL_STEP) barShown = true
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(page, model.view) { barShown = true }
+    Box(Modifier.weight(1f).fillMaxWidth().nestedScroll(barScroll)) {
         val historyDone = model.cache?.historyDone == true
         // A like of a post of a list (a reply or comment is liked from its thread).
         val likePost = { post: SocialPost -> model.sending.preparePost("Like", LIKE, PostTarget.onPost(post.id)) }
@@ -137,6 +159,34 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     onTip = { tipping = it },
                     onWho = { who = it },
                 )
+            }
+            page is SocialPage.Topic -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    TopicView(
+                        name = page.name,
+                        feed = feed,
+                        following = page.name in model.followedTopics,
+                        canPost = canAct,
+                        listState = model.pageState(page).list,
+                        onFollow = { model.setTopicFollowed(page.name, it) },
+                        onPost = { newPost(model, page.name) },
+                        modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                    ) { post ->
+                        PostCard(
+                            post = post,
+                            states = states,
+                            myAddress = myAddress,
+                            canAct = canAct,
+                            onOpen = { openThread(post.id, null) },
+                            onProfile = model::openProfile,
+                            onLike = { likePost(post) },
+                            onTip = { tipping = post },
+                            onWho = { who = post },
+                            topicShown = TopicShown.Not,
+                        )
+                    }
+                }
             }
             page is SocialPage.Profile -> key(page) {
                 Column(Modifier.fillMaxSize()) {
@@ -166,13 +216,16 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             model.view == SocialView.Feed -> {
                 val people = model.people
                 val epochStart = model.node?.epochStart
-                val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, epochStart) {
-                    val shown = if (model.feedFollowing) followingFeed(feed, people) else feed
+                val topics = model.followedTopics
+                val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, topics, epochStart) {
+                    val shown = if (model.feedFollowing) followingFeed(feed, people, topics) else feed
                     sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
                 }
                 val query = model.searchQuery.trim()
+                // "r/…" lists the topics instead of searching the posts.
+                val topicSearch = query.startsWith(TOPIC_PREFIX)
                 val hits by produceState<List<SearchHit>?>(null, query, feed, people) {
-                    if (query.length < MIN_SEARCH) {
+                    if (query.length < MIN_SEARCH || topicSearch) {
                         value = null
                         return@produceState
                     }
@@ -207,6 +260,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         state = model.feedState,
                         contentPadding = PaddingValues(top = headerDp, bottom = 16.dp),
                     ) {
+                        if (topicSearch) {
+                            topicItems(feed, query, model.followedTopics, model::openTopic, model::setTopicFollowed)
+                            return@LazyColumn
+                        }
                         val found = hits
                         if (query.length >= MIN_SEARCH) {
                             when {
@@ -255,6 +312,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                         onLike = { likePost(post) },
                                         onTip = { tipping = post },
                                         onWho = { who = post },
+                                        topicShown = TopicShown.InsteadOfAuthor,
                                     )
                                 }
                             }
@@ -321,7 +379,9 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             }
         }
     }
-    if (current == null) BottomBar(model)
+    AnimatedVisibility(current == null && barShown, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+        BottomBar(model)
+    }
     }
 
     model.sending.confirm?.let { pending ->
@@ -358,7 +418,13 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     }
 }
 
-/** Back, at the top of a thread or a profile. */
+/** Opens the editor for a new post, in topic [topic] when given (else in the topic typed last, if any). */
+private fun newPost(model: SocialModel, topic: String?) {
+    topic?.let { model.sending.draftTopic = it }
+    model.sending.draft = Draft("Post", "New post", PostTarget.NEW_POST, null)
+}
+
+/** Back, at the top of a thread, a profile or a topic. */
 @Composable
 private fun BackRow(onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -369,6 +435,9 @@ private fun BackRow(onBack: () -> Unit) {
         }
     }
 }
+
+/** The scroll (pixels in one step) that hides or shows the bottom bar: not a finger's tremor. */
+private const val BAR_SCROLL_STEP = 2f
 
 /** The bottom bar's height: the app keeps its notices over it. */
 val SOCIAL_BAR_HEIGHT = 60.dp
@@ -387,7 +456,8 @@ private fun BottomBar(model: SocialModel) {
             BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
             val inInbox = model.view == SocialView.Activity || model.view == SocialView.People
             BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread) { model.showList(model.inboxView) }
-            BarItem("Post", Icons.Filled.Edit, selected = false) { model.sending.draft = Draft("Post", "New post", PostTarget.NEW_POST, null) }
+            // On a topic's page, the new post goes in that topic.
+            BarItem("Post", Icons.Filled.Edit, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
         }
     }
 }

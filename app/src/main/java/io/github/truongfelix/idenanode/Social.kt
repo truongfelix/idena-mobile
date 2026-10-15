@@ -32,7 +32,7 @@ data class PostCall(
     val message: String,
     /** The id of the post it replies to, as the contract argument has it; empty for a post. */
     val replyTo: String,
-    /** Empty for the main feed; "discuss:<id>" for a comment on a reply. */
+    /** Empty for the main feed; "discuss:<id>" for a comment on a reply; "r/<name>" for a post in a topic. */
     val channel: String,
     val hasMedia: Boolean,
     /** The first media: "ipfs://<cid>" or inline base64; empty without media or when too large to keep. */
@@ -141,7 +141,7 @@ data class TipCall(
     /** The tipper, lowercase. */
     val from: String,
     val postId: String,
-    /** The tip as the argument has it; the contract takes whole iDNA. */
+    /** The tip as the argument has it; the contract takes the whole iDNA it starts with. */
     val tipAmount: String,
     /** The iDNA sent with the call (decimal). */
     val amount: String,
@@ -153,15 +153,16 @@ data class TipCall(
     val fromBalance: Boolean = false,
 ) {
     /**
-     * The tip in iDNA when the contract accepts it (sendTip): a whole number of at least 1 and no more
-     * than was sent; null otherwise (such a call fails). Before v11 ([sent]) the tip is what was sent, if
-     * anything; from the tips balance ([fromBalance]), its tipAmount, if anything (the balance it needs is not
-     * known here).
+     * The tip in iDNA when the contract accepts it (sendTip): it reads [tipAmount] up to its first non-digit
+     * ("6.9" pays 6, "0.5" pays 0), a whole number of at least 1 and no more than was sent; null otherwise
+     * (such a call fails); what was sent beyond the tip stays in the contract. Before v11 ([sent]) the tip is
+     * what was sent, if anything; from the tips balance ([fromBalance]), its tipAmount, if anything (the
+     * balance it needs is not known here).
      */
     val validAmount: BigDecimal?
         get() {
             if (sent || fromBalance) return (if (fromBalance) tipAmount else amount).toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
-            val tip = tipAmount.takeIf { WHOLE_IDNA.matches(it) }?.toBigDecimal()?.takeIf { it.signum() > 0 } ?: return null
+            val tip = LEADING_IDNA.find(tipAmount)?.value?.toBigDecimal()?.takeIf { it.signum() > 0 } ?: return null
             val paid = amount.toBigDecimalOrNull() ?: return null
             return tip.takeIf { paid >= it }
         }
@@ -172,7 +173,8 @@ data class TipCall(
         .put("sent", sent).put("fromBalance", fromBalance)
 
     companion object {
-        private val WHOLE_IDNA = Regex("^[0-9]{1,15}$")
+        /** The digits the contract reads from a sendTip tipAmount: those before the first non-digit. */
+        private val LEADING_IDNA = Regex("^[0-9]{1,15}(?![0-9])")
         private val DIGITS = Regex("^[0-9]{1,40}$")
 
         fun fromJson(json: JSONObject) = TipCall(
@@ -324,7 +326,8 @@ fun postIds(posts: List<PostCall>, authors: Map<Long, String>, fromOldest: Boole
  * under each post its replies; under each reply its comments, in the channel "discuss:<reply id>"
  * (a main-channel answer to a reply or a comment counts as a comment too). A like (a reply made of
  * [LIKE]) only counts on what it replies to. Each post needs a text or media, an id, and a known,
- * older parent that is not a like; posts in other channels are left out. A tip counts on the post it
+ * older parent that is not a like; a post (not an answer) may also be in a topic's channel ([topicOf]),
+ * posts in other channels are left out. A tip counts on the post it
  * names when its amount is valid and it comes after that post in the chain. [fromOldest]: see [postIds].
  */
 fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<TipCall> = emptyList(), fromOldest: Boolean = false): List<SocialPost> {
@@ -343,6 +346,7 @@ fun socialFeed(posts: List<PostCall>, authors: Map<Long, String>, tips: List<Tip
         val discussId = when {
             post.channel.isEmpty() -> null
             post.channel.startsWith("discuss:") -> post.channel.removePrefix("discuss:").toLongOrNull() ?: continue
+            post.replyTo.isEmpty() && topicOf(post.channel) != null -> null
             else -> continue
         }
         val parentId = post.replyTo.toLongOrNull()
@@ -419,8 +423,8 @@ fun lastActivityHeight(post: SocialPost): Long = maxOf(
  * the posts of a period ([FeedPeriod]) with the most likes, answers (replies and comments) or iDNA tipped.
  */
 enum class FeedSort(val title: String, val ranked: Boolean = false) {
-    Newest("Newest posts"),
     Activity("Latest activity"),
+    Newest("Newest posts"),
     Likes("Most liked", ranked = true),
     Comments("Most commented", ranked = true),
     Tips("Most tipped", ranked = true),
@@ -839,7 +843,15 @@ data class NodeView(
     val wrongTime: Boolean = false,
     /** The first block of the current epoch; null when not known. */
     val epochStart: Long? = null,
+    /** The chain's height (bcn_lastBlock), below [currentBlock] while a fast sync holds headers; null when not read. */
+    val chainBlock: Long? = null,
+    /** When the chain's head block was made (seconds); null when not read. */
+    val headTime: Long? = null,
 )
+
+/** The step of [this] node's sync ([syncStep]); [chainMoving]: whether its chain grew lately. */
+fun NodeView.syncStep(chainMoving: Boolean): SyncStep =
+    syncStep(chainBlock ?: currentBlock, currentBlock, highestBlock, chainMoving)
 
 /** Blocks the scan may lag the node's head and still be up to date: a block comes about every 20 s. */
 const val UP_TO_DATE_LAG = 3

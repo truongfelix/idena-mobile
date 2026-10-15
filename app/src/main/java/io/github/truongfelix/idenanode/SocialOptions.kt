@@ -20,7 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 
-/** Home's lists: Feed and Following (all posts, or the people followed), then the order and the period of a ranked order as menus. */
+/**
+ * Home's lists: Feed and Following (all posts, or those of the people and topics followed), then the order and the
+ * period of a ranked order as menus. The topics are listed by the search bar (r/).
+ */
 @Composable
 fun FeedOptions(model: SocialModel) {
     Row(
@@ -70,9 +73,10 @@ private fun <T> MenuChip(label: String, options: List<T>, title: (T) -> String, 
 
 /** Why the feed shows nothing although posts were read. */
 fun emptyFeedText(model: SocialModel): String {
-    val from = if (model.feedFollowing) " from the people you follow" else ""
+    val from = if (model.feedFollowing) " from the people and topics you follow" else ""
     return when {
-        model.feedFollowing && model.people.values.none { it.following } -> "You follow nobody yet: open a profile and select Follow."
+        model.feedFollowing && model.people.values.none { it.following } && model.followedTopics.isEmpty() ->
+            "You follow nobody and no topic yet: open a profile, or a topic (type r/ in the search), and select Follow."
         model.feedSort == FeedSort.Likes -> "No liked post in this period$from."
         model.feedSort == FeedSort.Comments -> "No post with answers in this period$from."
         model.feedSort == FeedSort.Tips -> "No tipped post in this period$from."

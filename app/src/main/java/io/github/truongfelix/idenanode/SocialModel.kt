@@ -47,6 +47,9 @@ sealed interface SocialPage {
 
     /** The profile of [address] (lowercase). */
     data class Profile(val address: String) : SocialPage
+
+    /** The posts of topic [name]. */
+    data class Topic(val name: String) : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -156,7 +159,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     // Navigation: the list shown, the open threads and profiles (Back closes the last), each list's place.
     var view by mutableStateOf(SocialView.Feed)
-    var feedSort by mutableStateOf(FeedSort.Newest)
+    var feedSort by mutableStateOf(FeedSort.Activity)
         private set
 
     /** The period of a ranked sort, and whether the feed shows the posts of the people followed only. */
@@ -195,6 +198,16 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     }
     private val peopleSave = Mutex()
 
+    /** The topics followed (kept on the phone): their posts are in the Following feed. */
+    var followedTopics by mutableStateOf(SocialStore.followedTopics(context))
+        private set
+
+    fun setTopicFollowed(name: String, follow: Boolean) {
+        followedTopics = if (follow) followedTopics + name else followedTopics - name
+        val topics = followedTopics
+        scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setFollowedTopics(context, topics) } } }
+    }
+
     /** [address]'s entry of the People list, or an empty one. */
     fun person(address: String): Person = people[address.lowercase()] ?: Person(address.lowercase())
     val pages = mutableStateListOf<SocialPage>()
@@ -203,6 +216,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     val feedState = LazyListState()
     val activityState = LazyListState()
     val myProfileState = LazyListState()
+    val peopleState = LazyListState()
 
     /** The editor and the paid actions. */
     val sending = SocialSending(context, scope) {
@@ -240,12 +254,26 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         openActivity()
     }
 
-    /** Shows the list [list] from the bottom bar, closing the open pages; the Activity counts as seen. */
+    /**
+     * Shows the list [list] from the bottom bar, closing the open pages; the Activity counts as seen. A tap on
+     * the list already shown, with no page over it, takes it back to its top.
+     */
     fun showList(list: SocialView) {
+        if (pages.isEmpty() && view == list) {
+            scope.launch { listState(list).animateScrollToItem(0) }
+            return
+        }
         pages.clear()
         pageStates.clear()
         if (list == SocialView.People) inboxView = list
         if (list == SocialView.Activity) openActivity() else view = list
+    }
+
+    private fun listState(list: SocialView): LazyListState = when (list) {
+        SocialView.Feed -> feedState
+        SocialView.Me -> myProfileState
+        SocialView.Activity -> activityState
+        SocialView.People -> peopleState
     }
 
     private val viewingActivity: Boolean
@@ -267,6 +295,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         feedFollowing = following
         scope.launch { feedState.scrollToItem(0) }
     }
+
+    fun openTopic(name: String) = open(SocialPage.Topic(name))
 
     /** Orders the feed by [sort], from its top (the place in the other order means nothing here). */
     fun sortFeedBy(sort: FeedSort) {

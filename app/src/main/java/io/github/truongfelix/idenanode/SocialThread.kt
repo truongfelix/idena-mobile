@@ -72,6 +72,8 @@ fun ThreadView(
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), state = pageState.list, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // The topic, then its author (who shows the time).
+                    post.topic?.let { TopicLine(it, time = null) }
                     PostHeader(post.call, states, onProfile)
                     PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true)
                     if (post.isOlder) {
@@ -92,7 +94,7 @@ fun ThreadView(
             }
             items(post.replies, key = { it.id }) { reply ->
                 val tree = remember(reply) { commentTree(reply.id, reply.replies) }
-                val thread = ThreadContext(states, myAddress, canAct, focusId, pageState.collapsed, onProfile, onLike, onAnswer, onTip, onWho)
+                val thread = ThreadContext(states, myAddress, canAct, focusId, pageState.collapsed, onProfile, onLike, onAnswer, onTip, onWho, post.call.author)
                 ThreadItem(reply, tree, depth = 0, replyId = reply.id, thread = thread)
             }
         }
@@ -111,6 +113,8 @@ private class ThreadContext(
     val onAnswer: (Draft) -> Unit,
     val onTip: (SocialPost) -> Unit,
     val onWho: (SocialPost) -> Unit,
+    /** The post's author: "OP" on their replies and comments. */
+    val opAuthor: String,
 )
 
 /** The width of the rail left of a reply or comment; a tap on it folds it. */
@@ -151,7 +155,7 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
         }
         Column(Modifier.focused(item.id == thread.focusId), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(Modifier.fillMaxWidth().clickable { toggle() }) {
-                PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp)
+                PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp, op = item.call.author == thread.opAuthor)
             }
             PostContent(item.call, MaterialTheme.typography.bodyLarge, selectable = true)
             val target = if (isReply) PostTarget.onReply(item.id) else PostTarget.onComment(replyId, item.id)

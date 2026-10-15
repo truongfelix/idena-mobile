@@ -88,15 +88,17 @@ fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {
                 Field("Network", state.network)
                 if (node != null) {
                     Field("Peers", node.peers.toString())
-                    Field(
-                        "Block",
-                        if (node.syncing && node.highestBlock > 0) "${format.format(node.currentBlock)} / ${format.format(node.highestBlock)}"
-                        else format.format(node.currentBlock),
-                    )
-                    val speed = state.blocksPerSecond
-                    if (node.syncing && node.highestBlock > 0 && speed != null && speed > 0) {
-                        Field("Speed", "${format.format(Math.round(speed))} blocks/s")
-                        Field("Time left", duration((node.highestBlock - node.currentBlock).coerceAtLeast(0) / speed))
+                    val step = node.syncStep(model.chainMoving)
+                    val chain = node.chainBlock ?: node.currentBlock
+                    val syncing = node.syncing && node.highestBlock > 0
+                    Field("Block", if (syncing) "${format.format(chain)} / ${format.format(step.total)}" else format.format(chain))
+                    // A fast sync's headers above the chain.
+                    if (syncing && node.currentBlock > chain) Field("Headers", "${format.format(node.currentBlock)} / ${format.format(step.total)}")
+                    node.headTime?.let { Field("Last block", timeAgo(it, System.currentTimeMillis() / 1000).let { ago -> if (ago == "now") ago else "$ago ago" }) }
+                    val speed = model.stepSpeed(step)
+                    if (syncing && step.phase != SyncPhase.Snapshot && speed != null && speed > 0) {
+                        Field("Speed", "${format.format(Math.round(speed))} ${if (step.phase == SyncPhase.Headers) "headers" else "blocks"}/s")
+                        Field("Time left", duration(step.remaining / speed))
                     }
                     if (node.wrongTime) Text("The phone's clock is wrong: fix the time for the node to work.", color = MaterialTheme.colorScheme.error)
                 } else if (state.syncEnabled) {

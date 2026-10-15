@@ -84,6 +84,7 @@ fun PostHeader(
     onProfile: (String) -> Unit,
     avatar: Dp = 36.dp,
     compact: Boolean = false,
+    op: Boolean = false,
 ) {
     // No state while the node is asked for it.
     val identity = states[call.author]
@@ -125,11 +126,15 @@ fun PostHeader(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     buildAnnotatedString { appendAddress(call.author, styles, onProfile) },
-                    Modifier.weight(1f),
+                    Modifier.weight(1f, fill = !op),
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (op) {
+                    Text("  OP", style = MaterialTheme.typography.labelLarge, color = OP_BLUE, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    Spacer(Modifier.weight(1f))
+                }
                 Spacer(Modifier.width(8.dp))
                 Text(ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
             }
@@ -162,16 +167,26 @@ fun PostCard(
     onLike: () -> Unit,
     onTip: () -> Unit,
     onWho: () -> Unit,
+    topicShown: TopicShown = TopicShown.AsTag,
 ) {
+    val topic = post.topic?.takeIf { topicShown != TopicShown.Not }
     // Flat, as Reddit's feed: the list draws a thin line between posts.
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PostHeader(post.call, states, onProfile, compact = true)
+            if (topic != null && topicShown == TopicShown.InsteadOfAuthor) TopicLine(topic, post.call.time, compact = true)
+            else PostHeader(post.call, states, onProfile, compact = true)
+            if (topic != null && topicShown == TopicShown.AsTag) TopicTag(topic)
             PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES, mediaMaxHeight = 220.dp)
         }
         ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip, onWho = onWho)
     }
 }
+
+/** How a post card shows the post's topic: as a tag under the author, in the author's place (Home), or not (the topic's page). */
+enum class TopicShown { AsTag, InsteadOfAuthor, Not }
+
+/** The color of "OP", Reddit's blue. */
+private val OP_BLUE = androidx.compose.ui.graphics.Color(0xFF0079D3)
 
 /** The lines of a post's text in the feed; the thread shows all of it. */
 const val FEED_TEXT_LINES = 3

@@ -217,6 +217,16 @@ object SocialStore {
         seenFile(context).writeText(height.toString())
     }
 
+    private fun topicsFile(context: Context) = File(dir(context), "topics_followed")
+
+    /** The topics followed, kept on the phone only: one name per line. */
+    fun followedTopics(context: Context): Set<String> =
+        runCatching { topicsFile(context).readLines() }.getOrDefault(emptyList()).mapNotNull { topicOf(TOPIC_PREFIX + it.trim()) }.toSet()
+
+    fun setFollowedTopics(context: Context, topics: Set<String>) {
+        topicsFile(context).writeText(topics.sorted().joinToString("\n"))
+    }
+
     private fun peopleFile(context: Context) = File(dir(context), "people.json")
 
     /** The People list ([Person]); empty when there is none yet. */

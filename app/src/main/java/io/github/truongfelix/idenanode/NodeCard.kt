@@ -58,6 +58,7 @@ fun NodeCard(
                         when {
                             state.startError != null -> "Stopped: the node could not start"
                             status != null && status.syncing -> "Running, syncing"
+                            status != null && headIsStale(status.headTime, System.currentTimeMillis() / 1000) -> "Running, behind"
                             status != null -> "Running, synced"
                             state.syncEnabled -> "Starting…"
                             !state.hasKey -> "Stopped: create or import a key first"
@@ -76,8 +77,10 @@ fun NodeCard(
             }
             Box(Modifier.fillMaxWidth().height(4.dp)) {
                 if (status != null && status.syncing && status.highestBlock > 0) {
+                    // The step's share: the headers', or the chain's ([syncStep]).
+                    val step = syncStep(status.stateBlock, status.currentBlock, status.highestBlock, (state.blocksPerSecond ?: 0.0) > 0)
                     LinearProgressIndicator(
-                        progress = { status.currentBlock.toFloat() / maxOf(status.highestBlock, status.currentBlock).toFloat() },
+                        progress = { if (step.total > 0) step.done.toFloat() / step.total else 0f },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

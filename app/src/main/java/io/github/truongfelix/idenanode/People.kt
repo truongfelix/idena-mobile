@@ -76,9 +76,9 @@ fun displayName(address: String, names: Map<String, String>): String = names[add
 fun peopleNames(people: Map<String, Person>): Map<String, String> =
     people.values.filter { it.name.isNotEmpty() }.associate { it.address to it.name }
 
-/** The posts of [feed] whose author is followed. */
-fun followingFeed(feed: List<SocialPost>, people: Map<String, Person>): List<SocialPost> =
-    feed.filter { people[it.call.author]?.following == true }
+/** The posts of [feed] whose author is followed, or in a followed topic ([topics]). */
+fun followingFeed(feed: List<SocialPost>, people: Map<String, Person>, topics: Set<String> = emptySet()): List<SocialPost> =
+    feed.filter { people[it.call.author]?.following == true || it.topic?.let { topic -> topic in topics } == true }
 
 /** What a search finds. */
 sealed interface SearchHit {

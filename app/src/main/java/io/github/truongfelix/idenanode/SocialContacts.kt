@@ -139,7 +139,7 @@ fun PeopleList(model: SocialModel, modifier: Modifier, onName: (Person) -> Unit)
             )
         }
     }
-    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+    LazyColumn(modifier, state = model.peopleState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         item(key = "about") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
