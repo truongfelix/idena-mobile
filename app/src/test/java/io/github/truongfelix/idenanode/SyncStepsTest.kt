@@ -1,6 +1,8 @@
 package io.github.truongfelix.idenanode
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncStepsTest {
@@ -27,5 +29,14 @@ class SyncStepsTest {
         assertEquals("no time left while waiting", "Waiting for the snapshot", syncLabel(SyncStep(SyncPhase.Snapshot, 4_873_470, 11_429_095), 10.0))
         assertEquals("Syncing 82% · about 3 min", syncLabel(SyncStep(SyncPhase.Blocks, 8_200, 10_000), 10.0))
         assertEquals("one block short", "Syncing 99%", syncLabel(SyncStep(SyncPhase.Blocks, 9_999, 10_000), null))
+    }
+
+    @Test
+    fun anOldHeadIsStale() {
+        val now = 1_760_000_000L
+        assertFalse(headIsStale(now - 30, now))
+        assertFalse(headIsStale(now - STALE_HEAD_SECONDS, now))
+        assertTrue(headIsStale(now - STALE_HEAD_SECONDS - 1, now))
+        assertFalse("not read", headIsStale(null, now))
     }
 }

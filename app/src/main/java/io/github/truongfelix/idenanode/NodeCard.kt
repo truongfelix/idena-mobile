@@ -58,6 +58,7 @@ fun NodeCard(
                         when {
                             state.startError != null -> "Stopped: the node could not start"
                             status != null && status.syncing -> "Running, syncing"
+                            status != null && headIsStale(status.headTime, System.currentTimeMillis() / 1000) -> "Running, behind"
                             status != null -> "Running, synced"
                             state.syncEnabled -> "Starting…"
                             !state.hasKey -> "Stopped: create or import a key first"

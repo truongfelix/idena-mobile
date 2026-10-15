@@ -845,6 +845,8 @@ data class NodeView(
     val epochStart: Long? = null,
     /** The chain's height (bcn_lastBlock), below [currentBlock] while a fast sync holds headers; null when not read. */
     val chainBlock: Long? = null,
+    /** When the chain's head block was made (seconds); null when not read. */
+    val headTime: Long? = null,
 )
 
 /** The step of [this] node's sync ([syncStep]); [chainMoving]: whether its chain grew lately. */

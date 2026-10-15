@@ -75,6 +75,7 @@ class NodeModel(private val context: Context) {
                 speed = view?.let { stepSpeed(it.syncStep(chainMoving)) },
                 backgroundIssue = backgroundIssue(state.ignoringBatteryOptimizations),
                 chainMoving = chainMoving,
+                nowSeconds = System.currentTimeMillis() / 1000,
             ),
         )
 
@@ -85,7 +86,7 @@ class NodeModel(private val context: Context) {
         view = next.status?.let {
             NodeView(
                 it.peers, it.syncing, it.currentBlock, it.highestBlock, validation = it.period != "None", wrongTime = it.wrongTime,
-                chainBlock = it.stateBlock,
+                chainBlock = it.stateBlock, headTime = it.headTime,
             )
         }
     }
@@ -102,7 +103,7 @@ class NodeModel(private val context: Context) {
                 NodeView(
                     peers, sync.optBoolean("syncing"), sync.optLong("currentBlock"), sync.optLong("highestBlock"),
                     validation = false, wrongTime = sync.optBoolean("wrongTime"),
-                    chainBlock = head.optLong("height"),
+                    chainBlock = head.optLong("height"), headTime = head.optLong("timestamp").takeIf { it > 0 },
                 )
             }.getOrNull()
             local to node

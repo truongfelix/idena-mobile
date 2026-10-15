@@ -94,6 +94,7 @@ fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {
                     Field("Block", if (syncing) "${format.format(chain)} / ${format.format(step.total)}" else format.format(chain))
                     // A fast sync's headers above the chain.
                     if (syncing && node.currentBlock > chain) Field("Headers", "${format.format(node.currentBlock)} / ${format.format(step.total)}")
+                    node.headTime?.let { Field("Last block", timeAgo(it, System.currentTimeMillis() / 1000).let { ago -> if (ago == "now") ago else "$ago ago" }) }
                     val speed = model.stepSpeed(step)
                     if (syncing && step.phase != SyncPhase.Snapshot && speed != null && speed > 0) {
                         Field("Speed", "${format.format(Math.round(speed))} ${if (step.phase == SyncPhase.Headers) "headers" else "blocks"}/s")

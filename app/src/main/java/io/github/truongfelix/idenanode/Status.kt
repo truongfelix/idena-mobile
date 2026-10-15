@@ -31,6 +31,8 @@ data class NodeBarInput(
     val backgroundIssue: String?,
     /** Whether the chain grew lately: a fast sync waiting for its snapshot may sync blocks meanwhile. */
     val chainMoving: Boolean = false,
+    /** The phone's clock (seconds), to tell an old head block; null leaves it out. */
+    val nowSeconds: Long? = null,
 )
 
 /**
@@ -42,7 +44,8 @@ const val PEER_GRACE_MS = 20 * 60_000L
 /**
  * The node's status bar: red when it could not start, does not answer (after [PEER_GRACE_MS]), has a wrong
  * clock or no peers (after the grace); grey with sync off; orange while starting, looking for peers,
- * syncing (its step, [syncStep]), or with a background issue; green when synced with peers.
+ * syncing (its step, [syncStep]), behind with an old head block though the node says it is synced, or with a
+ * background issue; green when synced with peers.
  */
 fun nodeBarState(input: NodeBarInput): BarState {
     if (input.startError != null) return BarState(Health.Bad, "The node could not start")
@@ -58,6 +61,7 @@ fun nodeBarState(input: NodeBarInput): BarState {
     }
     if (node.syncing && node.highestBlock > 0) return BarState(Health.Warn, syncLabel(node.syncStep(input.chainMoving), input.speed))
     if (node.syncing) return BarState(Health.Warn, "Syncing")
+    if (input.nowSeconds != null && headIsStale(node.headTime, input.nowSeconds)) return BarState(Health.Warn, "Behind: looking for peers")
     input.backgroundIssue?.let { return BarState(Health.Warn, "Synced · $it") }
     return BarState(Health.Good, "Synced · ${if (node.peers == 1) "1 peer" else "${node.peers} peers"}")
 }

@@ -86,6 +86,7 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             currentBlock = sync.optLong("currentBlock"),
             highestBlock = sync.optLong("highestBlock"),
             stateBlock = stateBlock,
+            headTime = lastBlock.optLong("timestamp").takeIf { it > 0 },
             syncing = sync.optBoolean("syncing"),
             wrongTime = sync.optBoolean("wrongTime"),
             peers = peers,
@@ -355,6 +356,8 @@ data class NodeStatus(
     val highestBlock: Long,
     /** The block of the node's state. Fast sync downloads headers first and the state only at the end. */
     val stateBlock: Long,
+    /** When the head block was made (seconds); null when not given. */
+    val headTime: Long? = null,
     val syncing: Boolean,
     val wrongTime: Boolean,
     val peers: Int,

@@ -54,6 +54,14 @@ class StatusTest {
     }
 
     @Test
+    fun aSyncedNodeWithAnOldHeadIsBehind() {
+        val now = 1_760_000_000L
+        val old = synced.copy(headTime = now - 3 * 3600)
+        assertEquals(BarState(Health.Warn, "Behind: looking for peers"), nodeBarState(running.copy(node = old, nowSeconds = now)))
+        assertEquals(BarState(Health.Good, "Synced · 6 peers"), nodeBarState(running.copy(node = old.copy(headTime = now - 20), nowSeconds = now)))
+    }
+
+    @Test
     fun errorsAndSwitchesComeFirst() {
         assertEquals(Health.Bad, nodeBarState(running.copy(startError = "database locked")).health)
         assertEquals(BarState(Health.Off, "Sync off"), nodeBarState(running.copy(syncEnabled = false)))

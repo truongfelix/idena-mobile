@@ -46,3 +46,12 @@ fun syncLabel(step: SyncStep, speed: Double?): String {
         SyncPhase.Blocks -> "Syncing ${step.percent}%$left"
     }
 }
+
+/**
+ * A head block older than this, with the node saying it is synced, means it is behind: blocks come about every
+ * 20 s, empty ones included.
+ */
+const val STALE_HEAD_SECONDS = 10 * 60L
+
+/** Whether a node that says it is synced is in fact behind: its head block, made at [headTime], is old at [now] (seconds). */
+fun headIsStale(headTime: Long?, now: Long): Boolean = headTime != null && headTime > 0 && now - headTime > STALE_HEAD_SECONDS
