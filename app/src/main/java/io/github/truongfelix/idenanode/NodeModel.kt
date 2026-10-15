@@ -28,8 +28,10 @@ data class ScreenState(
     val ignoringBatteryOptimizations: Boolean = true,
     /** How long ago the service started the node; null when unknown. */
     val runningForMs: Long? = null,
-    /** Blocks per second over the last minute while syncing; null until measured. */
+    /** The chain's blocks per second over the last minute while syncing; null until measured. */
     val blocksPerSecond: Double? = null,
+    /** The fast sync's headers per second over the last minute while syncing; null until measured. */
+    val headersPerSecond: Double? = null,
     /** The Advanced settings chosen by the user, and those of the node's last start. */
     val options: NodeOptions = NodeOptions(),
     val runningOptions: RunningOptions = RunningOptions(),
@@ -37,8 +39,8 @@ data class ScreenState(
 
 /**
  * The node as the app shows it, for the Node tab and the title row's status bar (both tabs): on the Node
- * tab everything it shows every 3 s; on the Social tab only the title row's sync and peers (two calls)
- * every 5 s. Nothing while the app is hidden.
+ * tab everything it shows every 3 s; on the Social tab only the title row's sync, peers and head block (three
+ * calls) every 5 s. Nothing while the app is hidden.
  */
 class NodeModel(private val context: Context) {
     var state by mutableStateOf(ScreenState())
@@ -51,7 +53,15 @@ class NodeModel(private val context: Context) {
     /** Whether the Node tab is shown: then everything is read. */
     var nodeTabVisible by mutableStateOf(true)
 
-    private val syncRate = SyncRate()
+    private val chainRate = SyncRate()
+    private val headerRate = SyncRate()
+
+    /** Whether the chain grew over the last minute. */
+    val chainMoving: Boolean
+        get() = (state.blocksPerSecond ?: 0.0) > 0
+
+    /** The speed of the sync's step: headers while they download, else blocks. */
+    fun stepSpeed(step: SyncStep): Double? = if (step.phase == SyncPhase.Headers) state.headersPerSecond else state.blocksPerSecond
 
     /** The title row's status bar. */
     val bar: BarState
@@ -62,17 +72,21 @@ class NodeModel(private val context: Context) {
                 startError = state.startError,
                 node = view,
                 runningForMs = state.runningForMs,
-                speed = state.blocksPerSecond,
+                speed = view?.let { stepSpeed(it.syncStep(chainMoving)) },
                 backgroundIssue = backgroundIssue(state.ignoringBatteryOptimizations),
+                chainMoving = chainMoving,
             ),
         )
 
     /** Reads everything the Node tab shows. */
     suspend fun refresh() {
         val next = withContext(Dispatchers.IO) { readState(context) }
-        state = next.copy(blocksPerSecond = next.status?.takeIf { it.syncing }?.let { syncRate.update(it.currentBlock) })
+        state = withRates(next, next.status?.takeIf { it.syncing }?.let { it.stateBlock to it.currentBlock })
         view = next.status?.let {
-            NodeView(it.peers, it.syncing, it.currentBlock, it.highestBlock, validation = it.period != "None", wrongTime = it.wrongTime)
+            NodeView(
+                it.peers, it.syncing, it.currentBlock, it.highestBlock, validation = it.period != "None", wrongTime = it.wrongTime,
+                chainBlock = it.stateBlock,
+            )
         }
     }
 
@@ -84,16 +98,22 @@ class NodeModel(private val context: Context) {
                 val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
                 val sync = rpc.call("bcn_syncing") as JSONObject
                 val peers = (rpc.call("net_peers") as? JSONArray)?.length() ?: 0
+                val head = rpc.call("bcn_lastBlock") as JSONObject
                 NodeView(
                     peers, sync.optBoolean("syncing"), sync.optLong("currentBlock"), sync.optLong("highestBlock"),
                     validation = false, wrongTime = sync.optBoolean("wrongTime"),
+                    chainBlock = head.optLong("height"),
                 )
             }.getOrNull()
             local to node
         }
-        state = local.copy(blocksPerSecond = node?.takeIf { it.syncing }?.let { syncRate.update(it.currentBlock) })
+        state = withRates(local, node?.takeIf { it.syncing }?.let { (it.chainBlock ?: it.currentBlock) to it.currentBlock })
         view = node
     }
+
+    /** [next] with the chain's and the headers' speeds, from [blocks] (chain, headers) while syncing. */
+    private fun withRates(next: ScreenState, blocks: Pair<Long, Long>?): ScreenState =
+        next.copy(blocksPerSecond = blocks?.let { chainRate.update(it.first) }, headersPerSecond = blocks?.let { headerRate.update(it.second) })
 
     /** The Sync switch was turned: the screen follows before the next read. */
     fun syncChanged(enabled: Boolean) {

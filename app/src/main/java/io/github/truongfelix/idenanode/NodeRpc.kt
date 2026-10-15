@@ -75,7 +75,8 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
         val sync = call("bcn_syncing") as JSONObject
         val peerList = call("net_peers") as? JSONArray
         val peers = peerList?.length() ?: 0
-        val stateBlock = (call("bcn_lastBlock") as JSONObject).optLong("height")
+        val lastBlock = call("bcn_lastBlock") as JSONObject
+        val stateBlock = lastBlock.optLong("height")
         val address = call("dna_getCoinbaseAddr") as String
         val identity = call("dna_identity") as JSONObject
         val epoch = call("dna_epoch") as JSONObject

@@ -25,10 +25,12 @@ data class NodeBarInput(
     val node: NodeView?,
     /** How long ago the service started the node; null when unknown. */
     val runningForMs: Long?,
-    /** Blocks per second while syncing; null until measured. */
+    /** Blocks (or headers, while they download) per second while syncing; null until measured. */
     val speed: Double?,
     /** What keeps the node from running with the screen off ([backgroundIssue]), or null. */
     val backgroundIssue: String?,
+    /** Whether the chain grew lately: a fast sync waiting for its snapshot may sync blocks meanwhile. */
+    val chainMoving: Boolean = false,
 )
 
 /**
@@ -40,7 +42,7 @@ const val PEER_GRACE_MS = 20 * 60_000L
 /**
  * The node's status bar: red when it could not start, does not answer (after [PEER_GRACE_MS]), has a wrong
  * clock or no peers (after the grace); grey with sync off; orange while starting, looking for peers,
- * syncing, or with a background issue; green when synced with peers.
+ * syncing (its step, [syncStep]), or with a background issue; green when synced with peers.
  */
 fun nodeBarState(input: NodeBarInput): BarState {
     if (input.startError != null) return BarState(Health.Bad, "The node could not start")
@@ -54,11 +56,7 @@ fun nodeBarState(input: NodeBarInput): BarState {
         val minutes = input.runningForMs?.let { it / 60_000 }
         return BarState(Health.Warn, if (minutes == null) "Looking for peers…" else "Looking for peers · $minutes min")
     }
-    if (node.syncing && node.highestBlock > 0) {
-        val share = (node.currentBlock.toDouble() / node.highestBlock * 100).toInt().coerceIn(0, 99)
-        val left = input.speed?.takeIf { it > 0 }?.let { " · ${duration((node.highestBlock - node.currentBlock).coerceAtLeast(0) / it)}" }.orEmpty()
-        return BarState(Health.Warn, "Syncing $share%$left")
-    }
+    if (node.syncing && node.highestBlock > 0) return BarState(Health.Warn, syncLabel(node.syncStep(input.chainMoving), input.speed))
     if (node.syncing) return BarState(Health.Warn, "Syncing")
     input.backgroundIssue?.let { return BarState(Health.Warn, "Synced · $it") }
     return BarState(Health.Good, "Synced · ${if (node.peers == 1) "1 peer" else "${node.peers} peers"}")

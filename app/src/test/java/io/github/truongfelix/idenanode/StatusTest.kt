@@ -45,6 +45,15 @@ class StatusTest {
     }
 
     @Test
+    fun theBarNamesTheFastSyncStep() {
+        // Galaxy, 2026-10-12 19:30: "Syncing 99%" with its chain in 2022.
+        val waiting = synced.copy(syncing = true, currentBlock = 11_429_095, highestBlock = 11_429_095, chainBlock = 4_873_470)
+        assertEquals(BarState(Health.Warn, "Waiting for the snapshot"), nodeBarState(running.copy(node = waiting, speed = 10.0)))
+        val slices = waiting.copy(currentBlock = 11_087_150, highestBlock = 11_430_011, chainBlock = 4_875_200)
+        assertEquals("Syncing 42%", nodeBarState(running.copy(node = slices, chainMoving = true)).label)
+    }
+
+    @Test
     fun errorsAndSwitchesComeFirst() {
         assertEquals(Health.Bad, nodeBarState(running.copy(startError = "database locked")).health)
         assertEquals(BarState(Health.Off, "Sync off"), nodeBarState(running.copy(syncEnabled = false)))

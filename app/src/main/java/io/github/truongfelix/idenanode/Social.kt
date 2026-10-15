@@ -843,7 +843,13 @@ data class NodeView(
     val wrongTime: Boolean = false,
     /** The first block of the current epoch; null when not known. */
     val epochStart: Long? = null,
+    /** The chain's height (bcn_lastBlock), below [currentBlock] while a fast sync holds headers; null when not read. */
+    val chainBlock: Long? = null,
 )
+
+/** The step of [this] node's sync ([syncStep]); [chainMoving]: whether its chain grew lately. */
+fun NodeView.syncStep(chainMoving: Boolean): SyncStep =
+    syncStep(chainBlock ?: currentBlock, currentBlock, highestBlock, chainMoving)
 
 /** Blocks the scan may lag the node's head and still be up to date: a block comes about every 20 s. */
 const val UP_TO_DATE_LAG = 3
