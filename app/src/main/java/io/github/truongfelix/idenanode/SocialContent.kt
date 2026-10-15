@@ -3,6 +3,7 @@ package io.github.truongfelix.idenanode
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -142,7 +144,7 @@ private fun PostMedia(call: PostCall, maxHeight: Dp) {
     }
 }
 
-/** An image decoded off the main thread, at most 1,080 pixels on its longer side. */
+/** An image decoded off the main thread, at most 1,080 pixels on its longer side; a tap shows it full screen. */
 @Composable
 private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp) {
     val decoded by produceState<Pair<Boolean, ImageBitmap?>>(false to images.get(key), key) {
@@ -153,16 +155,18 @@ private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp) {
         }
     }
     val bitmap = decoded.second
+    var open by remember(key) { mutableStateOf(false) }
     when {
         bitmap != null -> Image(
             bitmap = bitmap,
             contentDescription = "Image of the post",
-            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp)).clickable { open = true },
             contentScale = ContentScale.Fit,
         )
         decoded.first -> Note("🖼 An image this phone cannot show.")
         else -> Note("Decoding the image…")
     }
+    if (open && bitmap != null) ImageViewer(key, bitmap, bytes) { open = false }
 }
 
 /**
