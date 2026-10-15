@@ -21,8 +21,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 
 /**
- * Home's lists: Feed, Following (the people and topics followed) and Topics, then the order and the period of a
- * ranked order as menus (not on the Topics list).
+ * Home's lists: Feed and Following (all posts, or those of the people and topics followed), then the order and the
+ * period of a ranked order as menus. The topics are listed by the search bar (r/).
  */
 @Composable
 fun FeedOptions(model: SocialModel) {
@@ -31,10 +31,9 @@ fun FeedOptions(model: SocialModel) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(selected = !model.feedFollowing && !model.feedTopics, onClick = { model.showFeed(following = false) }, label = { Text("Feed") })
-        FilterChip(selected = model.feedFollowing && !model.feedTopics, onClick = { model.showFeed(following = true) }, label = { Text("Following") })
-        FilterChip(selected = model.feedTopics, onClick = model::showTopics, label = { Text("Topics") })
-        if (model.searchQuery.trim().length < MIN_SEARCH && !model.feedTopics) {
+        FilterChip(selected = !model.feedFollowing, onClick = { model.showFeed(following = false) }, label = { Text("Feed") })
+        FilterChip(selected = model.feedFollowing, onClick = { model.showFeed(following = true) }, label = { Text("Following") })
+        if (model.searchQuery.trim().length < MIN_SEARCH) {
             MenuChip(model.feedSort.title, FeedSort.entries, { it.title }, model::sortFeedBy)
             if (model.feedSort.ranked) MenuChip(model.feedPeriod.title, FeedPeriod.entries, { it.title }) { model.feedPeriod = it }
         }
@@ -77,7 +76,7 @@ fun emptyFeedText(model: SocialModel): String {
     val from = if (model.feedFollowing) " from the people and topics you follow" else ""
     return when {
         model.feedFollowing && model.people.values.none { it.following } && model.followedTopics.isEmpty() ->
-            "You follow nobody and no topic yet: open a profile or a topic and select Follow."
+            "You follow nobody and no topic yet: open a profile, or a topic (type r/ in the search), and select Follow."
         model.feedSort == FeedSort.Likes -> "No liked post in this period$from."
         model.feedSort == FeedSort.Comments -> "No post with answers in this period$from."
         model.feedSort == FeedSort.Tips -> "No tipped post in this period$from."

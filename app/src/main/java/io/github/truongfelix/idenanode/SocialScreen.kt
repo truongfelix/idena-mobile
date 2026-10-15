@@ -183,6 +183,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                             onLike = { likePost(post) },
                             onTip = { tipping = post },
                             onWho = { who = post },
+                            topicShown = TopicShown.Not,
                         )
                     }
                 }
@@ -221,9 +222,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
                 }
                 val query = model.searchQuery.trim()
-                val hits by produceState<List<SearchHit>?>(null, query, feed, people, model.feedTopics) {
-                    // On the Topics list, the search bar filters the topics.
-                    if (query.length < MIN_SEARCH || model.feedTopics) {
+                // "r/…" lists the topics instead of searching the posts.
+                val topicSearch = query.startsWith(TOPIC_PREFIX)
+                val hits by produceState<List<SearchHit>?>(null, query, feed, people) {
+                    if (query.length < MIN_SEARCH || topicSearch) {
                         value = null
                         return@produceState
                     }
@@ -258,7 +260,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         state = model.feedState,
                         contentPadding = PaddingValues(top = headerDp, bottom = 16.dp),
                     ) {
-                        if (model.feedTopics) {
+                        if (topicSearch) {
                             topicItems(feed, query, model.followedTopics, model::openTopic, model::setTopicFollowed)
                             return@LazyColumn
                         }
@@ -310,6 +312,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                         onLike = { likePost(post) },
                                         onTip = { tipping = post },
                                         onWho = { who = post },
+                                        topicShown = TopicShown.InsteadOfAuthor,
                                     )
                                 }
                             }

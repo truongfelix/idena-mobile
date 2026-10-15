@@ -28,6 +28,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Opens a topic's page from its tag on a post; null where tags do not open anything. */
@@ -45,7 +49,38 @@ fun TopicTag(name: String) {
     )
 }
 
-/** Home's Topics list: each topic of the posts read, the latest activity first; [query] (the search bar) filters them. */
+/** The picture of topic [name]: the robot of "r/name" in a circle (a person's robot is a rounded square). */
+@Composable
+fun TopicAvatar(name: String, size: Dp) {
+    Avatar(topicChannel(name), size, shape = CircleShape)
+}
+
+/**
+ * A post's topic in the author's place: its picture, "r/name" and the post's age ([time]; null for none); a tap
+ * opens the topic. [compact]: the feed's smaller line.
+ */
+@Composable
+fun TopicLine(name: String, time: Long?, compact: Boolean = false) {
+    val open = LocalOpenTopic.current
+    Row(
+        Modifier.then(if (open != null) Modifier.clickable { open(name) } else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TopicAvatar(name, if (compact) 24.dp else 36.dp)
+        Spacer(Modifier.width(if (compact) 8.dp else 10.dp))
+        Text(
+            topicChannel(name),
+            style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        time?.let {
+            Text("  ·  " + ago(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+/** The topics the search bar lists for "r/…" ([query]): each topic of the posts read holding it, the latest activity first. */
 fun LazyListScope.topicItems(
     feed: List<SocialPost>,
     query: String,
@@ -57,8 +92,8 @@ fun LazyListScope.topicItems(
     if (topics.isEmpty()) {
         item(key = "no-topics") {
             Text(
-                if (query.isBlank()) "No posts in a topic yet. Write one: the editor's Topic field puts a post in a topic."
-                else "No topic holds \"${query.trim()}\" in the posts read so far.",
+                if (query.trim().removePrefix(TOPIC_PREFIX).isBlank()) "No posts in a topic yet. Write one: the editor's Topic field puts a post in a topic."
+                else "No topic holds \"${query.trim().removePrefix(TOPIC_PREFIX)}\" in the posts read so far.",
                 Modifier.padding(vertical = 8.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -72,6 +107,8 @@ fun LazyListScope.topicItems(
                 Modifier.fillMaxWidth().clickable { onOpen(topic.name) }.padding(vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                TopicAvatar(topic.name, 40.dp)
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(topicChannel(topic.name), style = MaterialTheme.typography.titleMedium)
                     Text(
@@ -112,7 +149,11 @@ fun TopicView(
     LazyColumn(modifier, state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
         item(key = "header") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(topicChannel(name), style = MaterialTheme.typography.headlineSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TopicAvatar(name, 48.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text(topicChannel(name), style = MaterialTheme.typography.headlineSmall)
+                }
                 Text(
                     "${posts.size} ${if (posts.size == 1) "post" else "posts"} in the posts read so far. Anyone can write in " +
                         "any topic; idena.social does not show topic posts.",

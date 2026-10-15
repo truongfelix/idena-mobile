@@ -55,7 +55,7 @@ fun SearchField(model: SocialModel) {
                 Icon(Icons.Filled.Search, contentDescription = null, Modifier.size(20.dp), tint = colors.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    if (model.searchQuery.isEmpty()) Text("Search", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                    if (model.searchQuery.isEmpty()) Text("Search, or r/ for the topics", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
                     field()
                 }
                 if (model.searchQuery.isNotEmpty()) {

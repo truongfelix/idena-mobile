@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
@@ -66,17 +67,17 @@ fun identicon(address: String): Pair<BooleanArray, Int> {
 }
 
 /**
- * The avatar of [address] in a rounded square of [size]: its Idena robot ([RobotAvatars], as
+ * The avatar of [address] in a rounded square of [size] (a topic's: a circle, [shape]): its Idena robot ([RobotAvatars], as
  * robohash.idena.io draws it), drawn on the phone; the [identicon] only if the robot cannot be drawn.
  */
 @Composable
-fun Avatar(address: String, size: Dp, modifier: Modifier = Modifier) {
+fun Avatar(address: String, size: Dp, modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(size / 5)) {
     val context = LocalContext.current
     // Null while drawing (a few milliseconds the first time); Failed when a picture is missing.
     val robot by produceState<Any?>(RobotAvatars.cached(address), address) {
         if (value == null) value = withContext(Dispatchers.Default) { RobotAvatars.draw(context, address) } ?: Failed
     }
-    Box(modifier.size(size).clip(RoundedCornerShape(size / 5)).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+    Box(modifier.size(size).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
         when (val drawn = robot) {
             is ImageBitmap -> Image(drawn, contentDescription = null, Modifier.fillMaxSize())
             Failed -> Identicon(address, size)

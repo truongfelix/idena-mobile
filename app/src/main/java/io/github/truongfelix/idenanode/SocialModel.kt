@@ -166,10 +166,6 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
     var feedFollowing by mutableStateOf(false)
 
-    /** Whether Home shows the topics (the Topics chip) instead of posts. */
-    var feedTopics by mutableStateOf(false)
-        private set
-
     /** The random picks of the posts whose thread shows an ad ([threadShowsAd]), new at each app start. */
     val adSalt = kotlin.random.Random.nextLong()
 
@@ -295,17 +291,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** Shows the feed: all posts, or those of the people followed ([following]), from its top when that changes. */
     fun showFeed(following: Boolean) {
         view = SocialView.Feed
-        if (following == feedFollowing && !feedTopics) return
+        if (following == feedFollowing) return
         feedFollowing = following
-        feedTopics = false
-        scope.launch { feedState.scrollToItem(0) }
-    }
-
-    /** Shows the topics on Home (the Topics chip), from their top. */
-    fun showTopics() {
-        view = SocialView.Feed
-        if (feedTopics) return
-        feedTopics = true
         scope.launch { feedState.scrollToItem(0) }
     }
 
