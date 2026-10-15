@@ -91,6 +91,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     var who by remember { mutableStateOf<SocialPost?>(null) }
     // The person being named (the name dialog).
     var naming by remember { mutableStateOf<Person?>(null) }
+    // The feed's filter sheet is open.
+    var filtering by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val feed = model.feed
     val states = model.states
@@ -206,7 +208,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             page is SocialPage.Following -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
-                    FollowingView(model, model.pageState(page).list, onName = { naming = it }, Modifier.weight(1f).padding(horizontal = 16.dp))
+                    FollowingView(model, page.topics, model.pageState(page).list, onName = { naming = it }, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Profile -> key(page) {
@@ -238,9 +240,9 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 val people = model.people
                 val epochStart = model.node?.epochStart
                 val topics = model.followedTopics
-                val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, topics, epochStart) {
-                    val shown = if (model.feedFollowing) followingFeed(feed, people, topics) else feed
-                    sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
+                val filter = model.feedFilter
+                val sorted = remember(feed, filter, people, topics, epochStart) {
+                    filter.apply(feed, people, topics, System.currentTimeMillis() / 1000, epochStart)
                 }
                 val query = model.searchQuery.trim()
                 // "r/…" lists the topics instead of searching the posts.
@@ -349,8 +351,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         topBar()
                         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Spacer(Modifier.height(2.dp))
-                            SearchField(model)
-                            FeedOptions(model)
+                            SearchField(model) { FeedFilterButton(filter) { filtering = true } }
+                            FeedFilterLine(filter, onOpen = { filtering = true }, onReset = { model.filterFeed(FeedFilter()) })
                             HorizontalDivider()
                         }
                     }
@@ -422,6 +424,17 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
 
     who?.let { post ->
         WhoDialog(post, states, onProfile = { who = null; model.openProfile(it) }, onDismiss = { who = null })
+    }
+
+    if (filtering) {
+        FeedFilterSheet(
+            filter = model.feedFilter,
+            peopleCount = followedPeople(model.people).size,
+            topicsCount = model.followedTopics.size,
+            onChange = model::filterFeed,
+            onList = { topics -> filtering = false; model.open(SocialPage.Following(topics)) },
+            onDismiss = { filtering = false },
+        )
     }
 
     naming?.let { person ->

@@ -32,16 +32,16 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 
-/** The feed's search bar, a rounded bar: texts of the posts read, contact names, or a pasted address. */
+/** The feed's search bar, a rounded bar: texts of the posts read, contact names, or a pasted address; [trailing] at its end. */
 @Composable
-fun SearchField(model: SocialModel) {
+fun SearchField(model: SocialModel, trailing: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme
     BasicTextField(
         value = model.searchQuery,
         onValueChange = {
             model.searchQuery = it.take(200)
             // The results show in the feed.
-            if (model.view != SocialView.Feed) model.showFeed(following = model.feedFollowing)
+            if (model.view != SocialView.Feed) model.view = SocialView.Feed
         },
         modifier = Modifier.fillMaxWidth().height(40.dp),
         singleLine = true,
@@ -60,7 +60,8 @@ fun SearchField(model: SocialModel) {
                 }
                 if (model.searchQuery.isNotEmpty()) {
                     TextButton(onClick = { model.searchQuery = "" }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("✕") }
-                } else Spacer(Modifier.width(12.dp))
+                }
+                trailing()
             }
         },
     )

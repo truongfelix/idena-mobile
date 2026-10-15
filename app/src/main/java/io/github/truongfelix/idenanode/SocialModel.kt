@@ -51,8 +51,8 @@ sealed interface SocialPage {
     /** The posts of topic [name]. */
     data class Topic(val name: String) : SocialPage
 
-    /** The people and topics followed. */
-    data object Following : SocialPage
+    /** The people followed, or the topics ([topics]). */
+    data class Following(val topics: Boolean = false) : SocialPage
 
     /** The conversation of [key] ([conversationKey]: its participants, the account included). */
     data class Chat(val key: String) : SocialPage
@@ -168,12 +168,10 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     // Navigation: the list shown, the open threads and profiles (Back closes the last), each list's place.
     var view by mutableStateOf(SocialView.Feed)
-    var feedSort by mutableStateOf(FeedSort.Activity)
-        private set
 
-    /** The period of a ranked sort, and whether the feed shows the posts of the people followed only. */
-    var feedPeriod by mutableStateOf(FeedPeriod.Epoch)
-    var feedFollowing by mutableStateOf(false)
+    /** Whose posts the feed shows, in which order ([FeedFilter]). */
+    var feedFilter by mutableStateOf(FeedFilter())
+        private set
 
     /** The random picks of the posts whose thread shows an ad ([threadShowsAd]), new at each app start. */
     val adSalt = kotlin.random.Random.nextLong()
@@ -302,22 +300,14 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         announcedThrough = maxOf(announcedThrough, through)
     }
 
-    /** Shows the feed: all posts, or those of the people followed ([following]), from its top when that changes. */
-    fun showFeed(following: Boolean) {
-        view = SocialView.Feed
-        if (following == feedFollowing) return
-        feedFollowing = following
+    /** Filters the feed by [filter], from its top (the place in the other list means nothing there). */
+    fun filterFeed(filter: FeedFilter) {
+        if (filter == feedFilter) return
+        feedFilter = filter
         scope.launch { feedState.scrollToItem(0) }
     }
 
     fun openTopic(name: String) = open(SocialPage.Topic(name))
-
-    /** Orders the feed by [sort], from its top (the place in the other order means nothing here). */
-    fun sortFeedBy(sort: FeedSort) {
-        if (sort == feedSort) return
-        feedSort = sort
-        scope.launch { feedState.scrollToItem(0) }
-    }
 
     fun open(page: SocialPage) {
         if (pages.lastOrNull() != page) pages += page
