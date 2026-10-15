@@ -141,7 +141,7 @@ data class TipCall(
     /** The tipper, lowercase. */
     val from: String,
     val postId: String,
-    /** The tip as the argument has it; the contract takes whole iDNA. */
+    /** The tip as the argument has it; the contract takes the whole iDNA it starts with. */
     val tipAmount: String,
     /** The iDNA sent with the call (decimal). */
     val amount: String,
@@ -153,15 +153,16 @@ data class TipCall(
     val fromBalance: Boolean = false,
 ) {
     /**
-     * The tip in iDNA when the contract accepts it (sendTip): a whole number of at least 1 and no more
-     * than was sent; null otherwise (such a call fails). Before v11 ([sent]) the tip is what was sent, if
-     * anything; from the tips balance ([fromBalance]), its tipAmount, if anything (the balance it needs is not
-     * known here).
+     * The tip in iDNA when the contract accepts it (sendTip): it reads [tipAmount] up to its first non-digit
+     * ("6.9" pays 6, "0.5" pays 0), a whole number of at least 1 and no more than was sent; null otherwise
+     * (such a call fails); what was sent beyond the tip stays in the contract. Before v11 ([sent]) the tip is
+     * what was sent, if anything; from the tips balance ([fromBalance]), its tipAmount, if anything (the
+     * balance it needs is not known here).
      */
     val validAmount: BigDecimal?
         get() {
             if (sent || fromBalance) return (if (fromBalance) tipAmount else amount).toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
-            val tip = tipAmount.takeIf { WHOLE_IDNA.matches(it) }?.toBigDecimal()?.takeIf { it.signum() > 0 } ?: return null
+            val tip = LEADING_IDNA.find(tipAmount)?.value?.toBigDecimal()?.takeIf { it.signum() > 0 } ?: return null
             val paid = amount.toBigDecimalOrNull() ?: return null
             return tip.takeIf { paid >= it }
         }
@@ -172,7 +173,8 @@ data class TipCall(
         .put("sent", sent).put("fromBalance", fromBalance)
 
     companion object {
-        private val WHOLE_IDNA = Regex("^[0-9]{1,15}$")
+        /** The digits the contract reads from a sendTip tipAmount: those before the first non-digit. */
+        private val LEADING_IDNA = Regex("^[0-9]{1,15}(?![0-9])")
         private val DIGITS = Regex("^[0-9]{1,40}$")
 
         fun fromJson(json: JSONObject) = TipCall(

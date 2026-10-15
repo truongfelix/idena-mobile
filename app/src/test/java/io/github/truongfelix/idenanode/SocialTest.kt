@@ -124,6 +124,9 @@ class SocialTest {
         assertEquals(BigDecimal("5"), tip("t", a, "1", "5", "5", 10).validAmount)
         assertEquals("more sent than tipped", BigDecimal("5"), tip("t", a, "1", "5", "6.5", 10).validAmount)
         assertNull("a fraction: the contract reads 0 and refuses", tip("t", a, "1", "0.5", "0.5", 10).validAmount)
+        // v11 post 150, block 10,790,242: sent 6.9, its sendTip event paid 6.
+        assertEquals("the digits before the first non-digit", BigDecimal("6"), tip("t", a, "150", "6.9", "6.9", 10).validAmount)
+        assertNull("no leading digit", tip("t", a, "1", ".5", "1", 10).validAmount)
         assertNull(tip("t", a, "1", "0", "1", 10).validAmount)
         assertNull("more tipped than sent", tip("t", a, "1", "5", "4.99", 10).validAmount)
         assertNull(tip("t", a, "1", "", "1", 10).validAmount)
