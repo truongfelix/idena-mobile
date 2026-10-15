@@ -13,7 +13,7 @@ go 1.26.9
 // dialable beside another connection, direct peers, the official node's IPFS folder and key file, the node key
 // given in memory, Go 1.26.9, a wait for a peer above a stale head instead of consensus at that height,
 // dna_ceremonySummary).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.2.0.20261015093657-8804ff61c5ba
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go a992397ee4a28da1a4e1f82802d3d9cc300d7525
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
