@@ -191,12 +191,7 @@ fun TopicField(text: String, feed: List<SocialPost>, onChange: (String) -> Unit)
         singleLine = true,
         isError = !valid,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-        supportingText = {
-            Text(
-                if (valid) "Shown with the topic in our apps; idena.social does not show posts in a topic."
-                else "a-z, 0-9 and _, 3 to 21 characters",
-            )
-        },
+        supportingText = if (valid) null else ({ Text("a-z, 0-9 and _, 3 to 21 characters") }),
     )
     val offered = remember(feed, typed) {
         topicList(feed, typed).map { it.name }.filter { it != typedTopic(typed) }.take(MAX_OFFERED_TOPICS)

@@ -85,9 +85,8 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (requests) TextButton(onClick = { requests = false }) { Text("‹ Conversations") }
                 else if (waiting > 0) TextButton(onClick = { requests = true }) { Text("Requests ($waiting) ›") }
-                Text(
-                    if (requests) "Messages from people you do not follow and never wrote to. Answer or accept to move them to your conversations."
-                    else "To write to someone, open their profile and tap ✉.",
+                if (requests) Text(
+                    "Messages from people you do not follow and never wrote to. Answer or accept to move them to your conversations.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

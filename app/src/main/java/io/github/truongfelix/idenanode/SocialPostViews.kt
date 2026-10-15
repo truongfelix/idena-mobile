@@ -189,7 +189,7 @@ enum class TopicShown { AsTag, InsteadOfAuthor, Not }
 private val OP_BLUE = androidx.compose.ui.graphics.Color(0xFF0079D3)
 
 /** The lines of a post's text in the feed; the thread shows all of it. */
-const val FEED_TEXT_LINES = 3
+const val FEED_TEXT_LINES = 6
 
 /** A small action button, as Reddit's pills under a post (lower than Material's chips). */
 @Composable
