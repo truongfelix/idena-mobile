@@ -59,6 +59,9 @@ sealed interface SocialPage {
 
     /** Who to write to: a new conversation. */
     data object NewChat : SocialPage
+
+    /** Social settings ([SocialSettingsView]). */
+    data object Settings : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */

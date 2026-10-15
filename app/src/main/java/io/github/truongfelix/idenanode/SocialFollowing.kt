@@ -217,4 +217,5 @@ fun ListsBackup(model: SocialModel) {
 /** The largest list file imported (about 10,000 people). */
 private const val MAX_LISTS_FILE = 2_000_000
 
-private fun count(n: Int, one: String, many: String): String = if (n == 1) "1 $one" else "$n $many"
+/** "1 [one]", or [n] [many]. */
+fun count(n: Int, one: String, many: String): String = if (n == 1) "1 $one" else "$n $many"

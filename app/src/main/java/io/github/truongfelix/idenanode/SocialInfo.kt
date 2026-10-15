@@ -22,7 +22,7 @@ import java.text.NumberFormat
 
 /**
  * The details behind the Social status (title row): the node, the blocks read, the history, the last action, "Scan
- * blocks", and the export and import of the names and follows ([ListsBackup]). [peers]: the node's, as the title row reads them ([SocialModel.status]).
+ * blocks". [peers]: the node's, as the title row reads them ([SocialModel.status]).
  */
 @Composable
 fun SocialInfoDialog(model: SocialModel, peers: Int?, onDismiss: () -> Unit) {
@@ -58,8 +58,6 @@ fun SocialInfoDialog(model: SocialModel, peers: Int?, onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                HorizontalDivider()
-                ListsBackup(model)
                 DotLegend(
                     Health.Good to "Up to date",
                     Health.Warn to "Behind or reading older posts",

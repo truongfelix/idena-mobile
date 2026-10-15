@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Email
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
@@ -82,6 +83,7 @@ fun ProfileList(
     onTip: (SocialPost) -> Unit,
     onWho: (SocialPost) -> Unit,
     modifier: Modifier = Modifier,
+    mine: MyProfileLinks? = null,
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
@@ -92,7 +94,7 @@ fun ProfileList(
     }
     val items = profile.list(tab)
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)) {
-        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName) }
+        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, mine) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -124,9 +126,15 @@ fun ProfileList(
 }
 
 /**
+ * What the identity's own profile adds: how many people ([people]) and topics ([topics]) it follows, a tap opening the
+ * list ([onFollowing], true for the topics), and ⚙ for Social settings.
+ */
+class MyProfileLinks(val people: Int, val topics: Int, val onFollowing: (topics: Boolean) -> Unit, val onSettings: () -> Unit)
+
+/**
  * The identity of a profile, compact: the avatar; then the name (or the short address) with ✎ and Follow,
- * the short address with copy, the state, age and stake in the state's color; under them the likes and
- * the tips, received and given.
+ * the short address with copy, the state, age and stake in the state's color; under them what the identity's own
+ * profile follows ([mine], with ⚙), the likes and the tips, received and given.
  */
 @Composable
 private fun ProfileHeader(
@@ -138,6 +146,7 @@ private fun ProfileHeader(
     person: Person,
     onFollow: (Person) -> Unit,
     onName: (Person) -> Unit,
+    mine: MyProfileLinks?,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -158,6 +167,7 @@ private fun ProfileHeader(
                     if (person.name.isEmpty()) CopyAddressButton(address)
                     SmallIconButton(Icons.Filled.Edit, if (person.name.isEmpty()) "Name" else "Rename", muted) { onName(person) }
                     Spacer(Modifier.weight(1f))
+                    mine?.let { SmallIconButton(Icons.Filled.Settings, "Social settings", muted, onClick = it.onSettings) }
                     if (!isMe) {
                         LocalOpenChat.current?.let { chat ->
                             LaunchedEffect(address) { chat.lookUp(address) }
@@ -195,6 +205,13 @@ private fun ProfileHeader(
             }
         }
         val counts = MaterialTheme.typography.bodyMedium
+        mine?.let {
+            Row {
+                Text("${blockNumber.format(it.people)} following", Modifier.clickable { it.onFollowing(false) }, style = counts, fontWeight = FontWeight.Medium)
+                Text(" · ", style = counts)
+                Text("${count(it.topics, "topic", "topics")}", Modifier.clickable { it.onFollowing(true) }, style = counts, fontWeight = FontWeight.Medium)
+            }
+        }
         Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
         Text("🪙 ${tipText(profile.tipsReceived)} received · ${tipText(profile.tipsGiven)} given iDNA", style = counts)
         if (!historyDone) {

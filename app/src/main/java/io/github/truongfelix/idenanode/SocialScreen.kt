@@ -199,6 +199,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             page is SocialPage.Chat -> key(page) {
                 ChatView(model, page.key, model.pageState(page).list, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
             }
+            page is SocialPage.Settings -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    SocialSettingsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
             page is SocialPage.NewChat -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -379,6 +385,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 onFollow = { model.setPerson(it) },
                                 onName = { naming = it },
                                 listState = model.myProfileState,
+                                mine = MyProfileLinks(
+                                    people = followedPeople(model.people).size,
+                                    topics = model.followedTopics.size,
+                                    onFollowing = { topics -> model.open(SocialPage.Following(topics)) },
+                                    onSettings = { model.open(SocialPage.Settings) },
+                                ),
                                 tab = model.profileTabs[myAddress] ?: ProfileTab.Posts,
                                 onTab = { model.profileTabs[myAddress] = it },
                                 onOpen = openThread,
