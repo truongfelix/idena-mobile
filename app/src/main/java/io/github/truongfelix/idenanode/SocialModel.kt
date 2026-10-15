@@ -53,6 +53,9 @@ sealed interface SocialPage {
 
     /** The people and topics followed. */
     data object Following : SocialPage
+
+    /** The conversation of [key] ([conversationKey]: its participants, the account included). */
+    data class Chat(val key: String) : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -66,8 +69,8 @@ class PageState {
     val collapsed = androidx.compose.runtime.mutableStateMapOf<Long, Boolean>()
 }
 
-/** The tab's lists: the feed, the identity's own profile, and the activity on its posts (the Inbox). */
-enum class SocialView { Feed, Me, Activity }
+/** The tab's lists: the feed, the identity's own profile, and the Inbox's two: the activity on its posts and the messages. */
+enum class SocialView { Feed, Me, Activity, Messages }
 
 /** The lists of a profile, as idena.social's profile page has them. */
 enum class ProfileTab(val title: String) {
@@ -228,6 +231,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     val profileTabs = mutableStateMapOf<String, ProfileTab>()
     val feedState = LazyListState()
     val activityState = LazyListState()
+    val messagesState = LazyListState()
     val myProfileState = LazyListState()
 
     /** The editor and the paid actions. */
@@ -273,13 +277,19 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         }
         pages.clear()
         pageStates.clear()
+        if (list == SocialView.Activity || list == SocialView.Messages) inboxView = list
         if (list == SocialView.Activity) openActivity() else view = list
     }
+
+    /** The Inbox's list last shown: the notifications or the messages. */
+    var inboxView by mutableStateOf(SocialView.Activity)
+        private set
 
     private fun listState(list: SocialView): LazyListState = when (list) {
         SocialView.Feed -> feedState
         SocialView.Me -> myProfileState
         SocialView.Activity -> activityState
+        SocialView.Messages -> messagesState
     }
 
     private val viewingActivity: Boolean
@@ -347,6 +357,39 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                 ?.let { states.putAll(it) }
         }
         updateActivity()
+        updateChats()
+    }
+
+    /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
+    val chats = SocialChats(context)
+
+    /** The account's conversations, the latest first, those of strangers in Requests ([conversations]). */
+    val conversations: List<Conversation>
+        get() = myAddress?.let { conversations(chats.store.messages, it, people) }.orEmpty()
+
+    /** The conversations (not Requests) with a message not read yet. */
+    val unreadConversations: Int
+        get() = conversations.count { !it.isRequest && unreadCount(it, myAddress.orEmpty(), chats.store.seen[it.key]) > 0 }
+
+    private suspend fun updateChats() {
+        val me = myAddress ?: return
+        val calls = cache?.messages ?: return
+        withContext(Dispatchers.IO) {
+            chats.load(me)
+            // A node that does not answer, or without social_decrypt: tried again after the next scan step.
+            runCatching { chats.update(calls, rpc(context)) }
+        }
+    }
+
+    /** Opens the conversation of the account with [others] (lowercase), with or without messages yet. */
+    fun openChat(others: List<String>) {
+        val me = myAddress ?: return
+        open(SocialPage.Chat(conversationKey(others + me)))
+    }
+
+    /** Takes [conversation] out of Requests: its people are marked to message ([Person.message]). */
+    fun acceptChat(conversation: Conversation) {
+        conversation.others.forEach { setPerson(person(it).copy(message = true)) }
     }
 
     /**
@@ -362,6 +405,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
             scope.launch { myProfileState.scrollToItem(0) }
         }
         updateActivity()
+        updateChats()
     }
 
     /** The activity on the identity's posts after a scan, and a notice of what is new. */
@@ -452,6 +496,11 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                             }
                             if (next.authorsHeight >= next.high) scanNewOnce.set(false)
                             show(next)
+                        }
+                        // Once, for a scan made before the app read messages: those of the blocks already read.
+                        visible && current.messagesPending && scanningFlag.get() -> {
+                            scanStatus = "Reading the private messages of the blocks read before…"
+                            show(withContext(Dispatchers.IO) { scanOlderMessages(current, source) { SocialStore.save(context, it) } })
                         }
                         visible && !current.historyDone && scanningFlag.get() -> {
                             scanStatus = "Scanning the history…"

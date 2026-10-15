@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
@@ -158,6 +159,9 @@ private fun ProfileHeader(
                     SmallIconButton(Icons.Filled.Edit, if (person.name.isEmpty()) "Name" else "Rename", muted) { onName(person) }
                     Spacer(Modifier.weight(1f))
                     if (!isMe) {
+                        LocalOpenChat.current?.let { openChat ->
+                            SmallIconButton(Icons.Filled.Email, "Message", MaterialTheme.colorScheme.primary) { openChat(address) }
+                        }
                         FilterChip(
                             selected = person.following,
                             onClick = { onFollow(person.copy(following = !person.following)) },

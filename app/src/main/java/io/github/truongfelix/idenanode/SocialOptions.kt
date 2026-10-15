@@ -47,7 +47,7 @@ fun FeedOptions(model: SocialModel) {
     }
 }
 
-/** The Inbox's lists: Notifications (likes, comments and tips on the identity's posts, with what is new). */
+/** The Inbox's lists: Notifications (likes, comments and tips on the identity's posts, with what is new) and Messages. */
 @Composable
 fun InboxOptions(model: SocialModel) {
     val unread = model.unread.size
@@ -56,6 +56,12 @@ fun InboxOptions(model: SocialModel) {
             selected = model.view == SocialView.Activity,
             onClick = { model.showList(SocialView.Activity) },
             label = { Text(if (unread > 0) "Notifications · $unread new" else "Notifications") },
+        )
+        val chats = model.unreadConversations
+        FilterChip(
+            selected = model.view == SocialView.Messages,
+            onClick = { model.showList(SocialView.Messages) },
+            label = { Text(if (chats > 0) "Messages · $chats" else "Messages") },
         )
     }
 }

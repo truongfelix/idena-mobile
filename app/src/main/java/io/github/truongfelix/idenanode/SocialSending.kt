@@ -130,6 +130,26 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     }
 
     /**
+     * A private message [text] to [recipients] (lowercase, the account left out): each one's public key from the node
+     * (`dna_identity`), the plain message in idena.social's format ([plainMessage]), encrypted by the node for the
+     * account and each recipient (social_encrypt), then sendMessage with the website's 0.00002 iDNA.
+     */
+    fun prepareMessage(recipients: List<String>, text: String) = prepareWith("Message") { posting, from ->
+        val me = from.lowercase()
+        val others = recipients.filter { it != me }.ifEmpty { listOf(me) }
+        val keys = others.map { address ->
+            val key = posting.publicKey(address)
+            if (key.isEmpty()) throw IOException("${shortAddress(address)} cannot get messages yet: the node knows no public key for it")
+            key
+        }
+        val plain = plainMessage(me, others, text)
+        val parts = posting.encrypt(keys, plain)
+        if (parts.size != others.size + 1) throw IOException("the node encrypted ${parts.size} parts for ${others.size + 1} participants")
+        val call = SocialPosting.message(sendMessageArgument(parts, keccak256Hex(plain)))
+        PendingPost("Message", call, from, posting.estimate(from, call), "A private message to ${others.size} ${if (others.size == 1) "person" else "people"}")
+    }
+
+    /**
      * The editor's post: its text, on IPFS when [textOnIpfs], and its image, stored on IPFS. Each file is
      * a storeToIpfs transaction before the post, with its own fee; all fees are shown before sending.
      */

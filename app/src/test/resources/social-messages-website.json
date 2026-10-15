@@ -1,0 +1,21 @@
+{
+ "message": {
+  "sender": "0xaaaa000000000000000000000000000000000001",
+  "recipients": [
+   "0xbbbb000000000000000000000000000000000002"
+  ],
+  "text": "Grüße ❤️ \"quoted\" \\ back/slash\nnew line\ttab \u0001 end",
+  "plain": "[[\"0xaaaa000000000000000000000000000000000001\",\"0xbbbb000000000000000000000000000000000002\"],\"\",\"Grüße ❤️ \\\"quoted\\\" \\\\ back/slash\\nnew line\\ttab \\u0001 end\",\"\",\"\",[],[],\"\",[]]",
+  "messageHash": "5d9f69605510e8e62ce565d9724c1994d1240a6d207c6884af1d0c7720bb3776",
+  "parts": [
+   "BAAA+/=",
+   "BBBB/+=="
+  ],
+  "argument": "{\"message\":[\"BAAA+/=\",\"BBBB/+==\"],\"messageHash\":\"5d9f69605510e8e62ce565d9724c1994d1240a6d207c6884af1d0c7720bb3776\",\"encrypted\":true}"
+ },
+ "ipfsText": {
+  "text": "A long text on IPFS ❤️",
+  "key": "fU5t03Rhch7GLh8KECH+M1fB6nu00/1TzJmeiUG9Jio=",
+  "blob": "4xtF31cRgu9rxOypgrdeKlPB0OYkt+7m6aJ0d9sCCn2Cfv35hDYpSdBDgIMG53z2+B7egghZ"
+ }
+}
