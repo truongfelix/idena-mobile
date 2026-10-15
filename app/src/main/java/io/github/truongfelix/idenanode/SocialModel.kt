@@ -50,6 +50,9 @@ sealed interface SocialPage {
 
     /** The posts of topic [name]. */
     data class Topic(val name: String) : SocialPage
+
+    /** The people and topics followed. */
+    data object Following : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -63,8 +66,8 @@ class PageState {
     val collapsed = androidx.compose.runtime.mutableStateMapOf<Long, Boolean>()
 }
 
-/** The tab's lists: the feed, the activity on the identity's posts, its own profile, and the People list. */
-enum class SocialView { Feed, Me, Activity, People }
+/** The tab's lists: the feed, the identity's own profile, and the activity on its posts (the Inbox). */
+enum class SocialView { Feed, Me, Activity }
 
 /** The lists of a profile, as idena.social's profile page has them. */
 enum class ProfileTab(val title: String) {
@@ -184,11 +187,17 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
     }
 
-    /** Merges an exported People list into this one ([mergePeople]) and saves it. */
-    fun importPeople(imported: Map<String, Person>): PeopleImport {
-        val result = mergePeople(people, imported)
-        people = result.people
+    /** The names, the people and the topics followed, as Social's settings export them ([socialListsToJson]). */
+    val lists: SocialLists
+        get() = SocialLists(people, followedTopics)
+
+    /** Merges an exported file's lists into these ([mergeLists]) and saves them. */
+    fun importLists(imported: SocialLists): ListsImport {
+        val result = mergeLists(lists, imported)
+        people = result.lists.people
         savePeople()
+        followedTopics = result.lists.topics
+        saveTopics()
         return result
     }
 
@@ -204,6 +213,10 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     fun setTopicFollowed(name: String, follow: Boolean) {
         followedTopics = if (follow) followedTopics + name else followedTopics - name
+        saveTopics()
+    }
+
+    private fun saveTopics() {
         val topics = followedTopics
         scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setFollowedTopics(context, topics) } } }
     }
@@ -216,7 +229,6 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     val feedState = LazyListState()
     val activityState = LazyListState()
     val myProfileState = LazyListState()
-    val peopleState = LazyListState()
 
     /** The editor and the paid actions. */
     val sending = SocialSending(context, scope) {
@@ -235,13 +247,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         SocialStore.setNotifyKinds(context, notify)
     }
 
-    /** The Inbox's list last shown: the notifications ([SocialView.Activity]) or the chats ([SocialView.People]). */
-    var inboxView by mutableStateOf(SocialView.Activity)
-
     /** Shows the Activity: what is new now stays marked while it is open, and counts as seen. */
     fun openActivity() {
         view = SocialView.Activity
-        inboxView = SocialView.Activity
         highlightAfter = seenThrough
         markSeen()
     }
@@ -265,7 +273,6 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         }
         pages.clear()
         pageStates.clear()
-        if (list == SocialView.People) inboxView = list
         if (list == SocialView.Activity) openActivity() else view = list
     }
 
@@ -273,7 +280,6 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         SocialView.Feed -> feedState
         SocialView.Me -> myProfileState
         SocialView.Activity -> activityState
-        SocialView.People -> peopleState
     }
 
     private val viewingActivity: Boolean

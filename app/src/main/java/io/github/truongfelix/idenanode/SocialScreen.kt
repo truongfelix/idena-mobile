@@ -188,6 +188,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     }
                 }
             }
+            page is SocialPage.Following -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    FollowingView(model, model.pageState(page).list, onName = { naming = it }, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
             page is SocialPage.Profile -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -341,7 +347,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     Spacer(Modifier.height(2.dp))
                     when (model.view) {
                         SocialView.Feed -> {}
-                        SocialView.Activity, SocialView.People -> {
+                        SocialView.Activity -> {
                             InboxOptions(model)
                             HorizontalDivider()
                         }
@@ -349,7 +355,6 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     }
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
-                        SocialView.People -> PeopleList(model, Modifier.weight(1f), onName = { naming = it })
                         SocialView.Me -> {
                             if (myAddress == null) Text("Waiting for the node's address…", style = MaterialTheme.typography.bodyMedium)
                             else ProfileList(
@@ -454,8 +459,7 @@ private fun BottomBar(model: SocialModel) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             BarItem("Home", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
             BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
-            val inInbox = model.view == SocialView.Activity || model.view == SocialView.People
-            BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread) { model.showList(model.inboxView) }
+            BarItem("Inbox", Icons.Filled.Email, selected = onList && model.view == SocialView.Activity, badge = unread) { model.showList(SocialView.Activity) }
             // On a topic's page, the new post goes in that topic.
             BarItem("Post", Icons.Filled.Edit, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
         }
