@@ -159,7 +159,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     // Navigation: the list shown, the open threads and profiles (Back closes the last), each list's place.
     var view by mutableStateOf(SocialView.Feed)
-    var feedSort by mutableStateOf(FeedSort.Newest)
+    var feedSort by mutableStateOf(FeedSort.Activity)
         private set
 
     /** The period of a ranked sort, and whether the feed shows the posts of the people followed only. */

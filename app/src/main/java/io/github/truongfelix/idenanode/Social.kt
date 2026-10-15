@@ -423,8 +423,8 @@ fun lastActivityHeight(post: SocialPost): Long = maxOf(
  * the posts of a period ([FeedPeriod]) with the most likes, answers (replies and comments) or iDNA tipped.
  */
 enum class FeedSort(val title: String, val ranked: Boolean = false) {
-    Newest("Newest posts"),
     Activity("Latest activity"),
+    Newest("Newest posts"),
     Likes("Most liked", ranked = true),
     Comments("Most commented", ranked = true),
     Tips("Most tipped", ranked = true),
