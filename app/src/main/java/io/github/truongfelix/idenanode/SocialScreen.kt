@@ -59,6 +59,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.delay
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
@@ -117,7 +122,19 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     val page = model.pages.lastOrNull()
     // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
     if (current != null || page != null || model.view != SocialView.Feed) topBar()
-    Box(Modifier.weight(1f).fillMaxWidth()) {
+    // The bottom bar fades out while the content scrolls down and back in when it scrolls up; it is back on
+    // each new page or list.
+    var barShown by remember { mutableStateOf(true) }
+    val barScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -BAR_SCROLL_STEP) barShown = false else if (available.y > BAR_SCROLL_STEP) barShown = true
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(page, model.view) { barShown = true }
+    Box(Modifier.weight(1f).fillMaxWidth().nestedScroll(barScroll)) {
         val historyDone = model.cache?.historyDone == true
         // A like of a post of a list (a reply or comment is liked from its thread).
         val likePost = { post: SocialPost -> model.sending.preparePost("Like", LIKE, PostTarget.onPost(post.id)) }
@@ -359,7 +376,9 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             }
         }
     }
-    if (current == null) BottomBar(model)
+    AnimatedVisibility(current == null && barShown, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+        BottomBar(model)
+    }
     }
 
     model.sending.confirm?.let { pending ->
@@ -413,6 +432,9 @@ private fun BackRow(onBack: () -> Unit) {
         }
     }
 }
+
+/** The scroll (pixels in one step) that hides or shows the bottom bar: not a finger's tremor. */
+private const val BAR_SCROLL_STEP = 2f
 
 /** The bottom bar's height: the app keeps its notices over it. */
 val SOCIAL_BAR_HEIGHT = 60.dp
