@@ -56,6 +56,9 @@ sealed interface SocialPage {
 
     /** The conversation of [key] ([conversationKey]: its participants, the account included). */
     data class Chat(val key: String) : SocialPage
+
+    /** Who to write to: a new conversation. */
+    data object NewChat : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -69,7 +72,7 @@ class PageState {
     val collapsed = androidx.compose.runtime.mutableStateMapOf<Long, Boolean>()
 }
 
-/** The tab's lists: the feed, the identity's own profile, and the Inbox's two: the activity on its posts and the messages. */
+/** The tab's lists: the feed, the identity's own profile, the activity on its posts (Notifications) and the messages. */
 enum class SocialView { Feed, Me, Activity, Messages }
 
 /** The lists of a profile, as idena.social's profile page has them. */
@@ -277,13 +280,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         }
         pages.clear()
         pageStates.clear()
-        if (list == SocialView.Activity || list == SocialView.Messages) inboxView = list
         if (list == SocialView.Activity) openActivity() else view = list
     }
-
-    /** The Inbox's list last shown: the notifications or the messages. */
-    var inboxView by mutableStateOf(SocialView.Activity)
-        private set
 
     private fun listState(list: SocialView): LazyListState = when (list) {
         SocialView.Feed -> feedState

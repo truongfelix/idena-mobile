@@ -68,7 +68,8 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Surface
@@ -78,9 +79,9 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
 
 /**
  * The Social tab: idena.social read from the phone's node ([SocialModel] scans it), and posting with the
- * node's key. Home: the search bar and the feed (newest posts or latest activity, with [ads] in it).
- * Profile: the identity's. Inbox: the notifications (likes, comments and tips on the identity's posts)
- * and the chats (the contacts). Over them threads, profiles and the editor. The bottom bar opens the lists
+ * node's key. Feed: the search bar and the feed (newest posts or latest activity, with [ads] in it).
+ * Messages: the conversations. Notifications: likes, comments and tips on the identity's posts. Profile:
+ * the identity's. Over them threads, profiles, conversations and the editor. The bottom bar opens the lists
  * and the editor; the status is in the app's title row ([SocialInfoDialog]).
  */
 @Composable
@@ -194,9 +195,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 }
             }
             page is SocialPage.Chat -> key(page) {
+                ChatView(model, page.key, model.pageState(page).list, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
+            }
+            page is SocialPage.NewChat -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
-                    ChatView(model, page.key, model.pageState(page).list, canSend = canAct, Modifier.weight(1f).padding(horizontal = 16.dp))
+                    NewChatView(model, model.pageState(page).list, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Following -> key(page) {
@@ -356,14 +360,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             else -> {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Spacer(Modifier.height(2.dp))
-                    when (model.view) {
-                        SocialView.Feed -> {}
-                        SocialView.Activity, SocialView.Messages -> {
-                            InboxOptions(model)
-                            HorizontalDivider()
-                        }
-                        SocialView.Me -> {}
-                    }
+                    if (model.view == SocialView.Activity) Text("Notifications", style = MaterialTheme.typography.titleLarge)
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
                         SocialView.Messages -> MessagesList(model, Modifier.weight(1f))
@@ -396,7 +393,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             }
         }
     }
-    AnimatedVisibility(current == null && barShown, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+    // A conversation keeps the room for its messages and the keyboard.
+    AnimatedVisibility(current == null && barShown && page !is SocialPage.Chat, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
         BottomBar(model)
     }
     }
@@ -460,8 +458,9 @@ private const val BAR_SCROLL_STEP = 2f
 val SOCIAL_BAR_HEIGHT = 60.dp
 
 /**
- * The bottom bar: Home (the feed), the identity's Profile, the Inbox (with what is new), each shown over
- * the open pages, and Post (the editor). A list is marked while it shows with no page over it.
+ * The bottom bar, as the usual social apps': the Feed, Messages, Post (the editor), Notifications and the
+ * identity's Profile, the lists shown over the open pages, with what is new. A list is marked while it shows with
+ * no page over it.
  */
 @Composable
 private fun BottomBar(model: SocialModel) {
@@ -469,12 +468,16 @@ private fun BottomBar(model: SocialModel) {
     val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem("Home", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
-            BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
-            val inInbox = model.view == SocialView.Activity || model.view == SocialView.Messages
-            BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread + model.unreadConversations) { model.showList(model.inboxView) }
+            BarItem("Feed", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem("Messages", Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
+                model.showList(SocialView.Messages)
+            }
             // On a topic's page, the new post goes in that topic.
-            BarItem("Post", Icons.Filled.Edit, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
+            BarItem("Post", Icons.Filled.AddCircle, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
+            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread) {
+                model.showList(SocialView.Activity)
+            }
+            BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
         }
     }
 }

@@ -47,25 +47,6 @@ fun FeedOptions(model: SocialModel) {
     }
 }
 
-/** The Inbox's lists: Notifications (likes, comments and tips on the identity's posts, with what is new) and Messages. */
-@Composable
-fun InboxOptions(model: SocialModel) {
-    val unread = model.unread.size
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        FilterChip(
-            selected = model.view == SocialView.Activity,
-            onClick = { model.showList(SocialView.Activity) },
-            label = { Text(if (unread > 0) "Notifications · $unread new" else "Notifications") },
-        )
-        val chats = model.unreadConversations
-        FilterChip(
-            selected = model.view == SocialView.Messages,
-            onClick = { model.showList(SocialView.Messages) },
-            label = { Text(if (chats > 0) "Messages · $chats" else "Messages") },
-        )
-    }
-}
-
 /** A chip showing the choice made ([label] ▾); a tap opens the menu of [options]. */
 @Composable
 private fun <T> MenuChip(label: String, options: List<T>, title: (T) -> String, onSelect: (T) -> Unit) {
