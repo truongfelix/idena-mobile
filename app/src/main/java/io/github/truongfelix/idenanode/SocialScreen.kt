@@ -116,6 +116,11 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
+        LocalOpenChat provides ChatAccess(
+            open = { address -> model.openChat(listOf(address.lowercase())) },
+            canReceive = { address -> model.messageKeys[address.lowercase()]?.isNotEmpty() },
+            lookUp = { address -> model.lookUpKeys(listOf(address)) },
+        ),
     ) {
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
@@ -186,6 +191,18 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                             topicShown = TopicShown.Not,
                         )
                     }
+                }
+            }
+            page is SocialPage.Chat -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    ChatView(model, page.key, model.pageState(page).list, canSend = canAct, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.Following -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    FollowingView(model, model.pageState(page).list, onName = { naming = it }, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Profile -> key(page) {
@@ -341,7 +358,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     Spacer(Modifier.height(2.dp))
                     when (model.view) {
                         SocialView.Feed -> {}
-                        SocialView.Activity, SocialView.People -> {
+                        SocialView.Activity, SocialView.Messages -> {
                             InboxOptions(model)
                             HorizontalDivider()
                         }
@@ -349,7 +366,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     }
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
-                        SocialView.People -> PeopleList(model, Modifier.weight(1f), onName = { naming = it })
+                        SocialView.Messages -> MessagesList(model, Modifier.weight(1f))
                         SocialView.Me -> {
                             if (myAddress == null) Text("Waiting for the node's address…", style = MaterialTheme.typography.bodyMedium)
                             else ProfileList(
@@ -454,8 +471,8 @@ private fun BottomBar(model: SocialModel) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             BarItem("Home", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
             BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
-            val inInbox = model.view == SocialView.Activity || model.view == SocialView.People
-            BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread) { model.showList(model.inboxView) }
+            val inInbox = model.view == SocialView.Activity || model.view == SocialView.Messages
+            BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread + model.unreadConversations) { model.showList(model.inboxView) }
             // On a topic's page, the new post goes in that topic.
             BarItem("Post", Icons.Filled.Edit, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
         }

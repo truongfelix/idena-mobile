@@ -133,6 +133,28 @@ class SocialPosting(private val rpc: NodeRpc) {
     /** The CID [bytes] get once added to IPFS, computed by the node without adding them. */
     fun cid(bytes: ByteArray): String = rpc.call("ipfs_cid", JSONArray().put(bytesToHex(bytes))) as String
 
+    /** The senders' public keys of the calls in block [height] (bcn_contractCalls, [publicKeyHex]). */
+    fun callKeysAt(height: Long): Map<String, String> {
+        val contract = versionAt(height)?.address ?: SOCIAL_CONTRACT
+        val calls = rpc.call(
+            "bcn_contractCalls",
+            JSONArray().put(JSONObject().put("contract", contract).put("heights", JSONArray().put(height))),
+            readTimeoutMs = 70_000,
+        ) as? JSONArray ?: return emptyMap()
+        return callsToActivity(calls).keys
+    }
+
+    /** [address]'s public key as `dna_identity` gives it (hex, no 0x); empty when the node knows none. */
+    fun publicKey(address: String): String =
+        (rpc.call("dna_identity", JSONArray().put(address)) as? JSONObject)?.optString("pubkey").orEmpty().removePrefix("0x")
+
+    /** The parts of a private message: [plain] encrypted for the account, then for each of [publicKeys] (social_encrypt). */
+    fun encrypt(publicKeys: List<String>, plain: String): List<String> {
+        val args = JSONObject().put("publicKeys", JSONArray(publicKeys.map { "0x$it" })).put("message", plain)
+        val parts = rpc.call("social_encrypt", JSONArray().put(args), readTimeoutMs = 30_000) as JSONArray
+        return (0 until parts.length()).map { parts.getString(it) }
+    }
+
     /**
      * The fee of storing [size] bytes under [cid] on IPFS from [from] (a storeToIpfs transaction), from a
      * dry run by the node, which also checks the balance. Throws with the node's reason.
@@ -158,6 +180,11 @@ class SocialPosting(private val rpc: NodeRpc) {
         const val POST_AMOUNT = "0.00001"
 
         fun post(argument: String) = SocialCall("makePost", argument, POST_AMOUNT)
+
+        /** What idena.social sends with a private message. */
+        const val MESSAGE_AMOUNT = "0.00002"
+
+        fun message(argument: String) = SocialCall("sendMessage", argument, MESSAGE_AMOUNT)
 
         fun tip(postId: Long, amount: Long) = SocialCall("sendTip", sendTipArgument(postId, amount), amount.toString())
 

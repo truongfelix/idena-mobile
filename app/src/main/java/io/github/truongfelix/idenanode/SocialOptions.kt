@@ -16,6 +16,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -33,6 +37,9 @@ fun FeedOptions(model: SocialModel) {
     ) {
         FilterChip(selected = !model.feedFollowing, onClick = { model.showFeed(following = false) }, label = { Text("Feed") })
         FilterChip(selected = model.feedFollowing, onClick = { model.showFeed(following = true) }, label = { Text("Following") })
+        IconButton(onClick = { model.open(SocialPage.Following) }, Modifier.size(32.dp)) {
+            Icon(Icons.Filled.Settings, contentDescription = "The people and topics you follow", Modifier.size(20.dp))
+        }
         if (model.searchQuery.trim().length < MIN_SEARCH) {
             MenuChip(model.feedSort.title, FeedSort.entries, { it.title }, model::sortFeedBy)
             if (model.feedSort.ranked) MenuChip(model.feedPeriod.title, FeedPeriod.entries, { it.title }) { model.feedPeriod = it }
@@ -40,7 +47,7 @@ fun FeedOptions(model: SocialModel) {
     }
 }
 
-/** The Inbox's lists: Notifications (likes, comments and tips on the identity's posts, with what is new) and Contacts. */
+/** The Inbox's lists: Notifications (likes, comments and tips on the identity's posts, with what is new) and Messages. */
 @Composable
 fun InboxOptions(model: SocialModel) {
     val unread = model.unread.size
@@ -50,7 +57,12 @@ fun InboxOptions(model: SocialModel) {
             onClick = { model.showList(SocialView.Activity) },
             label = { Text(if (unread > 0) "Notifications · $unread new" else "Notifications") },
         )
-        FilterChip(selected = model.view == SocialView.People, onClick = { model.showList(SocialView.People) }, label = { Text("Contacts") })
+        val chats = model.unreadConversations
+        FilterChip(
+            selected = model.view == SocialView.Messages,
+            onClick = { model.showList(SocialView.Messages) },
+            label = { Text(if (chats > 0) "Messages · $chats" else "Messages") },
+        )
     }
 }
 

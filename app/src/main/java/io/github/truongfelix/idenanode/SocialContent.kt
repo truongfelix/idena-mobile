@@ -183,6 +183,29 @@ internal fun decodeScaled(bytes: ByteArray, maxSide: Int = 1080): ImageBitmap? {
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap()
 }
 
+/**
+ * A private message's text: as it is, or on IPFS ("ipfs://<cid>"), fetched through the node and opened with its key
+ * ([password], [decryptIpfsText]) when the website stored it encrypted.
+ */
+@Composable
+fun MessageText(text: String, password: String, style: TextStyle) {
+    val cid = ipfsCid(text)
+    if (cid == null) {
+        if (text.startsWith("ipfs://")) Note("Text on IPFS with an invalid address.") else SelectionContainer { Text(text, style = style) }
+        return
+    }
+    val (state, retry) = rememberIpfs(cid)
+    when (state) {
+        Fetched.Loading -> Note("Loading the text from IPFS through the node…")
+        is Fetched.Loaded -> {
+            val opened = remember(state, password) { if (password.isEmpty()) String(state.bytes, Charsets.UTF_8) else decryptIpfsText(state.bytes, password) }
+            if (opened == null) Note("🔒 This text on IPFS does not open with its key.") else SelectionContainer { Text(opened, style = style) }
+        }
+        Fetched.Unavailable -> Unavailable(retry)
+        is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
+    }
+}
+
 @Composable
 private fun Unavailable(retry: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
