@@ -205,3 +205,33 @@ fun conversations(messages: List<ChatMessage>, me: String, people: Map<String, P
 /** The messages of [conversation] from others after [seen] (a height and index), the unread ones. */
 fun unreadCount(conversation: Conversation, me: String, seen: Pair<Long, Int>?): Int =
     conversation.messages.count { it.from != me && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second) }
+
+/** A public key as the node writes it ("0x" optional), in lowercase hex without 0x; null when it is not one (33, 64 or 65 bytes). */
+fun publicKeyHex(text: String): String? {
+    val hex = text.removePrefix("0x").lowercase()
+    return hex.takeIf { it.length in setOf(66, 128, 130) && it.all { c -> c in "0123456789abcdef" } }
+}
+
+/** The blocks asked again for a key at most (the newest calls of the address first). */
+const val KEY_LOOKUP_BLOCKS = 3
+
+/**
+ * The public key to encrypt a message for [address] (lowercase), or null when none is known: the one of its identity
+ * ([identityKey]: an address that activated an invitation), else one the scan kept from its calls ([scannedKeys]), else
+ * one read again from a block where it called the contract ([callHeights], newest first; [keysAt] asks the node for a
+ * block's calls and their keys). An address that never signed anything has none: no message can be encrypted for it.
+ */
+fun findPublicKey(
+    address: String,
+    identityKey: (String) -> String,
+    scannedKeys: Map<String, String>,
+    callHeights: List<Long>,
+    keysAt: (Long) -> Map<String, String>,
+): String? {
+    publicKeyHex(identityKey(address))?.let { return it }
+    scannedKeys[address]?.let(::publicKeyHex)?.let { return it }
+    for (height in callHeights.take(KEY_LOOKUP_BLOCKS)) {
+        keysAt(height)[address]?.let(::publicKeyHex)?.let { return it }
+    }
+    return null
+}

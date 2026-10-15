@@ -358,6 +358,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         }
         updateActivity()
         updateChats()
+        // An address without a key may have signed a call since: looked up again when asked.
+        messageKeys.entries.removeAll { it.value.isEmpty() }
     }
 
     /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
@@ -385,6 +387,36 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     fun openChat(others: List<String>) {
         val me = myAddress ?: return
         open(SocialPage.Chat(conversationKey(others + me)))
+    }
+
+    /** By address (lowercase): its public key once looked up ([findPublicKey]), "" when it has none; absent until then. */
+    val messageKeys = mutableStateMapOf<String, String>()
+
+    /** Looks up the public keys of [addresses] not known yet; a node that does not answer leaves them unknown. */
+    fun lookUpKeys(addresses: List<String>) {
+        val todo = addresses.map { it.lowercase() }.filter { it !in messageKeys }.distinct()
+        if (todo.isEmpty()) return
+        val scanned = cache
+        scope.launch {
+            for (address in todo) {
+                val key = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val posting = SocialPosting(rpc(context))
+                        findPublicKey(
+                            address, posting::publicKey, scanned?.keys.orEmpty(), scanned?.callHeightsOf(address).orEmpty(), posting::callKeysAt,
+                        ).orEmpty()
+                    }.getOrNull()
+                } ?: continue
+                messageKeys[address] = key
+            }
+        }
+    }
+
+    /** Sends [text] to [others] (lowercase) once each one's public key is known. */
+    fun sendMessage(others: List<String>, text: String) {
+        val keys = others.map { messageKeys[it].orEmpty() }
+        if (keys.any { it.isEmpty() }) return
+        sending.prepareMessage(others, keys, text)
     }
 
     /** Takes [conversation] out of Requests: its people are marked to message ([Person.message]). */

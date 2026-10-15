@@ -130,18 +130,14 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     }
 
     /**
-     * A private message [text] to [recipients] (lowercase, the account left out): each one's public key from the node
-     * (`dna_identity`), the plain message in idena.social's format ([plainMessage]), encrypted by the node for the
+     * A private message [text] to [recipients] (lowercase, the account left out), with their public [keys] in the same
+     * order ([findPublicKey]): the plain message in idena.social's format ([plainMessage]), encrypted by the node for the
      * account and each recipient (social_encrypt), then sendMessage with the website's 0.00002 iDNA.
      */
-    fun prepareMessage(recipients: List<String>, text: String) = prepareWith("Message") { posting, from ->
+    fun prepareMessage(recipients: List<String>, keys: List<String>, text: String) = prepareWith("Message") { posting, from ->
         val me = from.lowercase()
         val others = recipients.filter { it != me }.ifEmpty { listOf(me) }
-        val keys = others.map { address ->
-            val key = posting.publicKey(address)
-            if (key.isEmpty()) throw IOException("${shortAddress(address)} cannot get messages yet: the node knows no public key for it")
-            key
-        }
+        if (keys.size != others.size) throw IOException("no public key for every person of the conversation")
         val plain = plainMessage(me, others, text)
         val parts = posting.encrypt(keys, plain)
         if (parts.size != others.size + 1) throw IOException("the node encrypted ${parts.size} parts for ${others.size + 1} participants")

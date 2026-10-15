@@ -116,7 +116,11 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
-        LocalOpenChat provides { address: String -> model.openChat(listOf(address.lowercase())) },
+        LocalOpenChat provides ChatAccess(
+            open = { address -> model.openChat(listOf(address.lowercase())) },
+            canReceive = { address -> model.messageKeys[address.lowercase()]?.isNotEmpty() },
+            lookUp = { address -> model.lookUpKeys(listOf(address)) },
+        ),
     ) {
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft

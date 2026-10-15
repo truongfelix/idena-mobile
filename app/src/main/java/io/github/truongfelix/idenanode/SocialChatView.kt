@@ -37,8 +37,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-/** Opens the conversation with an address (a profile's Message button); null where it cannot. */
-val LocalOpenChat = staticCompositionLocalOf<((String) -> Unit)?> { null }
+/**
+ * A profile's ✉: opens the conversation with an address, tells whether a message can be encrypted for it (true, false
+ * when no public key is known, null while not looked up) and looks it up.
+ */
+class ChatAccess(val open: (String) -> Unit, val canReceive: (String) -> Boolean?, val lookUp: (String) -> Unit)
+
+/** The profile's ✉ ([ChatAccess]); null where conversations cannot open. */
+val LocalOpenChat = staticCompositionLocalOf<ChatAccess?> { null }
+
+/** Why no message can be sent to [addresses]: no public key is known for them. */
+fun noKeyText(addresses: List<String>, names: Map<String, String>): String =
+    "${addresses.joinToString(", ") { displayName(it, names) }} cannot receive private messages: no public key is known " +
+        "for ${if (addresses.size == 1) "this address" else "these addresses"} (never an Idena identity, and no " +
+        "transaction it signed on idena.social), so nothing can be encrypted for it."
 
 /** What the public sees of a message, said above every conversation. */
 private const val PRIVACY_NOTE =
@@ -158,6 +170,9 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     LaunchedEffect(model.sending.sendStatus) {
         if (model.sending.sendStatus?.startsWith("Message sent") == true) draft = ""
     }
+    LaunchedEffect(key) { model.lookUpKeys(others) }
+    val noKey = others.filter { model.messageKeys[it] == "" }
+    val looking = others.any { it !in model.messageKeys }
     LaunchedEffect(conversation?.last?.hash) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size)
         conversation?.let { model.chats.markSeen(it) }
@@ -183,6 +198,10 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             }
             items(messages, key = { it.hash }) { message -> Bubble(message, mine = message.from == me, showSender = others.size > 1, names = model.names) }
         }
+        when {
+            noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            looking -> Text("Looking up the keys to encrypt for…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = draft,
@@ -191,12 +210,11 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 placeholder = { Text("Message") },
                 maxLines = 5,
             )
+            // Sending does not accept a request: once the message is in a block, the conversation holds one of the
+            // account's and leaves Requests ([conversations]); a send that fails leaves it there.
             Button(
-                onClick = {
-                    conversation?.let { model.acceptChat(it) } ?: others.forEach { model.setPerson(model.person(it).copy(message = true)) }
-                    model.sending.prepareMessage(others, draft.trim())
-                },
-                enabled = canSend && draft.isNotBlank(),
+                onClick = { model.sendMessage(others, draft.trim()) },
+                enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
             ) { Text("Send") }
         }
     }

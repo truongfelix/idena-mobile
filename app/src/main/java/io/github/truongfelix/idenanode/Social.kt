@@ -250,8 +250,11 @@ fun callsToActivity(calls: JSONArray, version: SocialVersion = CURRENT_VERSION):
     val posts = ArrayList<PostCall>()
     val tips = ArrayList<TipCall>()
     val messages = ArrayList<MessageCall>()
+    val keys = HashMap<String, String>()
     for (i in 0 until calls.length()) {
         val call = calls.getJSONObject(i)
+        // The sender's public key (idena-go returns it since #38), refused calls included: it signed them.
+        publicKeyHex(call.optString("senderPubKey"))?.let { keys[call.getString("from").lowercase()] = it }
         if (!call.optBoolean("success", true)) continue
         val arg = call.optJSONArray("args")?.optString(0) ?: continue
         val hash = call.getString("hash")
@@ -266,11 +269,16 @@ fun callsToActivity(calls: JSONArray, version: SocialVersion = CURRENT_VERSION):
             "sendMessage" -> if (version.isCurrent) MessageCall.parse(hash, height, time, index, from, arg)?.let { messages += it }
         }
     }
-    return BlockCalls(posts, tips, messages)
+    return BlockCalls(posts, tips, messages, keys)
 }
 
-/** The idena.social calls of some blocks. */
-data class BlockCalls(val posts: List<PostCall>, val tips: List<TipCall>, val messages: List<MessageCall> = emptyList())
+/** The idena.social calls of some blocks, and their senders' public keys (lowercase address -> hex key). */
+data class BlockCalls(
+    val posts: List<PostCall>,
+    val tips: List<TipCall>,
+    val messages: List<MessageCall> = emptyList(),
+    val keys: Map<String, String> = emptyMap(),
+)
 
 /**
  * A post of the feed with its likes (the like calls), its valid tips, and what answers it, oldest first:
@@ -759,6 +767,8 @@ data class SocialCache(
      * from the blocks scanned since, and reads the current contract's earlier blocks again for them ([scanOlderMessages]).
      */
     val messagesLow: Long = low,
+    /** The public keys of the callers seen (lowercase address -> hex key), to encrypt a message for them. */
+    val keys: Map<String, String> = emptyMap(),
 ) {
     /** Whether the current contract has blocks scanned before the app read messages, still to read for them. */
     val messagesPending: Boolean
@@ -797,7 +807,13 @@ data class SocialCache(
     }
 
     /** This cache with the calls of more blocks. */
-    fun plus(calls: BlockCalls) = copy(posts = posts + calls.posts, tips = tips + calls.tips, messages = withMessages(calls.messages))
+    fun plus(calls: BlockCalls) =
+        copy(posts = posts + calls.posts, tips = tips + calls.tips, messages = withMessages(calls.messages), keys = keys + calls.keys)
+
+    /** The blocks where [address] (lowercase) called the contract, the newest first: their calls hold its key. */
+    fun callHeightsOf(address: String): List<Long> =
+        (posts.filter { it.author == address }.map { it.height } + tips.filter { it.from == address }.map { it.height } +
+            messages.filter { it.from == address }.map { it.height }).distinct().sortedDescending()
 
     /** The messages with [more] added, each once (a backfill may read blocks again). */
     fun withMessages(more: List<MessageCall>): List<MessageCall> {
@@ -815,9 +831,11 @@ data class SocialCache(
         olderAuthors.forEach { (name, map) -> olderObject.put(name, authorsJson(map)) }
         val messageArray = JSONArray()
         messages.forEach { messageArray.put(it.toJson()) }
+        val keyObject = JSONObject()
+        keys.forEach { (address, key) -> keyObject.put(address, key) }
         return JSONObject().put("contract", SOCIAL_CONTRACT).put("version", VERSION).put("low", low).put("high", high)
             .put("posts", postArray).put("tips", tipArray).put("authors", authorsJson(authors)).put("authorsHeight", authorsHeight)
-            .put("olderAuthors", olderObject).put("messages", messageArray).put("messagesLow", messagesLow)
+            .put("olderAuthors", olderObject).put("messages", messageArray).put("messagesLow", messagesLow).put("keys", keyObject)
     }
 
     companion object {
@@ -857,6 +875,7 @@ data class SocialCache(
                 messages = (0 until messageArray.length()).map { MessageCall.fromJson(messageArray.getJSONObject(it)) },
                 // Before version 5, no block was read for messages.
                 messagesLow = if (json.has("messagesLow")) json.getLong("messagesLow") else high + 1,
+                keys = json.optJSONObject("keys")?.let { k -> k.keys().asSequence().associateWith { k.getString(it) } }.orEmpty(),
             )
         }
     }
@@ -1028,6 +1047,7 @@ fun scanOlderBlocks(cache: SocialCache, source: SocialSource, save: (SocialCache
         low = from, posts = older.posts + cache.posts, tips = older.tips + cache.tips, olderAuthors = olderAuthors,
         messages = if (withMessages) cache.withMessages(older.messages) else cache.messages,
         messagesLow = if (withMessages) from else cache.messagesLow,
+        keys = older.keys + cache.keys,
     )
     save(next)
     return next
@@ -1042,7 +1062,7 @@ fun scanOlderMessages(cache: SocialCache, source: SocialSource, save: (SocialCac
     val bottom = maxOf(cache.low, CURRENT_VERSION.from)
     val from = maxOf(cache.messagesLow - source.batchSize(), bottom)
     val read = source.calls(from, cache.messagesLow - 1)
-    val next = cache.copy(messages = cache.withMessages(read.messages), messagesLow = from)
+    val next = cache.copy(messages = cache.withMessages(read.messages), messagesLow = from, keys = read.keys + cache.keys)
     save(next)
     return next
 }

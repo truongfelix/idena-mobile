@@ -133,6 +133,17 @@ class SocialPosting(private val rpc: NodeRpc) {
     /** The CID [bytes] get once added to IPFS, computed by the node without adding them. */
     fun cid(bytes: ByteArray): String = rpc.call("ipfs_cid", JSONArray().put(bytesToHex(bytes))) as String
 
+    /** The senders' public keys of the calls in block [height] (bcn_contractCalls, [publicKeyHex]). */
+    fun callKeysAt(height: Long): Map<String, String> {
+        val contract = versionAt(height)?.address ?: SOCIAL_CONTRACT
+        val calls = rpc.call(
+            "bcn_contractCalls",
+            JSONArray().put(JSONObject().put("contract", contract).put("heights", JSONArray().put(height))),
+            readTimeoutMs = 70_000,
+        ) as? JSONArray ?: return emptyMap()
+        return callsToActivity(calls).keys
+    }
+
     /** [address]'s public key as `dna_identity` gives it (hex, no 0x); empty when the node knows none. */
     fun publicKey(address: String): String =
         (rpc.call("dna_identity", JSONArray().put(address)) as? JSONObject)?.optString("pubkey").orEmpty().removePrefix("0x")
