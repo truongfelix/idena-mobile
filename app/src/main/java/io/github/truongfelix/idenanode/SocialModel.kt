@@ -203,6 +203,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     val feedState = LazyListState()
     val activityState = LazyListState()
     val myProfileState = LazyListState()
+    val peopleState = LazyListState()
 
     /** The editor and the paid actions. */
     val sending = SocialSending(context, scope) {
@@ -240,12 +241,26 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         openActivity()
     }
 
-    /** Shows the list [list] from the bottom bar, closing the open pages; the Activity counts as seen. */
+    /**
+     * Shows the list [list] from the bottom bar, closing the open pages; the Activity counts as seen. A tap on
+     * the list already shown, with no page over it, takes it back to its top.
+     */
     fun showList(list: SocialView) {
+        if (pages.isEmpty() && view == list) {
+            scope.launch { listState(list).animateScrollToItem(0) }
+            return
+        }
         pages.clear()
         pageStates.clear()
         if (list == SocialView.People) inboxView = list
         if (list == SocialView.Activity) openActivity() else view = list
+    }
+
+    private fun listState(list: SocialView): LazyListState = when (list) {
+        SocialView.Feed -> feedState
+        SocialView.Me -> myProfileState
+        SocialView.Activity -> activityState
+        SocialView.People -> peopleState
     }
 
     private val viewingActivity: Boolean
