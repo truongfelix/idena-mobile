@@ -177,7 +177,12 @@ fun PostCard(
     // Flat, as Reddit's feed: the list draws a thin line between posts.
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (topic != null && topicShown == TopicShown.InsteadOfAuthor) TopicLine(topic, post.call.time, compact = true)
+            if (topic != null && topicShown == TopicShown.InsteadOfAuthor) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { TopicLine(topic, post.call.time, compact = true) }
+                    PostMenuButton(post.call)
+                }
+            }
             else PostHeader(post.call, states, onProfile, compact = true)
             if (topic != null && topicShown == TopicShown.AsTag) TopicTag(topic)
             PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES, mediaMaxHeight = 220.dp)
