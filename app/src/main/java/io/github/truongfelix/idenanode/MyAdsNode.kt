@@ -49,6 +49,9 @@ class ShowPlan(
         get() = profileFees + burnFee
 }
 
+/** Taking a campaign out of the profile, ready to send: the new profile list, its cid, and the fees. */
+class RemovalPlan(val profile: ByteArray, val profileCid: String, val fees: BigDecimal)
+
 /**
  * My ads through the app's own node; [ipfs] reads a cid's content (the phone's files, else the node). The calls block:
  * use them off the main thread.
@@ -170,6 +173,34 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
             send(JSONObject().put("type", CHANGE_PROFILE_TX).put("from", me).put("payload", bytesToHex(changeProfilePayload(added))))
         }
         return send(burnArgs(me, plan.key, plan.amount))
+    }
+
+    /**
+     * Plans taking the campaign [entry] out of the profile of [me]: the list without it, and the fees of storing it and
+     * of the change. An empty list is no file to store (the node refuses to store 0 bytes, and every IPFS node reads
+     * the empty file's cid at once): only the change, to that cid. Throws when the profile does not list it.
+     */
+    fun planRemoval(me: String, entry: ProfileEntry): RemovalPlan {
+        if (!rpc.synced()) throw IOException("the node is still syncing; try once it is synced")
+        val entries = profileEntries(me)
+        val remaining = withoutProfileEntry(entries, entry)
+        if (remaining.size == entries.size) throw IOException("your profile does not list this campaign")
+        val profile = encodeProfile(remaining)
+        val profileCid = posting.cid(profile)
+        val storeFee = if (profile.isEmpty()) BigDecimal.ZERO else posting.estimateStore(me, profileCid, profile.size)
+        val fees = storeFee +
+            estimate(JSONObject().put("type", CHANGE_PROFILE_TX).put("from", me).put("payload", bytesToHex(changeProfilePayload(profileCid))))
+        return RemovalPlan(profile, profileCid, fees)
+    }
+
+    /** Sends [plan]: the profile list to IPFS and its storage (unless empty), then the profile change; returns the change. */
+    fun sendRemoval(me: String, plan: RemovalPlan): String {
+        if (plan.profile.isNotEmpty()) {
+            val added = posting.add(plan.profile)
+            if (added != plan.profileCid) throw IOException("IPFS gave the profile another cid")
+            posting.store(added)
+        }
+        return send(JSONObject().put("type", CHANGE_PROFILE_TX).put("from", me).put("payload", bytesToHex(changeProfilePayload(plan.profileCid))))
     }
 
     private fun burnArgs(me: String, key: String, amount: BigDecimal) = JSONObject()

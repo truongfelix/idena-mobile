@@ -89,7 +89,12 @@ class MyAdsTest {
         // An ad in review or approved keeps its copy: it holds the voting.
         assertEquals(listOf(AdAction.Preview), menuActions(AdStageKind.InReview, true, true).map { it.second })
         assertEquals(listOf(AdAction.Preview, AdAction.SeeVoting), menuActions(AdStageKind.Approved, true, true).map { it.second })
-        assertEquals(listOf(AdAction.Preview, AdAction.SeeVoting), menuActions(AdStageKind.Showing, onPhone = false, hasVoting = true).map { it.second })
+        // A campaign (in the profile) can leave it, also one made elsewhere.
+        assertEquals(
+            listOf(AdAction.Preview, AdAction.SeeVoting, AdAction.RemoveFromProfile),
+            menuActions(AdStageKind.Showing, onPhone = false, hasVoting = true).map { it.second },
+        )
+        assertEquals(AdAction.RemoveFromProfile, menuActions(AdStageKind.NotShowing, true, true).last().second)
     }
 
     @Test
@@ -121,6 +126,25 @@ class MyAdsTest {
         assertEquals(listOf(one, two), withProfileEntry(listOf(one), two))
         val narrower = two.copy(target = targetHex(AdTarget(language = "fr")))
         assertEquals(listOf(one, narrower), withProfileEntry(listOf(one, two), narrower))
+    }
+
+    @Test
+    fun aCampaignLeavesTheProfileAlone() {
+        // The devnet god's profile (2026-10-16): two entries with one cid and their own votings, then campaign A.
+        val english = targetHex(AdTarget(language = "en"))
+        val ctl1 = ProfileEntry("bafkreiempty", english, "0xc1", "0xme")
+        val ctl2 = ProfileEntry("bafkreiempty", english, "0xc2", "0xme")
+        val a = ProfileEntry("bafkreia", english, "0xa", "0xme")
+        assertEquals(listOf(ctl1, a), withoutProfileEntry(listOf(ctl1, ctl2, a), ctl2))
+        assertEquals(listOf(ctl1, ctl2), withoutProfileEntry(listOf(ctl1, ctl2, a), a.copy(author = "0xother")))
+        assertEquals(emptyList<ProfileEntry>(), withoutProfileEntry(listOf(a), a))
+        // Another audience is another entry.
+        assertEquals(listOf(a), withoutProfileEntry(listOf(a), a.copy(target = "")))
+        assertEquals(
+            "Take “Fresh bread” out of your profile? No app shows it any more; the iDNA already burnt for it stays burnt." +
+                "\n\nFees: about 0.29 iDNA.",
+            removeConfirmText("Fresh bread", BigDecimal("0.2835")),
+        )
     }
 
     @Test

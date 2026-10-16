@@ -155,7 +155,7 @@ fun languageName(code: String): String =
     java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH).ifEmpty { code }
 
 /** What can be done with an ad from the list. */
-enum class AdAction { Preview, Edit, Delete, SendToReview, StartReview, SeeVoting, Show, BurnMore, CopyAsDraft }
+enum class AdAction { Preview, Edit, Delete, SendToReview, StartReview, SeeVoting, Show, BurnMore, CopyAsDraft, RemoveFromProfile }
 
 /** The one next step an ad's card offers, as its button. */
 fun mainAction(stage: AdStageKind): Pair<String, AdAction> = when (stage) {
@@ -169,15 +169,26 @@ fun mainAction(stage: AdStageKind): Pair<String, AdAction> = when (stage) {
 }
 
 /**
- * The card's ⋯ menu: the preview, editing a draft, its voting, and deleting a draft or a rejected ad (only the phone's
- * copy: nothing is sent). An ad with a review running or approved keeps its copy, which holds its voting.
+ * The card's ⋯ menu: the preview, editing a draft, its voting, deleting a draft or a rejected ad (only the phone's
+ * copy: nothing is sent), and taking a campaign (an ad in the profile) out of the profile. An ad with a review running
+ * or approved keeps its copy, which holds its voting.
  */
 fun menuActions(stage: AdStageKind, onPhone: Boolean, hasVoting: Boolean): List<Pair<String, AdAction>> = buildList {
     add("Preview" to AdAction.Preview)
     if (onPhone && stage == AdStageKind.Draft) add("Edit" to AdAction.Edit)
     if (hasVoting && stage != AdStageKind.InReview) add("See the voting" to AdAction.SeeVoting)
     if (onPhone && (stage == AdStageKind.Draft || stage == AdStageKind.Rejected)) add("Delete" to AdAction.Delete)
+    if (stage == AdStageKind.Showing || stage == AdStageKind.NotShowing) add("Remove from my profile…" to AdAction.RemoveFromProfile)
 }
+
+/** The profile list without the campaign [entry]: its content, voting and audience name it (the author does not). */
+fun withoutProfileEntry(entries: List<ProfileEntry>, entry: ProfileEntry): List<ProfileEntry> =
+    entries.filterNot { it.cid == entry.cid && it.contract == entry.contract && it.target == entry.target }
+
+/** What the removal confirmation says: what changes for the campaign [title], and the [fees]. */
+fun removeConfirmText(title: String, fees: BigDecimal): String =
+    "Take “$title” out of your profile? No app shows it any more; the iDNA already burnt for it stays burnt." +
+        "\n\nFees: about ${fee(fees)} iDNA."
 
 /** What sending an ad to review takes from the balance, in iDNA. */
 data class ReviewCosts(val reviewFee: BigDecimal, val deposit: BigDecimal, val stake: BigDecimal, val storeFee: BigDecimal, val deployFee: BigDecimal) {
