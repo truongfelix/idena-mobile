@@ -21,13 +21,10 @@ import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** The largest picture shown, as the desktop: the apps save a 256x256 WebP of at most 32 KB (ruling Q-48). */
-const val MAX_PICTURE_BYTES = 32 * 1024
-
 /**
  * A profile's picture from IPFS ([cid]) in a rounded square of [size], with the robot of [address] as a small badge
  * in its corner (a picture can be anyone's; the robot is the address's); the robot alone without a picture, while it
- * loads, or when the file is not an image or is larger than [MAX_PICTURE_BYTES].
+ * loads, or when the file is not a still WebP of at most [MAX_PICTURE_BYTES] ([isShowablePicture]).
  */
 @Composable
 fun ProfilePicture(address: String, cid: String?, size: Dp, modifier: Modifier = Modifier) {
@@ -63,7 +60,7 @@ fun PersonAvatar(address: String, size: Dp, modifier: Modifier = Modifier) =
 @Composable
 private fun rememberPicture(cid: String): ImageBitmap? {
     val (fetched, _) = rememberIpfs(cid)
-    val bytes = (fetched as? Fetched.Loaded)?.bytes?.takeIf { it.size <= MAX_PICTURE_BYTES } ?: return null
+    val bytes = (fetched as? Fetched.Loaded)?.bytes?.takeIf(::isShowablePicture) ?: return null
     val key = "picture:$cid"
     val bitmap by produceState(images.get(key), key) {
         if (value == null) value = withContext(Dispatchers.Default) { decodeScaled(bytes, 256) }?.also { images.put(key, it) }

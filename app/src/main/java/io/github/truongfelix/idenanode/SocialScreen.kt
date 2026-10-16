@@ -91,6 +91,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
+    var editingProfile by remember { mutableStateOf(false) }
     // The person being named (the name dialog).
     var naming by remember { mutableStateOf<Person?>(null) }
     // The feed's filter sheet is open.
@@ -439,6 +440,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 modifier = Modifier.weight(1f),
                                 contract = model.profiles[myAddress.lowercase()],
                                 onContract = { model.profiles[it.address] = it },
+                                onEditProfile = { editingProfile = true },
                             )
                         }
                         SocialView.Feed -> {}
@@ -462,11 +464,22 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     model.sending.confirm?.let { pending ->
         AlertDialog(
             onDismissRequest = { model.sending.confirm = null },
-            title = { Text("${pending.what} on idena.social") },
+            title = { Text("${pending.what} ${placeOf(pending)}") },
             text = { Text(confirmText(pending)) },
             confirmButton = { TextButton(onClick = { model.sending.confirm = null; model.sending.send(pending) }) { Text("Send") } },
             dismissButton = { TextButton(onClick = { model.sending.confirm = null }) { Text("Cancel") } },
         )
+    }
+
+    if (editingProfile) {
+        myAddress?.let { me ->
+            ProfileEditDialog(
+                address = me,
+                profile = model.profiles[me.lowercase()],
+                onSave = { editingProfile = false; sendProfileEdit(model.sending, it) },
+                onDismiss = { editingProfile = false },
+            )
+        }
     }
 
     tipping?.let { post ->

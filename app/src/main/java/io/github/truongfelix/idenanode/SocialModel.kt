@@ -280,6 +280,17 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     val sending = SocialSending(context, scope) {
         scanNewOnce.set(true)
         wake++
+        // A profile call changes what the contract holds for the account: shown at once, not at the next epoch.
+        refreshProfile(myAddress)
+    }
+
+    /** Reads [address]'s profile in the profiles contract again. */
+    fun refreshProfile(address: String?) {
+        val key = address?.lowercase() ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) { runCatching { NodeProfilesSource(rpc(context)).profiles(listOf(key)) }.getOrNull() }
+                ?.let { profiles.putAll(it) }
+        }
     }
 
     fun setScanningOn(on: Boolean) {

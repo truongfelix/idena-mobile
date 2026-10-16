@@ -37,6 +37,20 @@ class NodeProfilesSource(private val rpc: NodeRpc, private val contract: String 
         return countTrust(givers, states(addresses + vouchers.values), vouchers)
     }
 
+    /**
+     * The extra amount a call from [from] sends as a vouched member, at the network's [feePerGas] (10^-18 iDNA), or
+     * null: the contract reads it from any account it lists with a voucher, unless it read in this epoch that the
+     * account has an identity ([readsMemberExtra]).
+     */
+    fun memberExtra(from: String, feePerGas: java.math.BigInteger): MemberExtra? {
+        val me = profiles(listOf(from)).values.first()
+        if (me.voucher == null) return null
+        val kept = readValues(listOf("i:" to from.lowercase())).first()
+        val epoch = (rpc.call("dna_epoch") as JSONObject).optInt("epoch")
+        if (!readsMemberExtra(kept, epoch)) return null
+        return MemberExtra(memberExtraAmount(feePerGas), lapsed = !(isVouchable(me.state) && isValidated(me.voucherState)))
+    }
+
     /** The values of ([map], key) [entries] in one request: null for a key never written. */
     private fun readValues(entries: List<Pair<String, String>>): List<String?> =
         rpc.batchSettled("contract_readMap", entries.map { (map, key) -> readMapParams(contract, map, key) })

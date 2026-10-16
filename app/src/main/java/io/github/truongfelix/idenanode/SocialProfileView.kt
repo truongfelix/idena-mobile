@@ -91,6 +91,7 @@ fun ProfileList(
     mine: MyProfileLinks? = null,
     contract: ContractProfile? = null,
     onContract: (ContractProfile) -> Unit = {},
+    onEditProfile: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
@@ -108,7 +109,7 @@ fun ProfileList(
     }
     val items = profile.list(tab)
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
-        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, trust) }
+        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, trust, onEditProfile) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -165,6 +166,7 @@ private fun ProfileHeader(
     mine: MyProfileLinks?,
     contract: ContractProfile?,
     trust: TrustCount?,
+    onEditProfile: (() -> Unit)?,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -213,6 +215,7 @@ private fun ProfileHeader(
             CopyAddressButton(address)
         }
         ContractProfileLines(contract, trust, LocalNames.current, isMe, localName = person.name.isNotEmpty())
+        onEditProfile?.let { OutlinedButton(onClick = it) { Text("Edit your public profile") } }
         if (!isMe && person.blocked) Text(BLOCKED_TEXT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         val palette = statusPalette()
         Text(
