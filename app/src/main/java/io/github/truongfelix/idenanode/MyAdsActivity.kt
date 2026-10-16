@@ -159,6 +159,7 @@ fun MyAdsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         AdAction.StartReview -> StartReviewDialog(ad, address, onClose = close, onDone = reload)
         AdAction.Show -> ShowAdDialog(ad, address, onClose = close, onDone = reload)
         AdAction.BurnMore -> BurnMoreDialog(ad, address, onClose = close, onDone = reload)
+        AdAction.RemoveFromProfile -> RemoveFromProfileDialog(ad, address, onClose = close, onDone = reload)
         else -> close()
     }
 }
