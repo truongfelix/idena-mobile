@@ -106,32 +106,42 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
         model.sending.sendStatus?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
         imageNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         if (image != null) {
-            DraftImage(image.bytes)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                image.sizes.forEach { (side, bytes) ->
-                    FilterChip(
-                        selected = side == image.chosen,
-                        onClick = { model.sending.draftImage = image.copy(chosen = side) },
-                        label = { Text("$side px · ${kilobytes(bytes.size)}") },
-                    )
-                }
-            }
-            val cost = feePerGas?.let { "about ${fee(storeToIpfsFeeEstimate(it, image.bytes.size))} iDNA" } ?: "a fee that grows with its size"
-            Text(
-                "The image is stored on IPFS (a storeToIpfs transaction): $cost, on top of the post's fee. " +
-                    "It is sent as WebP, without the photo's details (place, camera).",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            DraftImageChoice(model, image, feePerGas)
             Pill("✕ Remove the image", enabled = true) { model.sending.draftImage = null }
         }
-        if (model.sending.textOnIpfs) {
-            Text(
-                "The text is stored on IPFS (a storeToIpfs transaction, cheaper than the post for long texts) and the " +
-                    "post holds its address. It stays readable while IPFS nodes keep it.",
-                style = MaterialTheme.typography.bodySmall,
+        if (model.sending.textOnIpfs) TextOnIpfsNote()
+    }
+}
+
+/** The draft's picture as it will be posted, its sizes (each with its weight) and what storing it costs. */
+@Composable
+fun DraftImageChoice(model: SocialModel, image: ImageDraft, feePerGas: BigDecimal?) {
+    DraftImage(image.bytes)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        image.sizes.forEach { (side, bytes) ->
+            FilterChip(
+                selected = side == image.chosen,
+                onClick = { model.sending.draftImage = image.copy(chosen = side) },
+                label = { Text("$side px · ${kilobytes(bytes.size)}") },
             )
         }
     }
+    val cost = feePerGas?.let { "about ${fee(storeToIpfsFeeEstimate(it, image.bytes.size))} iDNA" } ?: "a fee that grows with its size"
+    Text(
+        "The image is stored on IPFS (a storeToIpfs transaction): $cost, on top of the post's fee. " +
+            "It is sent as WebP, without the photo's details (place, camera).",
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/** What "Text on IPFS" does. */
+@Composable
+fun TextOnIpfsNote() {
+    Text(
+        "The text is stored on IPFS (a storeToIpfs transaction, cheaper than the post for long texts) and the " +
+            "post holds its address. It stays readable while IPFS nodes keep it.",
+        style = MaterialTheme.typography.bodySmall,
+    )
 }
 
 /**

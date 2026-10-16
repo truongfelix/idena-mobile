@@ -138,11 +138,9 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
     val page = model.pages.lastOrNull()
-    // The full editor shows a new post; a reply stays in its thread's reply bar until its picture line opens the editor
-    // (a page opened over the thread, a profile, shows as it is).
-    var expanded by remember { mutableStateOf(false) }
-    LaunchedEffect(current == null) { if (current == null) expanded = false }
-    val editing = current?.takeIf { it.target == PostTarget.NEW_POST || expanded }
+    // The full editor shows a new post; a reply stays in its thread's reply bar (a page opened over the thread, a
+    // profile, shows as it is).
+    val editing = current?.takeIf { it.target == PostTarget.NEW_POST }
     // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
     if (current != null || page != null || model.view != SocialView.Feed) topBar()
     // The bottom bar fades out while the content scrolls down and back in when it scrolls up; it is back on
@@ -182,7 +180,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     onTip = { tipping = it },
                     onWho = { who = it },
                     answeringId = current?.target?.replyTo?.takeIf { current.target.channel != null },
-                    footer = { if (!it.isOlder) ReplyBar(model, it, canPost = canAct, onExpand = { expanded = true }) },
+                    footer = { if (!it.isOlder) ReplyBar(model, it, canPost = canAct) },
                 )
             }
             page is SocialPage.Topic -> key(page) {

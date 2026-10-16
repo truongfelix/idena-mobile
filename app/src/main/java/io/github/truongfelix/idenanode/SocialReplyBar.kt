@@ -22,7 +22,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -40,11 +52,11 @@ fun replyDraft(post: SocialPost) = Draft("Reply", "Reply", PostTarget.onPost(pos
  * The reply bar under a thread, as the comments of the usual social apps: the thread stays on screen and scrolls
  * above it. The field answers [post] until 💬 Reply on a reply or comment points it there ("Replying to …", ✕ goes
  * back to the post); a tap in the field starts the reply. 🖼 opens the picture picker, and the picture joins the reply
- * here; the line naming it opens the full editor ([onExpand]: the picture's size, text on IPFS) with the same draft;
- * ➤ asks for the fees as the editor's Post does. Not shown under a post of an older contract (read only).
+ * here; the line naming it (or a long text) opens a panel over the thread ([ReplyOptionsSheet]: the picture's size,
+ * text on IPFS); ➤ asks for the fees as the editor's Post does. Not shown under a post of an older contract (read only).
  */
 @Composable
-fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: () -> Unit) {
+fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
     val sending = model.sending
     val draft = sending.draft?.takeIf { it.target != PostTarget.NEW_POST }
     val focus = remember { FocusRequester() }
@@ -56,6 +68,8 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: (
     val onPost = draft == null || draft.target == PostTarget.onPost(post.id)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val picker = rememberImagePicker(model)
+    var options by remember { mutableStateOf(false) }
+    if (options && draft != null) ReplyOptionsSheet(model, picker) { options = false }
     Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
         Column {
             HorizontalDivider()
@@ -73,12 +87,16 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: (
                         SmallIconButton(Icons.Filled.Close, "Reply to the post instead", muted) { sending.draft = replyDraft(post) }
                     }
                 }
-                val extras = listOfNotNull("🖼 Image".takeIf { sending.draftImage != null }, "Text on IPFS".takeIf { sending.textOnIpfs })
+                val extras = listOfNotNull(
+                    sending.draftImage?.let { "🖼 Image ${it.chosen} px" },
+                    "Text on IPFS".takeIf { sending.textOnIpfs },
+                    "Long text: on IPFS?".takeIf { !sending.textOnIpfs && sending.draftText.length >= LONG_REPLY },
+                )
                 if (draft != null && extras.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             extras.joinToString(" · ") + " ›",
-                            Modifier.weight(1f).clickable(onClick = onExpand),
+                            Modifier.weight(1f).clickable { options = true },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -112,6 +130,37 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: (
                         modifier = Modifier.size(52.dp),
                     ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Post the reply") }
                 }
+            }
+        }
+    }
+}
+
+/** A reply this long offers its text on IPFS (cheaper than in the transaction for long texts). */
+private const val LONG_REPLY = 280
+
+/** The panel over the thread for the reply's picture (its sizes and cost, Remove) and its text on IPFS; Done closes it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReplyOptionsSheet(model: SocialModel, picker: ImagePicker, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val sending = model.sending
+    val image = sending.draftImage
+    LaunchedEffect(image != null) { if (image != null) picker.loadFee(context) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.padding(start = 20.dp, end = 20.dp, bottom = 24.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (image != null) DraftImageChoice(model, image, picker.feePerGas)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Long text on IPFS", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = sending.textOnIpfs, onCheckedChange = { sending.textOnIpfs = it })
+            }
+            if (sending.textOnIpfs) TextOnIpfsNote()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (image != null) TextButton(onClick = { sending.draftImage = null }) { Text("✕ Remove the image") }
+                Spacer(Modifier.weight(1f))
+                Button(onClick = onDismiss) { Text("Done") }
             }
         }
     }
