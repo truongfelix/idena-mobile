@@ -21,7 +21,7 @@ data class NodeBarInput(
     val hasKey: Boolean,
     /** Why the node could not start, from its last start. */
     val startError: String?,
-    /** The node; null when it does not answer. */
+    /** The node; null when it does not answer, or only its first RPC does ([startPhase]). */
     val node: NodeView?,
     /** How long ago the service started the node; null when unknown. */
     val runningForMs: Long?,
@@ -33,6 +33,10 @@ data class NodeBarInput(
     val chainMoving: Boolean = false,
     /** The phone's clock (seconds), to tell an old head block; null leaves it out. */
     val nowSeconds: Long? = null,
+    /** The step of a start, while only the node's first RPC answers ([readStartPhase]); null when nothing answers. */
+    val startPhase: StartPhase? = null,
+    /** What the node says it does while it syncs (bcn_syncing's message: its IPFS store compacting); empty for nothing. */
+    val nodeMessage: String = "",
 )
 
 /**
@@ -43,22 +47,27 @@ const val PEER_GRACE_MS = 20 * 60_000L
 
 /**
  * The node's status bar: red when it could not start, does not answer (after [PEER_GRACE_MS]), has a wrong
- * clock or no peers (after the grace); grey with sync off; orange while starting, looking for peers,
- * syncing (its step, [syncStep]), behind with an old head block though the node says it is synced, or with a
- * background issue; green when synced with peers.
+ * clock or no peers (after the grace); grey with sync off; orange while starting (its step, [StartPhase], for as long
+ * as it takes: a compaction may outlast the grace), looking for peers, syncing (its step, [syncStep], or what the node
+ * says it does), behind with an old head block though the node says it is synced, or with a background issue; green
+ * when synced with peers.
  */
 fun nodeBarState(input: NodeBarInput): BarState {
     if (input.startError != null) return BarState(Health.Bad, "The node could not start")
     if (!input.syncEnabled) return BarState(Health.Off, if (input.hasKey) "Sync off" else "Sync off: create or import a key first")
     val starting = input.runningForMs == null || input.runningForMs < PEER_GRACE_MS
-    val node = input.node
-        ?: return if (starting) BarState(Health.Warn, "Starting the node…") else BarState(Health.Bad, "The node does not answer")
+    val node = input.node ?: return when {
+        input.startPhase != null -> BarState(Health.Warn, startLabel(input.startPhase, input.runningForMs))
+        starting -> BarState(Health.Warn, StartPhase.Starting.label)
+        else -> BarState(Health.Bad, "The node does not answer")
+    }
     if (node.wrongTime) return BarState(Health.Bad, "The phone's clock is wrong")
     if (node.peers == 0) {
         if (!starting) return BarState(Health.Bad, "No peers")
         val minutes = input.runningForMs?.let { it / 60_000 }
         return BarState(Health.Warn, if (minutes == null) "Looking for peers…" else "Looking for peers · $minutes min")
     }
+    if (node.syncing && input.nodeMessage.isNotEmpty()) return BarState(Health.Warn, input.nodeMessage)
     if (node.syncing && node.highestBlock > 0) return BarState(Health.Warn, syncLabel(node.syncStep(input.chainMoving), input.speed))
     if (node.syncing) return BarState(Health.Warn, "Syncing")
     if (input.nowSeconds != null && headIsStale(node.headTime, input.nowSeconds)) return BarState(Health.Warn, "Behind: looking for peers")

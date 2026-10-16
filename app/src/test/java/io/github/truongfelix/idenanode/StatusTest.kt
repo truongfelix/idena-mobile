@@ -36,6 +36,28 @@ class StatusTest {
     }
 
     @Test
+    fun aStartingNodeNamesItsStepForAsLongAsItTakes() {
+        val starting = running.copy(node = null, runningForMs = 30_000)
+        assertEquals(BarState(Health.Warn, "Opening the database…"), nodeBarState(starting.copy(startPhase = StartPhase.Opening)))
+        // A compaction may outlast the grace: still orange, the minutes counted.
+        assertEquals(
+            BarState(Health.Warn, "Compacting the database · 25 min"),
+            nodeBarState(starting.copy(startPhase = StartPhase.Compacting, runningForMs = 25 * 60_000L)),
+        )
+        assertEquals(BarState(Health.Bad, "The node does not answer"), nodeBarState(starting.copy(runningForMs = PEER_GRACE_MS)))
+    }
+
+    @Test
+    fun whatTheNodeSaysWhileSyncingComesFirst() {
+        val gc = running.copy(
+            node = synced.copy(syncing = true, currentBlock = 8_200, highestBlock = 10_000),
+            nodeMessage = "IPFS database compacting: it may take up to 3 minutes",
+        )
+        assertEquals(BarState(Health.Warn, "IPFS database compacting: it may take up to 3 minutes"), nodeBarState(gc))
+        assertEquals(BarState(Health.Good, "Synced · 6 peers"), nodeBarState(running.copy(nodeMessage = "left from a sync")))
+    }
+
+    @Test
     fun syncingShowsItsShareAndTimeLeft() {
         val syncing = running.copy(node = synced.copy(syncing = true, currentBlock = 8_200, highestBlock = 10_000), speed = 10.0)
         assertEquals(BarState(Health.Warn, "Syncing 82% · about 3 min"), nodeBarState(syncing))
