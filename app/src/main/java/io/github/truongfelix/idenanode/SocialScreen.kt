@@ -96,7 +96,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     // The feed's filter sheet is open.
     var filtering by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val feed = model.feed
+    val feed = model.shownFeed
     val states = model.states
     val myAddress = model.myAddress
     val canAct = model.ready && !model.sending.busy
@@ -118,6 +118,14 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     }
     CompositionLocalProvider(
         LocalNames provides model.names,
+        LocalHiding provides HiddenContent(model.hiding, myAddress),
+        LocalPostMenu provides PostMenu(
+            me = myAddress,
+            person = model::person,
+            onHide = model.hidden::hidePost,
+            onBlock = model::setPerson,
+            onBlockTopic = { model.setTopicBlocked(it, true) },
+        ),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
@@ -130,10 +138,9 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
     val page = model.pages.lastOrNull()
-    // The full editor shows a new post; a reply on its thread stays in the reply bar until 🖼 opens the editor.
-    var expanded by remember { mutableStateOf(false) }
-    LaunchedEffect(current == null) { if (current == null) expanded = false }
-    val editing = current?.takeIf { it.target == PostTarget.NEW_POST || page !is SocialPage.Thread || expanded }
+    // The full editor shows a new post; a reply stays in its thread's reply bar (a page opened over the thread, a
+    // profile, shows as it is).
+    val editing = current?.takeIf { it.target == PostTarget.NEW_POST }
     // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
     if (current != null || page != null || model.view != SocialView.Feed) topBar()
     // The bottom bar fades out while the content scrolls down and back in when it scrolls up; it is back on
@@ -159,7 +166,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 // 2 posts of each 5 in a row, at random, show an ad under the post, above the answers.
                 val rank = remember(feed, page.postId) { feed.map { it.id }.sorted().binarySearch(page.postId) }
                 ThreadView(
-                    post = feed.firstOrNull { it.id == page.postId },
+                    post = remember(model.feed, model.hiding, page.postId) { threadPost(model.feed, page.postId, model.hiding, myAddress) },
                     ad = if (threadShowsAd(rank, model.adSalt)) ({ FeedAd(ads, rank, Modifier.padding(vertical = 8.dp)) }) else null,
                     focusId = page.focusId,
                     pageState = model.pageState(page),
@@ -173,7 +180,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     onTip = { tipping = it },
                     onWho = { who = it },
                     answeringId = current?.target?.replyTo?.takeIf { current.target.channel != null },
-                    footer = { if (!it.isOlder) ReplyBar(model, it, canPost = canAct, onExpand = { expanded = true }) },
+                    footer = { if (!it.isOlder) ReplyBar(model, it, canPost = canAct) },
                 )
             }
             page is SocialPage.Topic -> key(page) {
@@ -183,8 +190,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         name = page.name,
                         feed = feed,
                         following = page.name in model.followedTopics,
+                        blocked = page.name in model.hidden.topics,
                         listState = model.pageState(page).list,
                         onFollow = { model.setTopicFollowed(page.name, it) },
+                        onBlock = { model.setTopicBlocked(page.name, it) },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                     ) { post ->
                         PostCard(
@@ -211,6 +220,30 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     SocialSettingsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
+            page is SocialPage.HiddenPosts -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    HiddenPostsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.BlockedTopics -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    BlockedTopicsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.Blocked -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    BlockedView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.HiddenWords -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    HiddenWordsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
             page is SocialPage.Following -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -230,6 +263,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         person = model.person(page.address),
                         onFollow = { model.setPerson(it) },
                         onName = { naming = it },
+                        onBlock = { model.setPerson(it) },
                         listState = model.pageState(page).list,
                         tab = model.profileTabs[page.address] ?: ProfileTab.Posts,
                         onTab = { model.profileTabs[page.address] = it },
@@ -384,6 +418,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 person = model.person(myAddress),
                                 onFollow = { model.setPerson(it) },
                                 onName = { naming = it },
+                                onBlock = { model.setPerson(it) },
                                 listState = model.myProfileState,
                                 mine = MyProfileLinks(
                                     people = followedPeople(model.people).size,

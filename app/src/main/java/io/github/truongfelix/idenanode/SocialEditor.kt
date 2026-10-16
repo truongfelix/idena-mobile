@@ -59,27 +59,15 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
  */
 @Composable
 fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
-    // The image being prepared or why it was refused, and the fee per gas for the size choice.
-    var imageNote by remember { mutableStateOf<String?>(null) }
-    var feePerGas by remember { mutableStateOf<BigDecimal?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        imageNote = "Preparing the image…"
-        scope.launch {
-            withContext(Dispatchers.Default) { runCatching { encodeImageSizes(context, uri) } }
-                .onSuccess { sizes ->
-                    model.sending.draftImage = ImageDraft(sizes, if (DEFAULT_IMAGE_SIZE in sizes) DEFAULT_IMAGE_SIZE else sizes.keys.max())
-                    imageNote = null
-                }
-                .onFailure { imageNote = "This image cannot be used: ${it.message}" }
-            if (feePerGas == null) feePerGas = withContext(Dispatchers.IO) { runCatching { SocialPosting(rpc(context)).feePerGas() }.getOrNull() }
-        }
-    }
+    val context = LocalContext.current
+    val picker = rememberImagePicker(model)
+    val imageNote = picker.note
+    val feePerGas = picker.feePerGas
     LaunchedEffect(Unit) { focus.requestFocus() }
     val image = model.sending.draftImage
+    // A picture chosen in the reply bar: its sizes' prices.
+    LaunchedEffect(image != null) { if (image != null) picker.loadFee(context) }
     val text = model.sending.draftText
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -112,40 +100,92 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             TopicField(model.sending.draftTopic, model.feed) { model.sending.draftTopic = it }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Pill(if (image == null) "🖼 Image" else "🖼 Other image", enabled = imageNote != "Preparing the image…") {
-                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            }
+            Pill(if (image == null) "🖼 Image" else "🖼 Other image", enabled = !picker.preparing, onClick = picker::pick)
             FilterChip(selected = model.sending.textOnIpfs, onClick = { model.sending.textOnIpfs = !model.sending.textOnIpfs }, label = { Text("Text on IPFS") })
         }
         model.sending.sendStatus?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
         imageNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         if (image != null) {
-            DraftImage(image.bytes)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                image.sizes.forEach { (side, bytes) ->
-                    FilterChip(
-                        selected = side == image.chosen,
-                        onClick = { model.sending.draftImage = image.copy(chosen = side) },
-                        label = { Text("$side px · ${kilobytes(bytes.size)}") },
-                    )
-                }
-            }
-            val cost = feePerGas?.let { "about ${fee(storeToIpfsFeeEstimate(it, image.bytes.size))} iDNA" } ?: "a fee that grows with its size"
-            Text(
-                "The image is stored on IPFS (a storeToIpfs transaction): $cost, on top of the post's fee. " +
-                    "It is sent as WebP, without the photo's details (place, camera).",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            DraftImageChoice(model, image, feePerGas)
             Pill("✕ Remove the image", enabled = true) { model.sending.draftImage = null }
         }
-        if (model.sending.textOnIpfs) {
-            Text(
-                "The text is stored on IPFS (a storeToIpfs transaction, cheaper than the post for long texts) and the " +
-                    "post holds its address. It stays readable while IPFS nodes keep it.",
-                style = MaterialTheme.typography.bodySmall,
+        if (model.sending.textOnIpfs) TextOnIpfsNote()
+    }
+}
+
+/** The draft's picture as it will be posted, its sizes (each with its weight) and what storing it costs. */
+@Composable
+fun DraftImageChoice(model: SocialModel, image: ImageDraft, feePerGas: BigDecimal?) {
+    DraftImage(image.bytes)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        image.sizes.forEach { (side, bytes) ->
+            FilterChip(
+                selected = side == image.chosen,
+                onClick = { model.sending.draftImage = image.copy(chosen = side) },
+                label = { Text("$side px · ${kilobytes(bytes.size)}") },
             )
         }
     }
+    val cost = feePerGas?.let { "about ${fee(storeToIpfsFeeEstimate(it, image.bytes.size))} iDNA" } ?: "a fee that grows with its size"
+    Text(
+        "The image is stored on IPFS (a storeToIpfs transaction): $cost, on top of the post's fee. " +
+            "It is sent as WebP, without the photo's details (place, camera).",
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/** What "Text on IPFS" does. */
+@Composable
+fun TextOnIpfsNote() {
+    Text(
+        "The text is stored on IPFS (a storeToIpfs transaction, cheaper than the post for long texts) and the " +
+            "post holds its address. It stays readable while IPFS nodes keep it.",
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/**
+ * The picture picker of a draft (the editor's and the reply bar's): the picture chosen is encoded at its sizes into
+ * the draft ([SocialSending.draftImage]); [note] says it is being prepared or why it was refused; [feePerGas] prices
+ * the sizes.
+ */
+class ImagePicker(private val launch: () -> Unit) {
+    var note by mutableStateOf<String?>(null)
+    var feePerGas by mutableStateOf<BigDecimal?>(null)
+
+    val preparing: Boolean
+        get() = note == PREPARING_IMAGE
+
+    fun pick() = launch()
+
+    /** Asks the node for [feePerGas] once (none when it does not answer). */
+    suspend fun loadFee(context: Context) {
+        if (feePerGas == null) feePerGas = withContext(Dispatchers.IO) { runCatching { SocialPosting(rpc(context)).feePerGas() }.getOrNull() }
+    }
+}
+
+private const val PREPARING_IMAGE = "Preparing the image…"
+
+@Composable
+fun rememberImagePicker(model: SocialModel): ImagePicker {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    lateinit var picker: ImagePicker
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        picker.note = PREPARING_IMAGE
+        scope.launch {
+            withContext(Dispatchers.Default) { runCatching { encodeImageSizes(context, uri) } }
+                .onSuccess { sizes ->
+                    model.sending.draftImage = ImageDraft(sizes, if (DEFAULT_IMAGE_SIZE in sizes) DEFAULT_IMAGE_SIZE else sizes.keys.max())
+                    picker.note = null
+                }
+                .onFailure { picker.note = "This image cannot be used: ${it.message}" }
+            picker.loadFee(context)
+        }
+    }
+    picker = remember { ImagePicker { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
+    return picker
 }
 
 /** The image of the draft as it will be posted (decoded from the encoded bytes, so its quality shows). */

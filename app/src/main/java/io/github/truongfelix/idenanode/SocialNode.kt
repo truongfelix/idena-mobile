@@ -254,6 +254,36 @@ object SocialStore {
         topicsFile(context).writeText(topics.sorted().joinToString("\n"))
     }
 
+    private fun hiddenWordsFile(context: Context) = File(dir(context), "hidden_words")
+
+    /** The hidden words ([WordFilter]), kept on the phone only: one per line. */
+    fun hiddenWords(context: Context): Set<String> =
+        runCatching { hiddenWordsFile(context).readLines() }.getOrDefault(emptyList()).mapNotNull(::cleanHiddenWord).toSet()
+
+    fun setHiddenWords(context: Context, words: Set<String>) {
+        hiddenWordsFile(context).writeText(words.sorted().joinToString("\n"))
+    }
+
+    private fun hiddenPostsFile(context: Context) = File(dir(context), "hidden_posts")
+
+    /** The posts hidden one by one ([Hiding.posts]): one transaction hash per line. */
+    fun hiddenPosts(context: Context): Set<String> =
+        runCatching { hiddenPostsFile(context).readLines() }.getOrDefault(emptyList()).mapNotNull(::txHashOf).toSet()
+
+    fun setHiddenPosts(context: Context, hashes: Set<String>) {
+        hiddenPostsFile(context).writeText(hashes.sorted().joinToString("\n"))
+    }
+
+    private fun blockedTopicsFile(context: Context) = File(dir(context), "topics_blocked")
+
+    /** The topics blocked ([Hiding.topics]): one name per line. */
+    fun blockedTopics(context: Context): Set<String> =
+        runCatching { blockedTopicsFile(context).readLines() }.getOrDefault(emptyList()).mapNotNull { topicOf(TOPIC_PREFIX + it.trim()) }.toSet()
+
+    fun setBlockedTopics(context: Context, topics: Set<String>) {
+        blockedTopicsFile(context).writeText(topics.sorted().joinToString("\n"))
+    }
+
     private fun peopleFile(context: Context) = File(dir(context), "people.json")
 
     /** The People list ([Person]); empty when there is none yet. */

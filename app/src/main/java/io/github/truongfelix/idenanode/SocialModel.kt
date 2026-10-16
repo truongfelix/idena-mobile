@@ -2,6 +2,7 @@ package io.github.truongfelix.idenanode
 
 import android.content.Context
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -59,6 +60,18 @@ sealed interface SocialPage {
 
     /** Social settings ([SocialSettingsView]). */
     data object Settings : SocialPage
+
+    /** The accounts blocked ([BlockedView]). */
+    data object Blocked : SocialPage
+
+    /** The hidden words ([HiddenWordsView]). */
+    data object HiddenWords : SocialPage
+
+    /** The posts hidden ([HiddenPostsView]). */
+    data object HiddenPosts : SocialPage
+
+    /** The topics blocked ([BlockedTopicsView]). */
+    data object BlockedTopics : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -140,9 +153,12 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private val scanNewOnce = AtomicBoolean(false)
     private var wake by mutableIntStateOf(0)
 
-    /** The likes, answers and tips of others on the identity's posts, newest first. */
-    var activity by mutableStateOf<List<ActivityItem>>(emptyList())
-        private set
+    // The likes, answers and tips of others on the identity's posts, newest first, before hiding.
+    private var allActivity by mutableStateOf<List<ActivityItem>>(emptyList())
+
+    /** The likes, answers and tips of others on the identity's posts, newest first; none hidden ([visibleActivity]). */
+    val activity: List<ActivityItem>
+        get() = visibleActivity(allActivity, hiding, myAddress)
 
     /** The kinds of activity that notify. */
     var notify by mutableStateOf(SocialStore.notifyKinds(context))
@@ -191,9 +207,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
     }
 
-    /** The names, the people and the topics followed, as Social's settings export them ([socialListsToJson]). */
+    /** The names, the people and the topics followed, and what is hidden, as Social's settings export them ([socialListsToJson]). */
     val lists: SocialLists
-        get() = SocialLists(people, followedTopics)
+        get() = SocialLists(people, followedTopics, hidden.words, hidden.posts, hidden.topics)
 
     /** Merges an exported file's lists into these ([mergeLists]) and saves them. */
     fun importLists(imported: SocialLists): ListsImport {
@@ -202,14 +218,35 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
         followedTopics = result.lists.topics
         saveTopics()
+        hidden.changeWords(result.lists.words)
+        hidden.changePosts(result.lists.hiddenPosts)
+        hidden.changeTopics(result.lists.blockedTopics)
         return result
     }
+
+    /** The accounts blocked ([Person.blocked]). */
+    val blocked: Set<String> by derivedStateOf { blockedAddresses(people) }
 
     private fun savePeople() {
         // One save at a time, each of the newest list.
         scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setPeople(context, people) } } }
     }
     private val peopleSave = Mutex()
+
+    /** The hidden words, posts hidden and topics blocked. */
+    val hidden = SocialHiddenLists(context, scope, peopleSave)
+
+    /** Everything hidden ([Hiding]). */
+    val hiding: Hiding by derivedStateOf { Hiding(blocked, hidden.wordFilter, hidden.posts, hidden.topics) }
+
+    /** The feed as shown ([visibleFeed]). */
+    val shownFeed: List<SocialPost> by derivedStateOf { visibleFeed(feed, hiding, myAddress) }
+
+    /** Blocks topic [name] (no longer followed), or unblocks it. */
+    fun setTopicBlocked(name: String, block: Boolean) {
+        hidden.changeTopics(if (block) hidden.topics + name else hidden.topics - name)
+        if (block && name in followedTopics) setTopicFollowed(name, false)
+    }
 
     /** The topics followed (kept on the phone): their posts are in the Following feed. */
     var followedTopics by mutableStateOf(SocialStore.followedTopics(context))
@@ -325,6 +362,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         if (pages.isEmpty()) return
         val page = pages.removeAt(pages.lastIndex)
         if (page !in pages) pageStates.remove(page)
+        // A reply started in the thread's bar goes with it: else, with no thread left, it showed in the full editor.
+        if (page is SocialPage.Thread && sending.draft?.target?.let { it != PostTarget.NEW_POST } == true) sending.draft = null
     }
 
     fun pageState(page: SocialPage) = pageStates.getOrPut(page) { PageState() }
@@ -353,9 +392,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
     val chats = SocialChats(context)
 
-    /** The account's conversations, the latest first, those of strangers in Requests ([conversations]). */
+    /** The account's conversations, the latest first, those of strangers in Requests ([conversations]); none with a blocked account. */
     val conversations: List<Conversation>
-        get() = myAddress?.let { conversations(chats.store.messages, it, people) }.orEmpty()
+        get() = myAddress?.let { visibleConversations(conversations(chats.store.messages, it, people), blocked) }.orEmpty()
 
     /** The conversations (not Requests) with a message not read yet. */
     val unreadConversations: Int
@@ -432,7 +471,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private suspend fun updateActivity() {
         val me = myAddress ?: return
         val current = feed
-        activity = withContext(Dispatchers.Default) { socialActivity(current, me) }
+        allActivity = withContext(Dispatchers.Default) { socialActivity(current, me) }
         val through = cache?.authorsHeight ?: return
         if (seenThrough == null) {
             // The first scan: what is there already is not news.

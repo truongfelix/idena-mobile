@@ -78,6 +78,7 @@ fun ProfileList(
     person: Person,
     onFollow: (Person) -> Unit,
     onName: (Person) -> Unit,
+    onBlock: (Person) -> Unit,
     listState: LazyListState,
     tab: ProfileTab,
     onTab: (ProfileTab) -> Unit,
@@ -98,7 +99,7 @@ fun ProfileList(
     }
     val items = profile.list(tab)
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
-        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, mine) }
+        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, onBlock, mine) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -151,6 +152,7 @@ private fun ProfileHeader(
     person: Person,
     onFollow: (Person) -> Unit,
     onName: (Person) -> Unit,
+    onBlock: (Person) -> Unit,
     mine: MyProfileLinks?,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -160,7 +162,9 @@ private fun ProfileHeader(
             Avatar(address, 72.dp)
             Spacer(Modifier.weight(1f))
             mine?.let { SmallIconButton(Icons.Filled.Settings, "Social settings", muted, size = 40.dp, onClick = it.onSettings) }
-            if (!isMe) {
+            if (!isMe && person.blocked) {
+                OutlinedButton(onClick = { onBlock(person.copy(blocked = false)) }) { Text("Unblock") }
+            } else if (!isMe) {
                 LocalOpenChat.current?.let { chat ->
                     LaunchedEffect(address) { chat.lookUp(address) }
                     // Greyed when no key is known: the conversation tells why.
@@ -178,6 +182,7 @@ private fun ProfileHeader(
                 }
                 val follow = { onFollow(person.copy(following = !person.following)) }
                 if (person.following) OutlinedButton(onClick = follow) { Text("Following") } else Button(onClick = follow) { Text("Follow") }
+                BlockMenu(person, onBlock)
             }
         }
         // The name on the whole width, on two lines if it needs them.
@@ -196,6 +201,7 @@ private fun ProfileHeader(
             Text(address, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = muted)
             CopyAddressButton(address)
         }
+        if (!isMe && person.blocked) Text(BLOCKED_TEXT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         val palette = statusPalette()
         Text(
             identity?.fold(

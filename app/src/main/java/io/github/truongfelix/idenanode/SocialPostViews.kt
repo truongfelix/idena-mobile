@@ -92,8 +92,9 @@ fun PostHeader(
     val palette = statusPalette()
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     if (compact) {
-        // The feed's one line, as Reddit's: avatar, name, state, time; the name is cut first.
+        // The feed's one line, as Reddit's: avatar, name, state, time, and ⋯ on the right; the name is cut first.
         Row(verticalAlignment = Alignment.CenterVertically) {
+          Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Avatar(call.author, 24.dp, Modifier.clickable { onProfile(call.author) })
             Spacer(Modifier.width(8.dp))
             Text(
@@ -115,6 +116,8 @@ fun PostHeader(
                 )
             }
             Text("  ·  " + ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
+          }
+          PostMenuButton(call)
         }
         return
     }
@@ -137,6 +140,7 @@ fun PostHeader(
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
+                PostMenuButton(call)
             }
             identity?.let {
                 Text(
@@ -173,7 +177,12 @@ fun PostCard(
     // Flat, as Reddit's feed: the list draws a thin line between posts.
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (topic != null && topicShown == TopicShown.InsteadOfAuthor) TopicLine(topic, post.call.time, compact = true)
+            if (topic != null && topicShown == TopicShown.InsteadOfAuthor) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { TopicLine(topic, post.call.time, compact = true) }
+                    PostMenuButton(post.call)
+                }
+            }
             else PostHeader(post.call, states, onProfile, compact = true)
             if (topic != null && topicShown == TopicShown.AsTag) TopicTag(topic)
             PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES, mediaMaxHeight = 220.dp)

@@ -11,13 +11,17 @@ class SocialListsTest {
     private val c = "0xcccc000000000000000000000000000000000003"
 
     @Test
-    fun theFileHoldsNamesPeopleAndTopics() {
+    fun theFileHoldsNamesPeopleTopicsBlocksAndHiddenWords() {
         val lists = SocialLists(
-            mapOf(a to Person(a, "Anna", following = true), b to Person(b, "Bob")),
+            mapOf(a to Person(a, "Anna", following = true), b to Person(b, "Bob"), c to Person(c, blocked = true)),
             setOf("idena", "flips"),
+            setOf("spam", "free coins"),
+            setOf("0x" + "ab".repeat(32)),
+            setOf("scam_topic"),
         )
         val json = socialListsToJson(lists)
-        assertEquals(2, json.getInt("version"))
+        assertEquals(3, json.getInt("version"))
+        assertEquals("sorted", "[\"free coins\",\"spam\"]", json.getJSONArray("hiddenWords").toString())
         assertEquals("sorted", "[\"flips\",\"idena\"]", json.getJSONArray("topics").toString())
         assertEquals(lists, socialListsFromJson(JSONObject(json.toString())))
     }
@@ -28,6 +32,43 @@ class SocialListsTest {
         assertEquals(1, v1.getInt("version"))
         assertEquals(SocialLists(mapOf(a to Person(a, "Anna", following = true)), emptySet()), socialListsFromJson(v1))
         assertNull("not an export", socialListsFromJson(JSONObject("""{"topics":["idena"]}""")))
+    }
+
+    @Test
+    fun aVersion2FileImportsWithoutHiddenWords() {
+        val json = JSONObject("""{"version":2,"people":[{"address":"$a","name":"Anna","following":true,"message":false}],"topics":["idena"]}""")
+        assertEquals(SocialLists(mapOf(a to Person(a, "Anna", following = true)), setOf("idena")), socialListsFromJson(json))
+    }
+
+    @Test
+    fun anImportAddsBlocksAndHiddenWords() {
+        val current = SocialLists(mapOf(a to Person(a, "Anna", following = true)), emptySet(), setOf("spam"))
+        val imported = SocialLists(mapOf(a to Person(a, blocked = true), b to Person(b, blocked = true)), emptySet(), setOf("spam", "scam"))
+        val result = mergeLists(current, imported)
+        assertEquals(Person(a, "Anna", following = true, blocked = true), result.lists.people[a])
+        assertEquals(Person(b, blocked = true), result.lists.people[b])
+        assertEquals(setOf("spam", "scam"), result.lists.words)
+        assertEquals(1, result.wordsAdded)
+    }
+
+    @Test
+    fun anImportAddsHiddenPostsAndBlockedTopics() {
+        val hash = "0x" + "ab".repeat(32)
+        val current = SocialLists(emptyMap(), emptySet(), hiddenPosts = setOf(hash))
+        val imported = SocialLists(emptyMap(), emptySet(), hiddenPosts = setOf(hash, "0x" + "cd".repeat(32)), blockedTopics = setOf("spam_topic"))
+        val result = mergeLists(current, imported)
+        assertEquals(2, result.othersAdded)
+        assertEquals(setOf(hash, "0x" + "cd".repeat(32)), result.lists.hiddenPosts)
+        assertEquals(setOf("spam_topic"), result.lists.blockedTopics)
+        val file = JSONObject("""{"version":3,"people":[],"hiddenPosts":["0x1234","$hash"],"blockedTopics":["ok_name","r/x"]}""")
+        assertEquals(setOf(hash), socialListsFromJson(file)!!.hiddenPosts)
+        assertEquals(setOf("ok_name"), socialListsFromJson(file)!!.blockedTopics)
+    }
+
+    @Test
+    fun invalidHiddenWordsAreLeftOutOfAFile() {
+        val json = JSONObject("""{"version":3,"people":[],"hiddenWords":["spam","   ","  free   coins "]}""")
+        assertEquals(setOf("spam", "free coins"), socialListsFromJson(json)!!.words)
     }
 
     @Test
