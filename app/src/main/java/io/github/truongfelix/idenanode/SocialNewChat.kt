@@ -104,7 +104,7 @@ fun RoundSearchField(value: String, onChange: (String) -> Unit, placeholder: Str
 @Composable
 fun PersonRow(address: String, names: Map<String, String>, onOpen: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(address, 44.dp)
+        PersonAvatar(address, 44.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             names[address]?.let { Text(it, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }

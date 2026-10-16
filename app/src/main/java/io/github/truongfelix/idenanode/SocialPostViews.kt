@@ -95,7 +95,7 @@ fun PostHeader(
         // The feed's one line, as Reddit's: avatar, name, state, time, and ⋯ on the right; the name is cut first.
         Row(verticalAlignment = Alignment.CenterVertically) {
           Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(call.author, 24.dp, Modifier.clickable { onProfile(call.author) })
+            PersonAvatar(call.author, 24.dp, Modifier.clickable { onProfile(call.author) })
             Spacer(Modifier.width(8.dp))
             Text(
                 buildAnnotatedString { appendAddress(call.author, styles, onProfile) },
@@ -122,7 +122,7 @@ fun PostHeader(
         return
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Avatar(call.author, avatar, Modifier.clickable { onProfile(call.author) })
+        PersonAvatar(call.author, avatar, Modifier.clickable { onProfile(call.author) })
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             // The time stays at the top right; the name is cut first.

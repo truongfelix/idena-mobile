@@ -118,6 +118,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     }
     CompositionLocalProvider(
         LocalNames provides model.names,
+        LocalPictures provides shownPictures(model.profiles.values),
         LocalHiding provides HiddenContent(model.hiding, myAddress),
         LocalPostMenu provides PostMenu(
             me = myAddress,
@@ -273,6 +274,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         onTip = { tipping = it },
                         onWho = { who = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                        contract = model.profiles[page.address.lowercase()],
+                        onContract = { model.profiles[it.address] = it },
                     )
                 }
             }
@@ -434,6 +437,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 onTip = { tipping = it },
                                 onWho = { who = it },
                                 modifier = Modifier.weight(1f),
+                                contract = model.profiles[myAddress.lowercase()],
+                                onContract = { model.profiles[it.address] = it },
                             )
                         }
                         SocialView.Feed -> {}

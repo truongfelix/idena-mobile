@@ -192,7 +192,7 @@ private fun FoldedLine(item: SocialPost, hidden: Int, onProfile: (String) -> Uni
         else -> item.call.message.replace(Regex("\\s+"), " ").trim()
     }
     Row(Modifier.fillMaxWidth().clickable(onClick = onUnfold).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(item.call.author, 24.dp)
+        PersonAvatar(item.call.author, 24.dp)
         Spacer(Modifier.width(8.dp))
         Text(
             buildAnnotatedString { appendAddress(item.call.author, styles, onProfile) },

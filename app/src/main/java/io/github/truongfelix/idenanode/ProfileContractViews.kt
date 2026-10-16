@@ -1,0 +1,97 @@
+package io.github.truongfelix.idenanode
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/** The largest picture shown, as the desktop: the apps save a 256x256 WebP of at most 32 KB (ruling Q-48). */
+const val MAX_PICTURE_BYTES = 32 * 1024
+
+/**
+ * A profile's picture from IPFS ([cid]) in a rounded square of [size], with the robot of [address] as a small badge
+ * in its corner (a picture can be anyone's; the robot is the address's); the robot alone without a picture, while it
+ * loads, or when the file is not an image or is larger than [MAX_PICTURE_BYTES].
+ */
+@Composable
+fun ProfilePicture(address: String, cid: String?, size: Dp, modifier: Modifier = Modifier) {
+    val picture = cid?.let { rememberPicture(it) }
+    if (picture == null) {
+        Avatar(address, size, modifier)
+        return
+    }
+    Box(modifier.size(size)) {
+        Image(
+            bitmap = picture,
+            contentDescription = "Profile picture",
+            modifier = Modifier.size(size).clip(RoundedCornerShape(size / 5)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentScale = ContentScale.Crop,
+        )
+        Avatar(address, size / 3, Modifier.align(Alignment.BottomEnd))
+    }
+}
+
+/** The pictures to show by lowercase address: those of the profiles in good standing ([ContractProfile.shownPicture]). */
+val LocalPictures = compositionLocalOf<Map<String, String>> { emptyMap() }
+
+/** The pictures to show of [profiles], by lowercase address. */
+fun shownPictures(profiles: Collection<ContractProfile>): Map<String, String> =
+    profiles.mapNotNull { p -> p.shownPicture?.let { p.address to it } }.toMap()
+
+/** A person's avatar: its profile picture ([LocalPictures]) with the robot as a badge, else the robot. */
+@Composable
+fun PersonAvatar(address: String, size: Dp, modifier: Modifier = Modifier) =
+    ProfilePicture(address, LocalPictures.current[address.lowercase()], size, modifier)
+
+/** The picture [cid] decoded, or null while it loads or when it cannot be shown. */
+@Composable
+private fun rememberPicture(cid: String): ImageBitmap? {
+    val (fetched, _) = rememberIpfs(cid)
+    val bytes = (fetched as? Fetched.Loaded)?.bytes?.takeIf { it.size <= MAX_PICTURE_BYTES } ?: return null
+    val key = "picture:$cid"
+    val bitmap by produceState(images.get(key), key) {
+        if (value == null) value = withContext(Dispatchers.Default) { decodeScaled(bytes, 256) }?.also { images.put(key, it) }
+    }
+    return bitmap
+}
+
+/**
+ * What a profile adds from the profiles contract, under the address, as the desktop shows it: the claimed name when
+ * the title does not show it (a name given on this phone there, [localName], or the name hidden), the bio, "Trusted
+ * by …" ([trust]) and "Vouched for by …" for an account without an identity. Out of good standing the name and bio
+ * show only to the account itself ([isMe]), marked hidden. [names] gives the voucher's name.
+ */
+@Composable
+fun ContractProfileLines(profile: ContractProfile?, trust: TrustCount?, names: Map<String, String>, isMe: Boolean, localName: Boolean) {
+    val body = MaterialTheme.typography.bodyMedium
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    if (profile != null) {
+        val shown = profile.inStanding || isMe
+        if (shown && profile.name != null && (localName || !profile.inStanding)) {
+            val hidden = if (profile.inStanding) "" else " · hidden: not validated, nor vouched for"
+            Text("@${profile.name}$hidden", style = body, fontWeight = FontWeight.Medium)
+        }
+        if (shown) profile.bio?.takeIf { it.isNotBlank() }?.let { Text(it, style = body) }
+    }
+    trust?.let(::trustText)?.let { Text(it, style = body) }
+    profile?.shownVoucher?.let { voucher ->
+        val note = if (profile.inStanding) "" else " (their voucher is not validated now)"
+        Text("Vouched for by ${displayName(voucher, names)}$note", style = body, color = muted)
+    }
+}

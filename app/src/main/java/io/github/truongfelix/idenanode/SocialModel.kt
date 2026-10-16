@@ -112,6 +112,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The identity state and age of the authors (Human, Verified...), read again at each new epoch. */
     val states = mutableStateMapOf<String, AuthorIdentity>()
     private var statesEpochStart: Long? = null
+
+    /** The authors' profiles in the profiles contract ([ContractProfile]), read with [states] and again when one opens. */
+    val profiles = mutableStateMapOf<String, ContractProfile>()
     var head by mutableStateOf<Long?>(null)
         private set
 
@@ -198,8 +201,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The People list: names and marks kept on the phone ([Person]). */
     var people by mutableStateOf(SocialStore.people(context))
         private set
+    /** The names shown: those given on the phone, else the names claimed in the profiles contract ([mergedNames]). */
     val names: Map<String, String>
-        get() = peopleNames(people)
+        get() = mergedNames(peopleNames(people), shownNames(profiles.values))
 
     /** Puts [person] in the People list (or takes it out once it has no name and no mark) and saves the list. */
     fun setPerson(person: Person) {
@@ -375,13 +379,23 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         sending.sent.scanned(next.authorsHeight)
         // The ages and states change at the validation: ask again in a new epoch.
         node?.epochStart?.let { start ->
-            if (statesEpochStart != null && statesEpochStart != start) states.clear()
+            if (statesEpochStart != null && statesEpochStart != start) {
+                states.clear()
+                profiles.clear()
+            }
             statesEpochStart = start
         }
-        val unknown = feed.flatMap { withReplies(it) }.map { it.call.author }.distinct().filter { it !in states }
+        val authors = feed.flatMap { withReplies(it) }.map { it.call.author }.distinct()
+        val unknown = authors.filter { it !in states }
         if (unknown.isNotEmpty()) {
             withContext(Dispatchers.IO) { runCatching { NodeSocialSource(rpc(context)).identityStates(unknown) }.getOrNull() }
                 ?.let { states.putAll(it) }
+        }
+        // The authors, the account and the people named or followed on the phone (contacts, chats).
+        val noProfile = (authors + listOfNotNull(myAddress) + people.keys).map { it.lowercase() }.distinct().filter { it !in profiles }
+        if (noProfile.isNotEmpty()) {
+            withContext(Dispatchers.IO) { runCatching { NodeProfilesSource(rpc(context)).profiles(noProfile) }.getOrNull() }
+                ?.let { profiles.putAll(it) }
         }
         updateActivity()
         updateChats()

@@ -89,17 +89,26 @@ fun ProfileList(
     onWho: (SocialPost) -> Unit,
     modifier: Modifier = Modifier,
     mine: MyProfileLinks? = null,
+    contract: ContractProfile? = null,
+    onContract: (ContractProfile) -> Unit = {},
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
     // Null while the node is asked.
     var identity by remember(address) { mutableStateOf<Result<ProfileIdentity>?>(null) }
+    var trust by remember(address) { mutableStateOf<TrustCount?>(null) }
     LaunchedEffect(address) {
         identity = withContext(Dispatchers.IO) { runCatching { NodeSocialSource(rpc(context)).identity(address) } }
     }
+    // The profile and its Trust read again at each opening: a name, a bio or a Trust may have changed since.
+    LaunchedEffect(address) {
+        val source = NodeProfilesSource(rpc(context))
+        withContext(Dispatchers.IO) { runCatching { source.profiles(listOf(address)) }.getOrNull() }?.values?.firstOrNull()?.let(onContract)
+        trust = withContext(Dispatchers.IO) { runCatching { source.trust(address) }.getOrNull() }
+    }
     val items = profile.list(tab)
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
-        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, onBlock, mine) }
+        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, trust) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -154,12 +163,14 @@ private fun ProfileHeader(
     onName: (Person) -> Unit,
     onBlock: (Person) -> Unit,
     mine: MyProfileLinks?,
+    contract: ContractProfile?,
+    trust: TrustCount?,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // The avatar, and on its right what can be done: ⚙ on the identity's own profile, Message and Follow on another's.
+        // The picture (or the robot), and on its right what can be done: ⚙ on the identity's own profile, Message and Follow on another's.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(address, 72.dp)
+            ProfilePicture(address, contract?.shownPicture, 72.dp)
             Spacer(Modifier.weight(1f))
             mine?.let { SmallIconButton(Icons.Filled.Settings, "Social settings", muted, size = 40.dp, onClick = it.onSettings) }
             if (!isMe && person.blocked) {
@@ -187,7 +198,7 @@ private fun ProfileHeader(
         }
         // The name on the whole width, on two lines if it needs them.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val title = person.name.ifEmpty { shortAddress(address) }
+            val title = person.name.ifEmpty { contract?.shownName ?: shortAddress(address) }
             Text(
                 if (isMe) "$title (you)" else title,
                 Modifier.weight(1f, fill = false),
@@ -201,6 +212,7 @@ private fun ProfileHeader(
             Text(address, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = muted)
             CopyAddressButton(address)
         }
+        ContractProfileLines(contract, trust, LocalNames.current, isMe, localName = person.name.isNotEmpty())
         if (!isMe && person.blocked) Text(BLOCKED_TEXT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         val palette = statusPalette()
         Text(

@@ -44,7 +44,7 @@ import java.util.Base64
  */
 
 /** Where IPFS content stands: being fetched, fetched, gone from IPFS, or the node not answering. */
-private sealed interface Fetched {
+internal sealed interface Fetched {
     data object Loading : Fetched
     class Loaded(val bytes: ByteArray) : Fetched
     data object Unavailable : Fetched
@@ -52,13 +52,13 @@ private sealed interface Fetched {
 }
 
 /** Decoded images, kept while the app runs (about 24 MB), so that scrolling back does not decode again. */
-private val images = object : LruCache<String, ImageBitmap>(24 * 1024 * 1024) {
+internal val images = object : LruCache<String, ImageBitmap>(24 * 1024 * 1024) {
     override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
 }
 
 /** The content of [cid]: from the phone's files, else through the node; and how to try again. */
 @Composable
-private fun rememberIpfs(cid: String): Pair<Fetched, () -> Unit> {
+internal fun rememberIpfs(cid: String): Pair<Fetched, () -> Unit> {
     val context = LocalContext.current
     var attempt by remember(cid) { mutableIntStateOf(0) }
     val state by produceState<Fetched>(Fetched.Loading, cid, attempt) {
