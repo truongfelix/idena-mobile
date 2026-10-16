@@ -78,15 +78,15 @@ private fun rememberIpfs(cid: String): Pair<Fetched, () -> Unit> {
     }
 }
 
-/** The hidden words ([WordFilter]) and the identity's address ([me]): a text with one shows folded, but not [me]'s own. */
-class HiddenWords(val filter: WordFilter, val me: String?)
+/** What is hidden ([Hiding]) and the identity's address ([me]): a text hidden shows folded, but never [me]'s own. */
+class HiddenContent(val hiding: Hiding, val me: String?)
 
-val LocalHiddenWords = compositionLocalOf { HiddenWords(WordFilter.None, null) }
+val LocalHiding = compositionLocalOf { HiddenContent(Hiding.None, null) }
 
 /**
  * A post's text and first media; [showMedia] false shows a short mention instead of the media. [selectable] lets a
  * long press select the text to copy it: only where the whole text shows (the thread), since a tap on a preview
- * opens the thread. A text with a hidden word ([LocalHiddenWords]) shows as one line instead, a tap shows it.
+ * opens the thread. A text hidden ([LocalHiding]: by the user, or with a hidden word) shows as one line instead, a tap shows it.
  */
 @Composable
 fun PostContent(
@@ -97,9 +97,13 @@ fun PostContent(
     mediaMaxHeight: Dp = 360.dp,
     selectable: Boolean = false,
 ) {
-    val hiding = LocalHiddenWords.current
+    val hidden = LocalHiding.current
     var shown by remember(call.hash) { mutableStateOf(false) }
-    val hides = { text: String -> !shown && call.author != hiding.me && hiding.filter.matches(text) }
+    if (!shown && call.author != hidden.me && call.hash.lowercase() in hidden.hiding.posts) {
+        HiddenNote(byUser = true) { shown = true }
+        return
+    }
+    val hides = { text: String -> !shown && call.author != hidden.me && hidden.hiding.words.matches(text) }
     // A text on IPFS is checked once fetched.
     var ipfsHidden by remember(call.hash) { mutableStateOf(false) }
     val cid = ipfsCid(call.message)
@@ -107,7 +111,7 @@ fun PostContent(
         cid != null -> IpfsText(cid, style, maxLines, selectable, hides, { ipfsHidden = it }) { shown = true }
         call.message.startsWith("ipfs://") -> Note("Text on IPFS with an invalid address.")
         hides(call.message) -> {
-            HiddenNote { shown = true }
+            HiddenNote(byUser = false) { shown = true }
             return
         }
         call.message.isNotEmpty() -> PostText(call.message, style, maxLines, selectable)
@@ -140,7 +144,7 @@ private fun IpfsText(
             val text = remember(state) { String(state.bytes, Charsets.UTF_8) }
             val hidden = hides(text)
             SideEffect { onHidden(hidden) }
-            if (hidden) HiddenNote(onShow) else PostText(text, style, maxLines, selectable)
+            if (hidden) HiddenNote(byUser = false, onShow) else PostText(text, style, maxLines, selectable)
         }
         Fetched.Unavailable -> Unavailable(retry)
         is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
@@ -248,11 +252,11 @@ private fun Note(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-/** The line in place of a text with a hidden word; a tap shows the text. */
+/** The line in place of a text hidden ([byUser]: by the user, else for a hidden word); a tap shows the text. */
 @Composable
-private fun HiddenNote(onShow: () -> Unit) {
+private fun HiddenNote(byUser: Boolean, onShow: () -> Unit) {
     Text(
-        "Hidden: a word of your list. Tap to show.",
+        if (byUser) "Hidden by you. Tap to show." else "Hidden: a word of your list. Tap to show.",
         Modifier.clickable(onClick = onShow),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -19,7 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** Social settings (the ⚙ of the identity's profile): the people and topics followed, the blocked accounts, the hidden words, and their export and import. */
+/** Social settings (the ⚙ of the identity's profile): the people and topics followed, the blocked accounts and topics, the hidden words and posts, and their export and import. */
 @Composable
 fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -28,7 +28,9 @@ fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
         SettingsLink("Topics I follow", model.followedTopics.size) { model.open(SocialPage.Following(topics = true)) }
         HorizontalDivider()
         SettingsLink("Blocked accounts", model.blocked.size) { model.open(SocialPage.Blocked) }
-        SettingsLink("Hidden words", model.hiddenWords.size) { model.open(SocialPage.HiddenWords) }
+        SettingsLink("Hidden words", model.hidden.words.size) { model.open(SocialPage.HiddenWords) }
+        SettingsLink("Hidden posts", model.hidden.posts.size) { model.open(SocialPage.HiddenPosts) }
+        SettingsLink("Blocked topics", model.hidden.topics.size) { model.open(SocialPage.BlockedTopics) }
         HorizontalDivider()
         ListsBackup(model)
     }

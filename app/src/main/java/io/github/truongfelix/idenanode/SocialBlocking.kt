@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -37,8 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /*
- * Blocking an account (⋮ on its profile) and the hidden words: the lists of Social settings, each entry undone there.
- * What they hide: [visibleFeed].
+ * Blocking an account (⋮ on its profile, ⋯ under its posts), hiding a post, blocking a topic (⋯, or its page), and the
+ * hidden words: the lists of Social settings, each entry undone there. What they hide: [visibleFeed].
  */
 
 /** Under a blocked account's name. */
@@ -58,26 +59,73 @@ fun BlockMenu(person: Person, onBlock: (Person) -> Unit) {
             })
         }
     }
-    if (asking) {
-        val name = displayName(person.address, LocalNames.current)
-        AlertDialog(
-            onDismissRequest = { asking = false },
-            title = { Text("Block $name?") },
-            text = {
-                Text(
-                    "Their posts, replies, comments, likes, tips and messages are hidden on this phone. The posts stay public " +
-                        "on the chain: they can still see and answer yours. Unblock in Social settings, or on this profile.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    asking = false
-                    onBlock(person.copy(blocked = true))
-                }) { Text("Block") }
-            },
-            dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } },
-        )
+    if (asking) BlockDialog(person, onBlock) { asking = false }
+}
+
+/** Asks before blocking [person]. */
+@Composable
+private fun BlockDialog(person: Person, onBlock: (Person) -> Unit, onDismiss: () -> Unit) {
+    val name = displayName(person.address, LocalNames.current)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Block $name?") },
+        text = {
+            Text(
+                "Their posts, replies, comments, likes, tips and messages are hidden on this phone. The posts stay public " +
+                    "on the chain: they can still see and answer yours. Unblock in Social settings, or on their profile.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss()
+                onBlock(person.copy(blocked = true))
+            }) { Text("Block") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** What ⋯ under a post, reply or comment of another can do: hide it, block its author, block its topic. */
+class PostMenu(
+    val me: String?,
+    val person: (String) -> Person,
+    val onHide: (hash: String, hide: Boolean) -> Unit,
+    val onBlock: (Person) -> Unit,
+    val onBlockTopic: (String) -> Unit,
+)
+
+/** The post menu of the Social tab; none: no ⋯ (as in the editor). */
+val LocalPostMenu = staticCompositionLocalOf<PostMenu?> { null }
+
+/** ⋯ under [post] (not one's own): Hide (or Show again), Block its author (asked first), Block its topic. */
+@Composable
+fun PostMenuButton(post: SocialPost) {
+    val menu = LocalPostMenu.current ?: return
+    if (post.call.author == menu.me) return
+    var open by remember { mutableStateOf(false) }
+    var asking by remember { mutableStateOf(false) }
+    val hidden = post.call.hash.lowercase() in LocalHiding.current.hiding.posts
+    val name = displayName(post.call.author, LocalNames.current)
+    Box {
+        Pill("⋯", enabled = true, description = "More") { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text(if (hidden) "Show again" else "Hide") }, onClick = {
+                open = false
+                menu.onHide(post.call.hash, !hidden)
+            })
+            DropdownMenuItem(text = { Text("Block $name", maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
+                open = false
+                asking = true
+            })
+            post.topic?.let { topic ->
+                DropdownMenuItem(text = { Text("Block the topic ${topicChannel(topic)}") }, onClick = {
+                    open = false
+                    menu.onBlockTopic(topic)
+                })
+            }
+        }
     }
+    if (asking) BlockDialog(menu.person(post.call.author), menu.onBlock) { asking = false }
 }
 
 /** The accounts blocked, each with Unblock; a tap on one opens its profile. */
@@ -113,11 +161,11 @@ fun BlockedView(model: SocialModel, modifier: Modifier = Modifier) {
 @Composable
 fun HiddenWordsView(model: SocialModel, modifier: Modifier = Modifier) {
     var text by remember { mutableStateOf("") }
-    val words = model.hiddenWords.sortedWith(String.CASE_INSENSITIVE_ORDER)
+    val words = model.hidden.words.sortedWith(String.CASE_INSENSITIVE_ORDER)
     val full = words.size >= MAX_HIDDEN_WORDS
     val add = {
         val word = cleanHiddenWord(text)
-        if (word != null && !full && words.none { matchForm(it) == matchForm(word) }) model.changeHiddenWords(model.hiddenWords + word)
+        if (word != null && !full && words.none { matchForm(it) == matchForm(word) }) model.hidden.changeWords(model.hidden.words + word)
         text = ""
     }
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -150,7 +198,7 @@ fun HiddenWordsView(model: SocialModel, modifier: Modifier = Modifier) {
             Column {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(word, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                    IconButton(onClick = { model.changeHiddenWords(model.hiddenWords - word) }) {
+                    IconButton(onClick = { model.hidden.changeWords(model.hidden.words - word) }) {
                         Icon(Icons.Filled.Close, contentDescription = "Remove $word")
                     }
                 }

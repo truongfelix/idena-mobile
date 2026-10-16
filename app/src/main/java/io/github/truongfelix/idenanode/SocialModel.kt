@@ -66,6 +66,12 @@ sealed interface SocialPage {
 
     /** The hidden words ([HiddenWordsView]). */
     data object HiddenWords : SocialPage
+
+    /** The posts hidden ([HiddenPostsView]). */
+    data object HiddenPosts : SocialPage
+
+    /** The topics blocked ([BlockedTopicsView]). */
+    data object BlockedTopics : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -152,7 +158,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     /** The likes, answers and tips of others on the identity's posts, newest first; none hidden ([visibleActivity]). */
     val activity: List<ActivityItem>
-        get() = visibleActivity(allActivity, blocked, wordFilter, myAddress)
+        get() = visibleActivity(allActivity, hiding, myAddress)
 
     /** The kinds of activity that notify. */
     var notify by mutableStateOf(SocialStore.notifyKinds(context))
@@ -201,9 +207,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
     }
 
-    /** The names, the people and the topics followed, the hidden words, as Social's settings export them ([socialListsToJson]). */
+    /** The names, the people and the topics followed, and what is hidden, as Social's settings export them ([socialListsToJson]). */
     val lists: SocialLists
-        get() = SocialLists(people, followedTopics, hiddenWords)
+        get() = SocialLists(people, followedTopics, hidden.words, hidden.posts, hidden.topics)
 
     /** Merges an exported file's lists into these ([mergeLists]) and saves them. */
     fun importLists(imported: SocialLists): ListsImport {
@@ -212,34 +218,35 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
         followedTopics = result.lists.topics
         saveTopics()
-        changeHiddenWords(result.lists.words)
+        hidden.changeWords(result.lists.words)
+        hidden.changePosts(result.lists.hiddenPosts)
+        hidden.changeTopics(result.lists.blockedTopics)
         return result
     }
 
     /** The accounts blocked ([Person.blocked]). */
     val blocked: Set<String> by derivedStateOf { blockedAddresses(people) }
 
-    /** The hidden words and phrases, kept on the phone. */
-    var hiddenWords by mutableStateOf(SocialStore.hiddenWords(context))
-        private set
-
-    /** [hiddenWords] as a filter. */
-    val wordFilter: WordFilter by derivedStateOf { WordFilter(hiddenWords) }
-
-    fun changeHiddenWords(words: Set<String>) {
-        if (words == hiddenWords) return
-        hiddenWords = words
-        scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setHiddenWords(context, words) } } }
-    }
-
-    /** The feed as shown: without the blocked accounts and the posts with a hidden word ([visibleFeed]). */
-    val shownFeed: List<SocialPost> by derivedStateOf { visibleFeed(feed, blocked, wordFilter, myAddress) }
-
     private fun savePeople() {
         // One save at a time, each of the newest list.
         scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setPeople(context, people) } } }
     }
     private val peopleSave = Mutex()
+
+    /** The hidden words, posts hidden and topics blocked. */
+    val hidden = SocialHiddenLists(context, scope, peopleSave)
+
+    /** Everything hidden ([Hiding]). */
+    val hiding: Hiding by derivedStateOf { Hiding(blocked, hidden.wordFilter, hidden.posts, hidden.topics) }
+
+    /** The feed as shown ([visibleFeed]). */
+    val shownFeed: List<SocialPost> by derivedStateOf { visibleFeed(feed, hiding, myAddress) }
+
+    /** Blocks topic [name] (no longer followed), or unblocks it. */
+    fun setTopicBlocked(name: String, block: Boolean) {
+        hidden.changeTopics(if (block) hidden.topics + name else hidden.topics - name)
+        if (block && name in followedTopics) setTopicFollowed(name, false)
+    }
 
     /** The topics followed (kept on the phone): their posts are in the Following feed. */
     var followedTopics by mutableStateOf(SocialStore.followedTopics(context))

@@ -130,16 +130,18 @@ private fun FollowTopicButton(following: Boolean, onFollow: (Boolean) -> Unit) {
 }
 
 /**
- * The page of topic [name]: Follow (its posts join the Following feed), then its posts (+ writes in the topic), newest
- * first, each drawn by [postCard].
+ * The page of topic [name]: Follow (its posts join the Following feed) and Block (its posts hidden on this phone, the
+ * page then offers Unblock), then its posts (+ writes in the topic), newest first, each drawn by [postCard].
  */
 @Composable
 fun TopicView(
     name: String,
     feed: List<SocialPost>,
     following: Boolean,
+    blocked: Boolean,
     listState: LazyListState,
     onFollow: (Boolean) -> Unit,
+    onBlock: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     postCard: @Composable (SocialPost) -> Unit,
 ) {
@@ -158,7 +160,19 @@ fun TopicView(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                FollowTopicButton(following, onFollow)
+                if (blocked) {
+                    Text(
+                        "Blocked: its posts are hidden on this phone.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    OutlinedButton(onClick = { onBlock(false) }) { Text("Unblock") }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FollowTopicButton(following, onFollow)
+                        OutlinedButton(onClick = { onBlock(true) }) { Text("Block") }
+                    }
+                }
                 Spacer(Modifier.padding(2.dp))
             }
         }

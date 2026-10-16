@@ -56,12 +56,12 @@ class SocialHidingTest {
             SocialPost(1, call(1, bob), listOf(like), listOf(tip), listOf(post(2, eve, replyTo = "1"), bobsReply)),
             post(4, eve),
         )
-        val shown = visibleFeed(feed, setOf(eve), WordFilter.None, me)
+        val shown = visibleFeed(feed, Hiding(blocked = setOf(eve)), me)
         // 5 is eve's; 6 and 8 answer it (8 through 6) and leave with it; 7 is mine and stays; 9 stays.
         assertEquals(listOf(1L, 3L, 7L, 9L), ids(shown))
         assertEquals(0, shown[0].likes)
         assertTrue(shown[0].tips.isEmpty())
-        assertSame("nothing hidden: the same list", feed, visibleFeed(feed, emptySet(), WordFilter.None, me))
+        assertSame("nothing hidden: the same list", feed, visibleFeed(feed, Hiding.None, me))
     }
 
     @Test
@@ -72,7 +72,7 @@ class SocialHidingTest {
             post(4, bob, "ipfs://bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy"),
             post(5, eve, "hello", replies = listOf(post(6, bob, "free coins", replyTo = "5"))),
         )
-        val shown = visibleFeed(feed, emptySet(), WordFilter(listOf("free coins")), me)
+        val shown = visibleFeed(feed, Hiding(words = WordFilter(listOf("free coins"))), me)
         // A reply with the word stays: its thread folds it. A text on IPFS is checked once fetched.
         assertEquals(listOf(2L, 4L, 5L, 6L), ids(shown))
     }
@@ -85,9 +85,42 @@ class SocialHidingTest {
             ActivityItem(ActivityKind.Reply, bob, 11, 0, 11, 1, 2, post, call(2, bob, "free coins", replyTo = "1")),
             ActivityItem(ActivityKind.Reply, bob, 12, 0, 12, 1, 3, post, call(3, bob, "thanks", replyTo = "1")),
             ActivityItem(ActivityKind.Tip, bob, 13, 0, 13, 1, 1, post),
+            ActivityItem(ActivityKind.Reply, bob, 14, 0, 14, 1, 4, post, call(4, bob, "rude", replyTo = "1")),
         )
-        val shown = visibleActivity(items, setOf(eve), WordFilter(listOf("free coins")), me)
-        assertEquals(listOf(12L, 13L), shown.map { it.height })
+        val hiding = Hiding(setOf(eve), WordFilter(listOf("free coins")), posts = setOf(call(4, bob).hash))
+        assertEquals(listOf(12L, 13L), visibleActivity(items, hiding, me).map { it.height })
+    }
+
+    @Test
+    fun aPostHiddenOrInABlockedTopicLeavesTheLists() {
+        val feed = listOf(
+            post(1, bob, replies = listOf(post(3, eve, replyTo = "1"))),
+            post(2, bob, channel = "r/flips"),
+            post(4, eve, channel = "r/idena"),
+            post(5, me, channel = "r/flips"),
+            post(6, me),
+        )
+        val hiding = Hiding(posts = setOf(call(1, bob).hash, call(3, eve).hash, call(6, me).hash), topics = setOf("flips"))
+        // 3 is a reply: its thread folds it. Mine stay, hidden or in a blocked topic.
+        assertEquals(listOf(4L, 5L, 6L), ids(visibleFeed(feed, hiding, me)))
+    }
+
+    @Test
+    fun aHiddenPostStillOpensButNotABlockedOne() {
+        val feed = listOf(post(1, bob, "free coins", replies = listOf(post(3, eve, replyTo = "1"))), post(2, eve))
+        val hiding = Hiding(setOf(eve), WordFilter(listOf("free coins")), posts = setOf(call(1, bob).hash))
+        assertEquals(listOf(1L), ids(listOfNotNull(threadPost(feed, 1, hiding, me))))
+        assertNull(threadPost(feed, 2, hiding, me))
+        assertNull(threadPost(feed, 9, hiding, me))
+    }
+
+    @Test
+    fun aHashIsCheckedAndLowercase() {
+        val hash = "0x" + "Ab".repeat(32)
+        assertEquals(hash.lowercase(), txHashOf(" $hash "))
+        assertNull(txHashOf("0x1234"))
+        assertNull(txHashOf("ab".repeat(32)))
+        assertTrue("any case hides", Hiding(posts = setOf(hash.lowercase())).hidesText(call(1, bob).copy(hash = hash), me))
     }
 
     @Test

@@ -184,7 +184,9 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
 private fun FoldedLine(item: SocialPost, hidden: Int, onProfile: (String) -> Unit, onUnfold: () -> Unit) {
     val styles = addressLinkStyles()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val content = LocalHiding.current
     val preview = when {
+        content.hiding.hidesText(item.call, content.me) -> "Hidden"
         ipfsCid(item.call.message) != null -> "Text on IPFS"
         item.call.message.isEmpty() && item.call.hasMedia -> "🖼 Media"
         else -> item.call.message.replace(Regex("\\s+"), " ").trim()

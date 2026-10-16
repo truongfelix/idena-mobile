@@ -118,7 +118,14 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     }
     CompositionLocalProvider(
         LocalNames provides model.names,
-        LocalHiddenWords provides HiddenWords(model.wordFilter, myAddress),
+        LocalHiding provides HiddenContent(model.hiding, myAddress),
+        LocalPostMenu provides PostMenu(
+            me = myAddress,
+            person = model::person,
+            onHide = model.hidden::hidePost,
+            onBlock = model::setPerson,
+            onBlockTopic = { model.setTopicBlocked(it, true) },
+        ),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
@@ -160,7 +167,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 // 2 posts of each 5 in a row, at random, show an ad under the post, above the answers.
                 val rank = remember(feed, page.postId) { feed.map { it.id }.sorted().binarySearch(page.postId) }
                 ThreadView(
-                    post = feed.firstOrNull { it.id == page.postId },
+                    post = remember(model.feed, model.hiding, page.postId) { threadPost(model.feed, page.postId, model.hiding, myAddress) },
                     ad = if (threadShowsAd(rank, model.adSalt)) ({ FeedAd(ads, rank, Modifier.padding(vertical = 8.dp)) }) else null,
                     focusId = page.focusId,
                     pageState = model.pageState(page),
@@ -184,8 +191,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         name = page.name,
                         feed = feed,
                         following = page.name in model.followedTopics,
+                        blocked = page.name in model.hidden.topics,
                         listState = model.pageState(page).list,
                         onFollow = { model.setTopicFollowed(page.name, it) },
+                        onBlock = { model.setTopicBlocked(page.name, it) },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                     ) { post ->
                         PostCard(
@@ -210,6 +219,18 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
                     SocialSettingsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.HiddenPosts -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    HiddenPostsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.BlockedTopics -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    BlockedTopicsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Blocked -> key(page) {

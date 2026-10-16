@@ -16,6 +16,8 @@ class SocialListsTest {
             mapOf(a to Person(a, "Anna", following = true), b to Person(b, "Bob"), c to Person(c, blocked = true)),
             setOf("idena", "flips"),
             setOf("spam", "free coins"),
+            setOf("0x" + "ab".repeat(32)),
+            setOf("scam_topic"),
         )
         val json = socialListsToJson(lists)
         assertEquals(3, json.getInt("version"))
@@ -47,6 +49,20 @@ class SocialListsTest {
         assertEquals(Person(b, blocked = true), result.lists.people[b])
         assertEquals(setOf("spam", "scam"), result.lists.words)
         assertEquals(1, result.wordsAdded)
+    }
+
+    @Test
+    fun anImportAddsHiddenPostsAndBlockedTopics() {
+        val hash = "0x" + "ab".repeat(32)
+        val current = SocialLists(emptyMap(), emptySet(), hiddenPosts = setOf(hash))
+        val imported = SocialLists(emptyMap(), emptySet(), hiddenPosts = setOf(hash, "0x" + "cd".repeat(32)), blockedTopics = setOf("spam_topic"))
+        val result = mergeLists(current, imported)
+        assertEquals(2, result.othersAdded)
+        assertEquals(setOf(hash, "0x" + "cd".repeat(32)), result.lists.hiddenPosts)
+        assertEquals(setOf("spam_topic"), result.lists.blockedTopics)
+        val file = JSONObject("""{"version":3,"people":[],"hiddenPosts":["0x1234","$hash"],"blockedTopics":["ok_name","r/x"]}""")
+        assertEquals(setOf(hash), socialListsFromJson(file)!!.hiddenPosts)
+        assertEquals(setOf("ok_name"), socialListsFromJson(file)!!.blockedTopics)
     }
 
     @Test

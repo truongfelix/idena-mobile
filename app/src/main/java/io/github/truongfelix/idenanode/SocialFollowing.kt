@@ -164,8 +164,9 @@ fun ListsBackup(model: SocialModel) {
                     out.use { it.write(socialListsToJson(lists).toString(2).toByteArray(Charsets.UTF_8)) }
                 }.fold(
                     {
-                        "Exported ${count(lists.people.size, "person", "people")}, ${count(lists.topics.size, "topic", "topics")} " +
-                            "and ${count(lists.words.size, "hidden word", "hidden words")}."
+                        "Exported ${count(lists.people.size, "person", "people")}, ${count(lists.topics.size, "topic", "topics")}, " +
+                            "${count(lists.words.size, "hidden word", "hidden words")}, ${count(lists.hiddenPosts.size, "hidden post", "hidden posts")} " +
+                            "and ${count(lists.blockedTopics.size, "blocked topic", "blocked topics")}."
                     },
                     { "Export failed: ${it.message}" },
                 )
@@ -198,22 +199,23 @@ fun ListsBackup(model: SocialModel) {
                 { imported ->
                     val result = model.importLists(imported)
                     "Imported: ${count(result.people.added, "person", "people")} added, ${result.people.changed} changed, " +
-                        "${count(result.topicsAdded, "topic", "topics")} and ${count(result.wordsAdded, "hidden word", "hidden words")} added."
+                        "${count(result.topicsAdded, "topic", "topics")}, ${count(result.wordsAdded, "hidden word", "hidden words")} " +
+                        "and ${count(result.othersAdded, "hidden post or blocked topic", "hidden posts and blocked topics")} added."
                 },
                 { "Import failed: ${it.message}" },
             )
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Your names, follows, blocks and hidden words", style = MaterialTheme.typography.titleSmall)
+        Text("Your names, follows, blocks and hidden things", style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Export", enabled = true) { exporter.launch("idena-social-lists.json") }
             Pill("Import", enabled = true) { importer.launch(arrayOf("application/json", "application/octet-stream", "text/*")) }
         }
         note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
         Text(
-            "One file with the names you gave, the people and the topics you follow, the accounts you blocked and the " +
-                "hidden words: to keep them or move them to another " +
+            "One file with the names you gave, the people and the topics you follow, the accounts and topics you blocked, " +
+                "the hidden words and posts: to keep them or move them to another " +
                 "phone. Whoever gets the file sees them. An import adds to these lists; nothing is removed.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -235,6 +235,7 @@ fun ActionBar(
         Spacer(Modifier.weight(1f))
         // Who liked and tipped, in place of the line "Liked by · tipped by" under the pills.
         if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = "Who liked and tipped", onClick = onWho)
+        PostMenuButton(post)
     }
 }
 
