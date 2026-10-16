@@ -39,8 +39,9 @@ fun replyDraft(post: SocialPost) = Draft("Reply", "Reply", PostTarget.onPost(pos
 /**
  * The reply bar under a thread, as the comments of the usual social apps: the thread stays on screen and scrolls
  * above it. The field answers [post] until 💬 Reply on a reply or comment points it there ("Replying to …", ✕ goes
- * back to the post); a tap in the field starts the reply. 🖼 opens the full editor ([onExpand]: image, text on IPFS)
- * with the same draft; ➤ asks for the fees as the editor's Post does. Not shown under a post of an older contract (read only).
+ * back to the post); a tap in the field starts the reply. 🖼 opens the picture picker, and the picture joins the reply
+ * here; the line naming it opens the full editor ([onExpand]: the picture's size, text on IPFS) with the same draft;
+ * ➤ asks for the fees as the editor's Post does. Not shown under a post of an older contract (read only).
  */
 @Composable
 fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: () -> Unit) {
@@ -54,6 +55,7 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: (
     }
     val onPost = draft == null || draft.target == PostTarget.onPost(post.id)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val picker = rememberImagePicker(model)
     Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
         Column {
             HorizontalDivider()
@@ -73,8 +75,17 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: (
                 }
                 val extras = listOfNotNull("🖼 Image".takeIf { sending.draftImage != null }, "Text on IPFS".takeIf { sending.textOnIpfs })
                 if (draft != null && extras.isNotEmpty()) {
-                    Text(extras.joinToString(" · "), Modifier.clickable(onClick = onExpand), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            extras.joinToString(" · ") + " ›",
+                            Modifier.weight(1f).clickable(onClick = onExpand),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (sending.draftImage != null) SmallIconButton(Icons.Filled.Close, "Remove the image", muted) { sending.draftImage = null }
+                    }
                 }
+                picker.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutlinedTextField(
                         value = sending.draftText,
@@ -91,12 +102,13 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean, onExpand: (
                     IconButton(
                         onClick = {
                             if (sending.draft == null) sending.draft = replyDraft(post)
-                            onExpand()
+                            picker.pick()
                         },
+                        enabled = !picker.preparing,
                     ) { Text("🖼") }
                     FilledIconButton(
                         onClick = sending::prepareDraft,
-                        enabled = canPost && draft != null && (sending.draftText.isNotBlank() || sending.draftImage != null),
+                        enabled = canPost && draft != null && !picker.preparing && (sending.draftText.isNotBlank() || sending.draftImage != null),
                         modifier = Modifier.size(52.dp),
                     ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Post the reply") }
                 }
