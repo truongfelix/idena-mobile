@@ -39,7 +39,7 @@ fun HiddenPostsView(model: SocialModel, modifier: Modifier = Modifier) {
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item { Text("Hidden posts", style = MaterialTheme.typography.titleLarge) }
         item { Hint("Posts, replies and comments you hid: they leave the lists, and show folded in their thread.") }
-        if (entries.isEmpty()) item { Text("Nothing is hidden. To hide a post: ⋯ under it.", style = MaterialTheme.typography.bodyMedium) }
+        if (entries.isEmpty()) item { Text("Nothing is hidden. To hide a post: ⋯ at its top right.", style = MaterialTheme.typography.bodyMedium) }
         items(entries, key = { it.hash }) { entry ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 val call = entry.call
@@ -80,7 +80,7 @@ fun BlockedTopicsView(model: SocialModel, modifier: Modifier = Modifier) {
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item { Text("Blocked topics", style = MaterialTheme.typography.titleLarge) }
         item { Hint("Their posts are hidden on this phone only.") }
-        if (topics.isEmpty()) item { Text("No topic is blocked. To block one: Block on its page, or ⋯ under one of its posts.", style = MaterialTheme.typography.bodyMedium) }
+        if (topics.isEmpty()) item { Text("No topic is blocked. To block one: Block on its page, or ⋯ on one of its posts.", style = MaterialTheme.typography.bodyMedium) }
         items(topics, key = { it }) { topic ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(

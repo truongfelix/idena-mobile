@@ -92,8 +92,9 @@ fun PostHeader(
     val palette = statusPalette()
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     if (compact) {
-        // The feed's one line, as Reddit's: avatar, name, state, time; the name is cut first.
+        // The feed's one line, as Reddit's: avatar, name, state, time, and ⋯ on the right; the name is cut first.
         Row(verticalAlignment = Alignment.CenterVertically) {
+          Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Avatar(call.author, 24.dp, Modifier.clickable { onProfile(call.author) })
             Spacer(Modifier.width(8.dp))
             Text(
@@ -115,6 +116,8 @@ fun PostHeader(
                 )
             }
             Text("  ·  " + ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
+          }
+          PostMenuButton(call)
         }
         return
     }
@@ -137,6 +140,7 @@ fun PostHeader(
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
+                PostMenuButton(call)
             }
             identity?.let {
                 Text(
@@ -235,7 +239,6 @@ fun ActionBar(
         Spacer(Modifier.weight(1f))
         // Who liked and tipped, in place of the line "Liked by · tipped by" under the pills.
         if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = "Who liked and tipped", onClick = onWho)
-        PostMenuButton(post)
     }
 }
 

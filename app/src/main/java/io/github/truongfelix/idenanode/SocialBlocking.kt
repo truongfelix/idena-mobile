@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -38,7 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /*
- * Blocking an account (⋮ on its profile, ⋯ under its posts), hiding a post, blocking a topic (⋯, or its page), and the
+ * Blocking an account (⋮ on its profile, ⋯ on its posts), hiding a post, blocking a topic (⋯, or its page), and the
  * hidden words: the lists of Social settings, each entry undone there. What they hide: [visibleFeed].
  */
 
@@ -85,7 +86,7 @@ private fun BlockDialog(person: Person, onBlock: (Person) -> Unit, onDismiss: ()
     )
 }
 
-/** What ⋯ under a post, reply or comment of another can do: hide it, block its author, block its topic. */
+/** What ⋯ of a post, reply or comment of another can do: hide it, block its author, block its topic. */
 class PostMenu(
     val me: String?,
     val person: (String) -> Person,
@@ -97,27 +98,29 @@ class PostMenu(
 /** The post menu of the Social tab; none: no ⋯ (as in the editor). */
 val LocalPostMenu = staticCompositionLocalOf<PostMenu?> { null }
 
-/** ⋯ under [post] (not one's own): Hide (or Show again), Block its author (asked first), Block its topic. */
+/** ⋯ at the top right of [call] (a post, reply or comment, not one's own): Hide (or Show again), Block its author (asked first), Block its topic. */
 @Composable
-fun PostMenuButton(post: SocialPost) {
+fun PostMenuButton(call: PostCall) {
     val menu = LocalPostMenu.current ?: return
-    if (post.call.author == menu.me) return
+    if (call.author == menu.me) return
     var open by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
-    val hidden = post.call.hash.lowercase() in LocalHiding.current.hiding.posts
-    val name = displayName(post.call.author, LocalNames.current)
+    val hidden = call.hash.lowercase() in LocalHiding.current.hiding.posts
+    val name = displayName(call.author, LocalNames.current)
     Box {
-        Pill("⋯", enabled = true, description = "More") { open = true }
+        IconButton(onClick = { open = true }, Modifier.size(28.dp)) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text(if (hidden) "Show again" else "Hide") }, onClick = {
                 open = false
-                menu.onHide(post.call.hash, !hidden)
+                menu.onHide(call.hash, !hidden)
             })
             DropdownMenuItem(text = { Text("Block $name", maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
                 open = false
                 asking = true
             })
-            post.topic?.let { topic ->
+            topicOf(call.channel)?.let { topic ->
                 DropdownMenuItem(text = { Text("Block the topic ${topicChannel(topic)}") }, onClick = {
                     open = false
                     menu.onBlockTopic(topic)
@@ -125,7 +128,7 @@ fun PostMenuButton(post: SocialPost) {
             }
         }
     }
-    if (asking) BlockDialog(menu.person(post.call.author), menu.onBlock) { asking = false }
+    if (asking) BlockDialog(menu.person(call.author), menu.onBlock) { asking = false }
 }
 
 /** The accounts blocked, each with Unblock; a tap on one opens its profile. */
