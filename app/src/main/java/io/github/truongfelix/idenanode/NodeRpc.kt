@@ -88,6 +88,7 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
             stateBlock = stateBlock,
             headTime = lastBlock.optLong("timestamp").takeIf { it > 0 },
             syncing = sync.optBoolean("syncing"),
+            message = sync.optString("message"),
             wrongTime = sync.optBoolean("wrongTime"),
             peers = peers,
             identityState = identity.optString("state"),
@@ -359,6 +360,8 @@ data class NodeStatus(
     /** When the head block was made (seconds); null when not given. */
     val headTime: Long? = null,
     val syncing: Boolean,
+    /** What the node says it does while it syncs (bcn_syncing): its IPFS store compacting; empty for nothing. */
+    val message: String = "",
     val wrongTime: Boolean,
     val peers: Int,
     val identityState: String,

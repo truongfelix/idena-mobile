@@ -60,7 +60,7 @@ fun NodeCard(
                             status != null && status.syncing -> "Running, syncing"
                             status != null && headIsStale(status.headTime, System.currentTimeMillis() / 1000) -> "Running, behind"
                             status != null -> "Running, synced"
-                            state.syncEnabled -> "Starting…"
+                            state.syncEnabled -> state.startPhase?.let { startLabel(it, state.runningForMs) } ?: "Starting…"
                             !state.hasKey -> "Stopped: create or import a key first"
                             else -> "Stopped"
                         },

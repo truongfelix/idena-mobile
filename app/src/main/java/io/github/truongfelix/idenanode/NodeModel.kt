@@ -32,6 +32,10 @@ data class ScreenState(
     val blocksPerSecond: Double? = null,
     /** The fast sync's headers per second over the last minute while syncing; null until measured. */
     val headersPerSecond: Double? = null,
+    /** The step of a start, while only the node's first RPC answers; null when the node runs, or nothing answers. */
+    val startPhase: StartPhase? = null,
+    /** What the node says it does while it syncs (bcn_syncing's message); empty for nothing. */
+    val nodeMessage: String = "",
     /** The Advanced settings chosen by the user, and those of the node's last start. */
     val options: NodeOptions = NodeOptions(),
     val runningOptions: RunningOptions = RunningOptions(),
@@ -76,6 +80,8 @@ class NodeModel(private val context: Context) {
                 backgroundIssue = backgroundIssue(state.ignoringBatteryOptimizations),
                 chainMoving = chainMoving,
                 nowSeconds = System.currentTimeMillis() / 1000,
+                startPhase = state.startPhase,
+                nodeMessage = state.nodeMessage,
             ),
         )
 
@@ -95,9 +101,11 @@ class NodeModel(private val context: Context) {
     private suspend fun refreshBar() {
         val (local, node) = withContext(Dispatchers.IO) {
             val local = readLocal(context, state)
+            val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
+            var message = ""
             val node = runCatching {
-                val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
                 val sync = rpc.call("bcn_syncing") as JSONObject
+                message = sync.optString("message")
                 val peers = (rpc.call("net_peers") as? JSONArray)?.length() ?: 0
                 val head = rpc.call("bcn_lastBlock") as JSONObject
                 NodeView(
@@ -106,7 +114,8 @@ class NodeModel(private val context: Context) {
                     chainBlock = head.optLong("height"), headTime = head.optLong("timestamp").takeIf { it > 0 },
                 )
             }.getOrNull()
-            local to node
+            val startPhase = if (node == null && local.syncEnabled) readStartPhase(context, rpc) else null
+            local.copy(startPhase = startPhase, nodeMessage = message) to node
         }
         state = withRates(local, node?.takeIf { it.syncing }?.let { (it.chainBlock ?: it.currentBlock) to it.currentBlock })
         view = node
@@ -160,13 +169,16 @@ private class SyncRate {
 
 private fun readState(context: Context): ScreenState {
     val hasKey = NodeSettings.hasKey(context)
+    val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
     val status = try {
-        NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).status()
+        rpc.status()
     } catch (e: Exception) {
         null
     }
-    return readLocal(context, ScreenState(status = status)).copy(
+    val local = readLocal(context, ScreenState(status = status, nodeMessage = status?.message.orEmpty()))
+    return local.copy(
         hasKey = hasKey,
+        startPhase = if (status == null && local.syncEnabled) readStartPhase(context, rpc) else null,
         // Reading the key needs the Keystore and the node library; only when the node does not answer.
         keyAddress = if (status == null && hasKey) {
             runCatching { NodeKeys.files(context).read() }.getOrNull()?.let { key ->

@@ -28,6 +28,27 @@ import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /**
+ * The node's notification: its block and peers, what it says it does while it syncs, the step of its start while
+ * only its first RPC answers ([startPhase] not null), or that it does not answer, after [PEER_GRACE_MS].
+ */
+fun notificationText(status: NodeStatus?, startPhase: StartPhase?, runningForMs: Long?): String {
+    if (status == null) {
+        return when {
+            startPhase != null -> startLabel(startPhase, runningForMs)
+            runningForMs == null || runningForMs < PEER_GRACE_MS -> StartPhase.Starting.label
+            else -> "The node does not answer"
+        }
+    }
+    val format = NumberFormat.getIntegerInstance()
+    val block = when {
+        status.syncing && status.message.isNotEmpty() -> status.message
+        status.syncing && status.highestBlock > 0 -> "Syncing ${format.format(status.currentBlock)} / ${format.format(status.highestBlock)}"
+        else -> "Block ${format.format(status.currentBlock)}"
+    }
+    return "$block · ${status.peers} peers"
+}
+
+/**
  * Runs the node in the `:node` process while sync is switched on, as a foreground service: it keeps
  * running when the user leaves the app or locks the phone. Stopping ends the process, which is how
  * the node stops (the desktop app ends the node process the same way); the node's databases recover
@@ -39,6 +60,8 @@ class NodeService : Service() {
     private val routerExecutor = Executors.newSingleThreadExecutor()
     private val searchExecutor = Executors.newSingleThreadExecutor()
     private val socialExecutor = Executors.newSingleThreadExecutor()
+    // The notification's reads: the node's start runs on [executor] until the node runs.
+    private val statusExecutor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var started = false
     private var wakeLock: PowerManager.WakeLock? = null
@@ -67,6 +90,7 @@ class NodeService : Service() {
             started = true
             acquireLocks()
             executor.execute { runNode() }
+            handler.post(updateNotification)
         }
         if (intent?.action == ACTION_ROUTER_SEARCH) searchExecutor.execute { RouterSearch.run(this) }
         return START_STICKY
@@ -89,7 +113,6 @@ class NodeService : Service() {
             handler.post { stopNode() }
             return
         }
-        handler.post(updateNotification)
         handler.postDelayed(routerUpkeep, ROUTER_UPKEEP_FIRST_MS)
         handler.postDelayed(socialCheck, SOCIAL_CHECK_FIRST_MS)
     }
@@ -128,22 +151,17 @@ class NodeService : Service() {
         }
     }
 
-    /** Refreshes the notification with the sync progress while the node runs. */
+    /** Refreshes the notification with the start's step, then the sync progress, from the node's start on. */
     private val updateNotification: Runnable = object : Runnable {
         override fun run() {
-            executor.execute {
-                val text = try {
-                    val status = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(this@NodeService)).status()
-                    val format = NumberFormat.getIntegerInstance()
-                    val block = if (status.syncing && status.highestBlock > 0) {
-                        "Syncing ${format.format(status.currentBlock)} / ${format.format(status.highestBlock)}"
-                    } else {
-                        "Block ${format.format(status.currentBlock)}"
-                    }
-                    "$block · ${status.peers} peers"
-                } catch (e: Exception) {
-                    "Node is starting…"
-                }
+            statusExecutor.execute {
+                val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(this@NodeService))
+                val status = runCatching { rpc.status() }.getOrNull()
+                val text = notificationText(
+                    status,
+                    if (status == null) readStartPhase(this@NodeService, rpc) else null,
+                    NodeSettings.runningForMs(this@NodeService),
+                )
                 handler.post {
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
                 }
