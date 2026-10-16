@@ -130,7 +130,7 @@ private fun FollowTopicButton(following: Boolean, onFollow: (Boolean) -> Unit) {
 }
 
 /**
- * The page of topic [name]: Follow (its posts join the Following feed), "Post in r/name", then its posts, newest
+ * The page of topic [name]: Follow (its posts join the Following feed), then its posts (+ writes in the topic), newest
  * first, each drawn by [postCard].
  */
 @Composable
@@ -138,15 +138,13 @@ fun TopicView(
     name: String,
     feed: List<SocialPost>,
     following: Boolean,
-    canPost: Boolean,
     listState: LazyListState,
     onFollow: (Boolean) -> Unit,
-    onPost: () -> Unit,
     modifier: Modifier = Modifier,
     postCard: @Composable (SocialPost) -> Unit,
 ) {
     val posts = remember(feed, name) { topicFeed(feed, name) }
-    LazyColumn(modifier, state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
+    LazyColumn(modifier, state = listState, contentPadding = PaddingValues(bottom = POST_BUTTON_ROOM)) {
         item(key = "header") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,10 +158,7 @@ fun TopicView(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FollowTopicButton(following, onFollow)
-                    OutlinedButton(onClick = onPost, enabled = canPost) { Text("Post in ${topicChannel(name)}") }
-                }
+                FollowTopicButton(following, onFollow)
                 Spacer(Modifier.padding(2.dp))
             }
         }
@@ -191,12 +186,7 @@ fun TopicField(text: String, feed: List<SocialPost>, onChange: (String) -> Unit)
         singleLine = true,
         isError = !valid,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-        supportingText = {
-            Text(
-                if (valid) "Shown with the topic in our apps; idena.social does not show posts in a topic."
-                else "a-z, 0-9 and _, 3 to 21 characters",
-            )
-        },
+        supportingText = if (valid) null else ({ Text("a-z, 0-9 and _, 3 to 21 characters") }),
     )
     val offered = remember(feed, typed) {
         topicList(feed, typed).map { it.name }.filter { it != typedTopic(typed) }.take(MAX_OFFERED_TOPICS)

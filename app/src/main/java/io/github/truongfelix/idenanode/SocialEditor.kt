@@ -145,10 +145,6 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        Text(
-            "Posts are public and stay on the blockchain for good. The fees are shown before sending.",
-            style = MaterialTheme.typography.bodySmall,
-        )
     }
 }
 

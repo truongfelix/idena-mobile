@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,9 +69,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -78,9 +81,9 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
 
 /**
  * The Social tab: idena.social read from the phone's node ([SocialModel] scans it), and posting with the
- * node's key. Home: the search bar and the feed (newest posts or latest activity, with [ads] in it).
- * Profile: the identity's. Inbox: the notifications (likes, comments and tips on the identity's posts)
- * and the chats (the contacts). Over them threads, profiles and the editor. The bottom bar opens the lists
+ * node's key. Feed: the search bar and the feed (newest posts or latest activity, with [ads] in it).
+ * Messages: the conversations. Notifications: likes, comments and tips on the identity's posts. Profile:
+ * the identity's. Over them threads, profiles, conversations and the editor. The bottom bar opens the lists
  * and the editor; the status is in the app's title row ([SocialInfoDialog]).
  */
 @Composable
@@ -90,6 +93,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     var who by remember { mutableStateOf<SocialPost?>(null) }
     // The person being named (the name dialog).
     var naming by remember { mutableStateOf<Person?>(null) }
+    // The feed's filter sheet is open.
+    var filtering by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val feed = model.feed
     val states = model.states
@@ -125,6 +130,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
     val page = model.pages.lastOrNull()
+    // The full editor shows a new post; a reply on its thread stays in the reply bar until 🖼 opens the editor.
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(current == null) { if (current == null) expanded = false }
+    val editing = current?.takeIf { it.target == PostTarget.NEW_POST || page !is SocialPage.Thread || expanded }
     // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
     if (current != null || page != null || model.view != SocialView.Feed) topBar()
     // The bottom bar fades out while the content scrolls down and back in when it scrolls up; it is back on
@@ -145,7 +154,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         val likePost = { post: SocialPost -> model.sending.preparePost("Like", LIKE, PostTarget.onPost(post.id)) }
         val openThread = { threadId: Long, focusId: Long? -> model.open(SocialPage.Thread(threadId, focusId)) }
         when {
-            current != null -> Editor(model, current, canPost = canAct)
+            editing != null -> Editor(model, editing, canPost = canAct)
             page is SocialPage.Thread -> key(page) {
                 // 2 posts of each 5 in a row, at random, show an ad under the post, above the answers.
                 val rank = remember(feed, page.postId) { feed.map { it.id }.sorted().binarySearch(page.postId) }
@@ -163,6 +172,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     onAnswer = { model.sending.draft = it },
                     onTip = { tipping = it },
                     onWho = { who = it },
+                    answeringId = current?.target?.replyTo?.takeIf { current.target.channel != null },
+                    footer = { if (!it.isOlder) ReplyBar(model, it, canPost = canAct, onExpand = { expanded = true }) },
                 )
             }
             page is SocialPage.Topic -> key(page) {
@@ -172,10 +183,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         name = page.name,
                         feed = feed,
                         following = page.name in model.followedTopics,
-                        canPost = canAct,
                         listState = model.pageState(page).list,
                         onFollow = { model.setTopicFollowed(page.name, it) },
-                        onPost = { newPost(model, page.name) },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                     ) { post ->
                         PostCard(
@@ -194,15 +203,18 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 }
             }
             page is SocialPage.Chat -> key(page) {
+                ChatView(model, page.key, model.pageState(page).list, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
+            }
+            page is SocialPage.Settings -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
-                    ChatView(model, page.key, model.pageState(page).list, canSend = canAct, Modifier.weight(1f).padding(horizontal = 16.dp))
+                    SocialSettingsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Following -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
-                    FollowingView(model, model.pageState(page).list, onName = { naming = it }, Modifier.weight(1f).padding(horizontal = 16.dp))
+                    FollowingView(model, page.topics, model.pageState(page).list, onName = { naming = it }, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Profile -> key(page) {
@@ -234,9 +246,9 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 val people = model.people
                 val epochStart = model.node?.epochStart
                 val topics = model.followedTopics
-                val sorted = remember(feed, model.feedSort, model.feedPeriod, model.feedFollowing, people, topics, epochStart) {
-                    val shown = if (model.feedFollowing) followingFeed(feed, people, topics) else feed
-                    sortFeed(shown, model.feedSort, model.feedPeriod, System.currentTimeMillis() / 1000, epochStart)
+                val filter = model.feedFilter
+                val sorted = remember(feed, filter, people, topics, epochStart) {
+                    filter.apply(feed, people, topics, System.currentTimeMillis() / 1000, epochStart)
                 }
                 val query = model.searchQuery.trim()
                 // "r/…" lists the topics instead of searching the posts.
@@ -275,7 +287,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     LazyColumn(
                         Modifier.fillMaxSize().nestedScroll(slide).padding(horizontal = 16.dp),
                         state = model.feedState,
-                        contentPadding = PaddingValues(top = headerDp, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = headerDp, bottom = POST_BUTTON_ROOM),
                     ) {
                         if (topicSearch) {
                             topicItems(feed, query, model.followedTopics, model::openTopic, model::setTopicFollowed)
@@ -345,8 +357,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         topBar()
                         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Spacer(Modifier.height(2.dp))
-                            SearchField(model)
-                            FeedOptions(model)
+                            SearchField(model) { FeedFilterButton(filter) { filtering = true } }
+                            FeedFilterLine(filter, onOpen = { filtering = true }, onReset = { model.filterFeed(FeedFilter()) })
                             HorizontalDivider()
                         }
                     }
@@ -356,14 +368,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             else -> {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Spacer(Modifier.height(2.dp))
-                    when (model.view) {
-                        SocialView.Feed -> {}
-                        SocialView.Activity, SocialView.Messages -> {
-                            InboxOptions(model)
-                            HorizontalDivider()
-                        }
-                        SocialView.Me -> {}
-                    }
+                    if (model.view == SocialView.Activity) Text("Notifications", style = MaterialTheme.typography.titleLarge)
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
                         SocialView.Messages -> MessagesList(model, Modifier.weight(1f))
@@ -380,6 +385,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 onFollow = { model.setPerson(it) },
                                 onName = { naming = it },
                                 listState = model.myProfileState,
+                                mine = MyProfileLinks(
+                                    people = followedPeople(model.people).size,
+                                    topics = model.followedTopics.size,
+                                    onFollowing = { topics -> model.open(SocialPage.Following(topics)) },
+                                    onSettings = { model.open(SocialPage.Settings) },
+                                ),
                                 tab = model.profileTabs[myAddress] ?: ProfileTab.Posts,
                                 onTab = { model.profileTabs[myAddress] = it },
                                 onOpen = openThread,
@@ -395,8 +406,15 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 }
             }
         }
+        // + writes a new post, from the lists posts are read in (in the topic, on a topic's page); it fades with the bar.
+        val topic = (page as? SocialPage.Topic)?.name
+        val postHere = current == null && (if (page == null) model.view == SocialView.Feed || model.view == SocialView.Me else topic != null)
+        androidx.compose.animation.AnimatedVisibility(postHere && barShown, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+            PostButton(enabled = canAct) { newPost(model, topic) }
+        }
     }
-    AnimatedVisibility(current == null && barShown, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+    // A conversation keeps the room for its messages and the keyboard.
+    AnimatedVisibility(current == null && barShown && page !is SocialPage.Chat, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
         BottomBar(model)
     }
     }
@@ -426,6 +444,17 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         WhoDialog(post, states, onProfile = { who = null; model.openProfile(it) }, onDismiss = { who = null })
     }
 
+    if (filtering) {
+        FeedFilterSheet(
+            filter = model.feedFilter,
+            peopleCount = followedPeople(model.people).size,
+            topicsCount = model.followedTopics.size,
+            onChange = model::filterFeed,
+            onList = { topics -> filtering = false; model.open(SocialPage.Following(topics)) },
+            onDismiss = { filtering = false },
+        )
+    }
+
     naming?.let { person ->
         NameDialog(person, onDismiss = { naming = null }) { name ->
             naming = null
@@ -439,6 +468,18 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
 private fun newPost(model: SocialModel, topic: String?) {
     topic?.let { model.sending.draftTopic = it }
     model.sending.draft = Draft("Post", "New post", PostTarget.NEW_POST, null)
+}
+
+/** The room a list leaves under its last item for [PostButton]. */
+val POST_BUTTON_ROOM = 88.dp
+
+/** + at the bottom right: the editor for a new post. */
+@Composable
+private fun PostButton(enabled: Boolean, onClick: () -> Unit) {
+    FloatingActionButton(
+        onClick = { if (enabled) onClick() },
+        containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+    ) { Icon(Icons.Filled.Add, contentDescription = "New post") }
 }
 
 /** Back, at the top of a thread, a profile or a topic. */
@@ -460,8 +501,9 @@ private const val BAR_SCROLL_STEP = 2f
 val SOCIAL_BAR_HEIGHT = 60.dp
 
 /**
- * The bottom bar: Home (the feed), the identity's Profile, the Inbox (with what is new), each shown over
- * the open pages, and Post (the editor). A list is marked while it shows with no page over it.
+ * The bottom bar, as the usual social apps': the Feed, Messages, Notifications and the identity's Profile, four
+ * slots of one width, the lists shown over the open pages, with what is new. A list is marked while it shows with
+ * no page over it. A new post is written from [PostButton].
  */
 @Composable
 private fun BottomBar(model: SocialModel) {
@@ -469,12 +511,14 @@ private fun BottomBar(model: SocialModel) {
     val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem("Home", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem("Feed", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem("Messages", Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
+                model.showList(SocialView.Messages)
+            }
+            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread) {
+                model.showList(SocialView.Activity)
+            }
             BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
-            val inInbox = model.view == SocialView.Activity || model.view == SocialView.Messages
-            BarItem("Inbox", Icons.Filled.Email, selected = onList && inInbox, badge = unread + model.unreadConversations) { model.showList(model.inboxView) }
-            // On a topic's page, the new post goes in that topic.
-            BarItem("Post", Icons.Filled.Edit, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
         }
     }
 }
@@ -490,6 +534,6 @@ private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean
         BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) {
             Icon(icon, contentDescription = null, tint = color)
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

@@ -75,7 +75,7 @@ import java.math.RoundingMode
 import java.time.Instant
 
 class MainActivity : ComponentActivity() {
-    // The taps on the Social notification ([SocialBadge]): each opens the Social tab's Inbox.
+    // The taps on the Social notification ([SocialBadge]): each opens the Social tab's Notifications.
     private var showActivity by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {

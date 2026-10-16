@@ -17,6 +17,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Email
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
@@ -82,6 +87,7 @@ fun ProfileList(
     onTip: (SocialPost) -> Unit,
     onWho: (SocialPost) -> Unit,
     modifier: Modifier = Modifier,
+    mine: MyProfileLinks? = null,
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
@@ -91,8 +97,8 @@ fun ProfileList(
         identity = withContext(Dispatchers.IO) { runCatching { NodeSocialSource(rpc(context)).identity(address) } }
     }
     val items = profile.list(tab)
-    LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)) {
-        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName) }
+    LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
+        item { ProfileHeader(address, identity, profile, isMe = address == myAddress, historyDone = historyDone, person, onFollow, onName, mine) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -124,9 +130,16 @@ fun ProfileList(
 }
 
 /**
- * The identity of a profile, compact: the avatar; then the name (or the short address) with ✎ and Follow,
- * the short address with copy, the state, age and stake in the state's color; under them the likes and
- * the tips, received and given.
+ * What the identity's own profile adds: how many people ([people]) and topics ([topics]) it follows, a tap opening the
+ * list ([onFollowing], true for the topics), and ⚙ for Social settings.
+ */
+class MyProfileLinks(val people: Int, val topics: Int, val onFollowing: (topics: Boolean) -> Unit, val onSettings: () -> Unit)
+
+/**
+ * The identity of a profile, on the whole width as the usual social apps': the avatar with ⚙ (the identity's own
+ * profile, [mine]) or Message and Follow; the name (or the short address) with ✎, the full address with copy, the
+ * state, age and stake in the state's color; then what the identity's own profile follows, the likes and the tips,
+ * received and given.
  */
 @Composable
 private fun ProfileHeader(
@@ -138,63 +151,73 @@ private fun ProfileHeader(
     person: Person,
     onFollow: (Person) -> Unit,
     onName: (Person) -> Unit,
+    mine: MyProfileLinks?,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The avatar, and on its right what can be done: ⚙ on the identity's own profile, Message and Follow on another's.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(address, 64.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val title = person.name.ifEmpty { shortAddress(address) }
-                    Text(
-                        if (isMe) "$title (you)" else title,
-                        Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    // Without a name the title is the short address: copy it there.
-                    if (person.name.isEmpty()) CopyAddressButton(address)
-                    SmallIconButton(Icons.Filled.Edit, if (person.name.isEmpty()) "Name" else "Rename", muted) { onName(person) }
-                    Spacer(Modifier.weight(1f))
-                    if (!isMe) {
-                        LocalOpenChat.current?.let { chat ->
-                            LaunchedEffect(address) { chat.lookUp(address) }
-                            // Greyed when no key is known: the conversation tells why.
-                            val tint = if (chat.canReceive(address) == false) muted.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary
-                            SmallIconButton(Icons.Filled.Email, "Message", tint) { chat.open(address) }
-                        }
-                        FilterChip(
-                            selected = person.following,
-                            onClick = { onFollow(person.copy(following = !person.following)) },
-                            label = { Text(if (person.following) "Following" else "Follow") },
-                        )
+            Avatar(address, 72.dp)
+            Spacer(Modifier.weight(1f))
+            mine?.let { SmallIconButton(Icons.Filled.Settings, "Social settings", muted, size = 40.dp, onClick = it.onSettings) }
+            if (!isMe) {
+                LocalOpenChat.current?.let { chat ->
+                    LaunchedEffect(address) { chat.lookUp(address) }
+                    // Greyed when no key is known: the conversation tells why.
+                    val tint = if (chat.canReceive(address) == false) muted.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary
+                    OutlinedButton(
+                        onClick = { chat.open(address) },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = tint),
+                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                    ) {
+                        Icon(Icons.Filled.Email, contentDescription = null, Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text("Message")
                     }
+                    Spacer(Modifier.width(8.dp))
                 }
-                if (person.name.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(shortAddress(address), style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, color = muted)
-                        CopyAddressButton(address)
-                    }
-                }
-                val palette = statusPalette()
-                Text(
-                    identity?.fold(
-                        {
-                            buildAnnotatedString {
-                                withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) {
-                                    append("${it.status} · age ${it.age} · stake ${blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))} iDNA")
-                                }
-                            }
-                        },
-                        { AnnotatedString("Identity: the node did not answer (${it.message}).") },
-                    ) ?: AnnotatedString("Identity: asking the node…"),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                val follow = { onFollow(person.copy(following = !person.following)) }
+                if (person.following) OutlinedButton(onClick = follow) { Text("Following") } else Button(onClick = follow) { Text("Follow") }
             }
         }
+        // The name on the whole width, on two lines if it needs them.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val title = person.name.ifEmpty { shortAddress(address) }
+            Text(
+                if (isMe) "$title (you)" else title,
+                Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            SmallIconButton(Icons.Filled.Edit, if (person.name.isEmpty()) "Name" else "Rename", muted) { onName(person) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(address, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = muted)
+            CopyAddressButton(address)
+        }
+        val palette = statusPalette()
+        Text(
+            identity?.fold(
+                {
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) {
+                            append("${it.status} · age ${it.age} · stake ${blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))} iDNA")
+                        }
+                    }
+                },
+                { AnnotatedString("Identity: the node did not answer (${it.message}).") },
+            ) ?: AnnotatedString("Identity: asking the node…"),
+            style = MaterialTheme.typography.bodyMedium,
+        )
         val counts = MaterialTheme.typography.bodyMedium
+        mine?.let {
+            Row {
+                Text("${blockNumber.format(it.people)} following", Modifier.clickable { it.onFollowing(false) }, style = counts, fontWeight = FontWeight.Medium)
+                Text(" · ", style = counts)
+                Text("${count(it.topics, "topic", "topics")}", Modifier.clickable { it.onFollowing(true) }, style = counts, fontWeight = FontWeight.Medium)
+            }
+        }
         Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
         Text("🪙 ${tipText(profile.tipsReceived)} received · ${tipText(profile.tipsGiven)} given iDNA", style = counts)
         if (!historyDone) {
@@ -238,7 +261,7 @@ private fun ProfileItemCard(
                         HorizontalDivider()
                     }
                     PostHeader(call, states, onProfile)
-                    PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = 6)
+                    PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES)
                 }
                 ProfileTab.Likes -> {
                     val like = item.like ?: return@Column
@@ -266,7 +289,7 @@ private fun ProfileItemCard(
                 }
                 ProfileTab.Posts, ProfileTab.Media -> {
                     PostHeader(call, states, onProfile)
-                    PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = 6)
+                    PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES)
                 }
             }
             Text(

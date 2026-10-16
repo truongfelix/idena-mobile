@@ -41,7 +41,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 /*
- * The Following page (from the ⚙ next to Home's Following chip): the people and the topics followed, kept on the phone
+ * The Following page (from the feed's filter, or the profile's counts): the people and the topics followed, kept on the phone
  * only. Its rows stay while the page is open, an unfollowed one with Follow, so a tap by mistake is undone at once.
  * Export and import of these lists are in Social's settings ([ListsBackup]).
  */
@@ -52,11 +52,12 @@ private enum class FollowingTab { People, Topics }
 @Composable
 fun FollowingView(
     model: SocialModel,
+    topicsFirst: Boolean,
     listState: LazyListState,
     onName: (Person) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var tab by rememberSaveable { mutableStateOf(FollowingTab.People) }
+    var tab by rememberSaveable { mutableStateOf(if (topicsFirst) FollowingTab.Topics else FollowingTab.People) }
     // The rows shown: those followed when the page opened, and those followed now.
     val openedPeople = remember { followedPeople(model.people).map { it.address }.toSet() }
     val openedTopics = remember { model.followedTopics }
@@ -80,7 +81,7 @@ fun FollowingView(
                     )
                 }
                 Text(
-                    "Their posts make your Following feed. Private: kept on this phone, never published.",
+                    "Private: kept on this phone, never published.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -216,4 +217,5 @@ fun ListsBackup(model: SocialModel) {
 /** The largest list file imported (about 10,000 people). */
 private const val MAX_LISTS_FILE = 2_000_000
 
-private fun count(n: Int, one: String, many: String): String = if (n == 1) "1 $one" else "$n $many"
+/** "1 [one]", or [n] [many]. */
+fun count(n: Int, one: String, many: String): String = if (n == 1) "1 $one" else "$n $many"

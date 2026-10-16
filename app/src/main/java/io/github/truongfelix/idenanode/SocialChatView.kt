@@ -1,6 +1,21 @@
 package io.github.truongfelix.idenanode
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +33,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -70,42 +84,54 @@ private fun preview(message: ChatMessage): String = when {
 }
 
 /**
- * The Inbox's Messages: the conversations, the latest first, with what was not read; Requests (strangers) behind
- * their own line. A tap opens the conversation.
+ * The Messages tab: the conversations, the latest first, with what was not read; Requests (strangers) behind their
+ * own line. The search finds conversations and people by name or address: a person found opens a new conversation.
  */
 @Composable
 fun MessagesList(model: SocialModel, modifier: Modifier) {
     val me = model.myAddress.orEmpty()
     val all = model.conversations
     var requests by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
     val waiting = all.count { it.isRequest }
-    val shown = all.filter { it.isRequest == requests }
-    LazyColumn(modifier, state = model.messagesState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-        item(key = "head") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (requests) TextButton(onClick = { requests = false }) { Text("‹ Conversations") }
-                else if (waiting > 0) TextButton(onClick = { requests = true }) { Text("Requests ($waiting) ›") }
+    val searching = query.isNotBlank()
+    val shown = if (searching) findConversations(all, query, model.names) else all.filter { it.isRequest == requests }
+    // Searching, the people with no one-to-one conversation shown come after the conversations.
+    val people = if (!searching) emptyList() else {
+        val withChat = shown.filter { !it.isGroup }.map { it.others.first() }.toSet()
+        chatCandidates(query, model.people, all, me).filter { it !in withChat }
+    }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(if (requests) "Requests" else "Messages", style = MaterialTheme.typography.titleLarge)
+        RoundSearchField(query, { query = it }, "Search a name or address")
+        LazyColumn(Modifier.weight(1f), state = model.messagesState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+            if (!searching) item(key = "head") {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (requests) TextButton(onClick = { requests = false }) { Text("‹ Conversations") }
+                    else if (waiting > 0) TextButton(onClick = { requests = true }) { Text("Requests ($waiting) ›") }
+                    if (requests) Text(
+                        "Messages from people you do not follow and never wrote to. Answer or accept to move them to your conversations.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (shown.isEmpty() && people.isEmpty()) item(key = "none") {
                 Text(
-                    if (requests) "Messages from people you do not follow and never wrote to. Answer or accept to move them to your conversations."
-                    else "To write to someone, open their profile and tap ✉.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    when {
+                        searching -> "No one by that name: paste their address."
+                        requests -> "No request."
+                        model.cache?.messagesPending == true -> "No conversation yet. The messages of the blocks read before are still being read."
+                        else -> "No conversation yet."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        }
-        if (shown.isEmpty()) item(key = "none") {
-            Text(
-                when {
-                    requests -> "No request."
-                    model.cache?.messagesPending == true -> "No conversation yet. The messages of the blocks read before are still being read."
-                    else -> "No conversation yet."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        items(shown, key = { it.key }) { conversation ->
-            val unread = unreadCount(conversation, me, model.chats.store.seen[conversation.key])
-            ConversationRow(conversation, model.names, unread) { model.open(SocialPage.Chat(conversation.key)) }
+            items(shown, key = { it.key }) { conversation ->
+                val unread = unreadCount(conversation, me, model.chats.store.seen[conversation.key])
+                ConversationRow(conversation, model.names, unread) { model.open(SocialPage.Chat(conversation.key)) }
+            }
+            items(people, key = { "person:$it" }) { address -> PersonRow(address, model.names) { model.openChat(listOf(address)) } }
         }
     }
 }
@@ -156,11 +182,12 @@ private fun ConversationRow(conversation: Conversation, names: Map<String, Strin
 }
 
 /**
- * The conversation of [key]: its messages, oldest first, the account's on the right; Accept for a request; and the
- * box to answer, sent to every other participant after the fee is shown.
+ * The conversation of [key]: who it is with (ⓘ: what the public sees), its messages, oldest first, the account's on
+ * the right; Accept for a request; and the box to answer, sent to every other participant after the fee is shown.
+ * A conversation with no message yet opens with the keyboard.
  */
 @Composable
-fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend: Boolean, modifier: Modifier = Modifier) {
+fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend: Boolean, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val me = model.myAddress.orEmpty()
     val conversation = model.conversations.firstOrNull { it.key == key }
     val others = conversation?.others ?: key.split('-').filter { it != me }.ifEmpty { listOf(me) }
@@ -177,16 +204,30 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size)
         conversation?.let { model.chats.markSeen(it) }
     }
+    var privacy by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(key) { if (messages.isEmpty()) runCatching { focus.requestFocus() } }
     Column(modifier.imePadding()) {
-        LazyColumn(Modifier.weight(1f), state = listState, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
+        Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            Row(
+                Modifier.weight(1f).clickable(enabled = others.size == 1) { model.openProfile(others.first()) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(others.first(), 36.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(othersTitle(others, model.names), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            IconButton(onClick = { privacy = true }) { Icon(Icons.Outlined.Info, contentDescription = "Who sees what") }
+        }
+        LazyColumn(
+            Modifier.weight(1f).padding(horizontal = 16.dp),
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
             item(key = "head") {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(others.first(), 40.dp, Modifier.clickable { model.openProfile(others.first()) })
-                        Spacer(Modifier.width(10.dp))
-                        Text(othersTitle(others, model.names), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    Text(PRIVACY_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (conversation?.isRequest == true) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("Not in your conversations yet.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -198,25 +239,37 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             }
             items(messages, key = { it.hash }) { message -> Bubble(message, mine = message.from == me, showSender = others.size > 1, names = model.names) }
         }
-        when {
-            noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            looking -> Text("Looking up the keys to encrypt for…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            when {
+                noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                looking -> Text("Looking up the keys to encrypt for…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it.take(MAX_MESSAGE) },
+                    modifier = Modifier.weight(1f).focusRequester(focus),
+                    placeholder = { Text("Message") },
+                    maxLines = 5,
+                    shape = RoundedCornerShape(24.dp),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                )
+                // Sending does not accept a request: once the message is in a block, the conversation holds one of the
+                // account's and leaves Requests ([conversations]); a send that fails leaves it there.
+                FilledIconButton(
+                    onClick = { model.sendMessage(others, draft.trim()) },
+                    enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
+                    modifier = Modifier.size(52.dp),
+                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send") }
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it.take(MAX_MESSAGE) },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Message") },
-                maxLines = 5,
-            )
-            // Sending does not accept a request: once the message is in a block, the conversation holds one of the
-            // account's and leaves Requests ([conversations]); a send that fails leaves it there.
-            Button(
-                onClick = { model.sendMessage(others, draft.trim()) },
-                enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
-            ) { Text("Send") }
-        }
+    }
+    if (privacy) {
+        AlertDialog(
+            onDismissRequest = { privacy = false },
+            text = { Text(PRIVACY_NOTE) },
+            confirmButton = { TextButton(onClick = { privacy = false }) { Text("OK") } },
+        )
     }
 }
 

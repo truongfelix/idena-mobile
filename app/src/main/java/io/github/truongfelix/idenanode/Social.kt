@@ -441,8 +441,8 @@ enum class FeedSort(val title: String, val ranked: Boolean = false) {
     Tips("Most tipped", ranked = true),
 }
 
-/** The posts a ranked sort looks at: made in the current epoch, the last 7 days, or ever. */
-enum class FeedPeriod(val title: String) { Epoch("This epoch"), Week("7 days"), All("All") }
+/** The posts a ranked sort looks at: made in the current epoch, the last 7 days, 30 days, 365 days, or ever. */
+enum class FeedPeriod(val title: String, val days: Int = 0) { Epoch("This epoch"), Week("7 days", 7), Month("1 month", 30), Year("1 year", 365), All("All") }
 
 /** What a ranked sort counts on [post] itself. */
 private fun rankOf(post: SocialPost, sort: FeedSort): BigDecimal = when (sort) {
@@ -471,8 +471,8 @@ fun sortFeed(
         .filter {
             when (period) {
                 FeedPeriod.Epoch -> epochStart == null || it.call.height >= epochStart
-                FeedPeriod.Week -> it.call.time >= now - 7 * 24 * 3600
                 FeedPeriod.All -> true
+                else -> it.call.time >= now - period.days * 24L * 3600
             }
         }
         .map { it to rankOf(it, sort) }

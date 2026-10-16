@@ -14,7 +14,7 @@ import java.io.File
  * Social news on the app's icon. Android shows a badge on an app's icon for its notifications, so while the app is
  * not on screen the node's service ([NodeService], its own process) reads the new blocks every few minutes and
  * posts a notification counting the activity on the identity's posts not seen yet: the count of the Social tab's
- * Inbox, of the kinds that notify. It sounds only for activity it did not announce before. Opening the Social tab
+ * Notifications, of the kinds that notify. It sounds only for activity it did not announce before. Opening the Social tab
  * removes it; with "Scan blocks" off, nothing is read.
  */
 
@@ -44,7 +44,7 @@ object SocialBadge {
     private const val CHANNEL_ID = "social"
     private const val NOTIFICATION_ID = 2
 
-    /** The extra of the intent that opens the app on the Social tab's Inbox. */
+    /** The extra of the intent that opens the app on the Social tab's Notifications. */
     const val EXTRA_SHOW_ACTIVITY = "showSocialActivity"
 
     fun createChannel(context: Context) {
