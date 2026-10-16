@@ -362,6 +362,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         if (pages.isEmpty()) return
         val page = pages.removeAt(pages.lastIndex)
         if (page !in pages) pageStates.remove(page)
+        // A reply started in the thread's bar goes with it: else, with no thread left, it showed in the full editor.
+        if (page is SocialPage.Thread && sending.draft?.target?.let { it != PostTarget.NEW_POST } == true) sending.draft = null
     }
 
     fun pageState(page: SocialPage) = pageStates.getOrPut(page) { PageState() }
