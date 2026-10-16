@@ -31,9 +31,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val REPORTS_INFO = "When the node stops answering for 5 minutes, the app writes a report and restarts " +
-    "the node, up to 3 times in 6 hours. A report holds what each part of the node was doing (its goroutines) and the " +
-    "end of its log: the node's address and its peers' network addresses are in it, no key.\n\n" +
-    "Make a report: one now, from the running node. Save the last report: as a file, to send it."
+    "the node, up to 3 times in 6 hours.\n\n" +
+    "A report shows what each part of the node was doing (its goroutines) and about the last 20 minutes of its log. " +
+    "It holds the node's address and its peers' network addresses, no key.\n\n" +
+    "If your node has trouble connecting or syncing: Make a report, Save the last report, and share it with the Idena " +
+    "community to understand what happens."
 
 /** How long the section waits for the report it asked for. */
 private const val REPORT_WAIT_MS = 30_000L
