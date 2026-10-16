@@ -25,6 +25,7 @@ import io.github.truongfelix.idenanode.go.mobile.Mobile
 import java.io.File
 import java.text.NumberFormat
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
@@ -64,6 +65,13 @@ class NodeService : Service() {
     private val statusExecutor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var started = false
+    // A read of a node that takes connections but does not answer waits for its timeouts: one read at a time.
+    private val reading = AtomicBoolean(false)
+    // The watchdog ([NodeWatch]), from the node's start; [freezeHandled] once it found the node stopped, until it
+    // answers again; [restarting] once it asked the app for the restart that ends this process.
+    private var watch: NodeWatch? = null
+    @Volatile private var freezeHandled = false
+    @Volatile private var restarting = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
@@ -89,10 +97,17 @@ class NodeService : Service() {
         if (!started) {
             started = true
             acquireLocks()
+            watch = NodeWatch(SystemClock.uptimeMillis())
             executor.execute { runNode() }
             handler.post(updateNotification)
         }
         if (intent?.action == ACTION_ROUTER_SEARCH) searchExecutor.execute { RouterSearch.run(this) }
+        if (intent?.action == ACTION_REPORT) {
+            thread(name = "node-report") {
+                runCatching { NodeReports.write(this, "Made from the app.", NodeReports.collectGoroutines(this)) }
+                    .onFailure { Log.w(TAG, "Node report: $it") }
+            }
+        }
         return START_STICKY
     }
 
@@ -151,22 +166,60 @@ class NodeService : Service() {
         }
     }
 
-    /** Refreshes the notification with the start's step, then the sync progress, from the node's start on. */
+    /**
+     * Refreshes the notification with the start's step, then the sync progress, from the node's start on; its reads
+     * are the watchdog's ([NodeWatch]).
+     */
     private val updateNotification: Runnable = object : Runnable {
         override fun run() {
-            statusExecutor.execute {
-                val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(this@NodeService))
-                val status = runCatching { rpc.status() }.getOrNull()
-                val text = notificationText(
-                    status,
-                    if (status == null) readStartPhase(this@NodeService, rpc) else null,
-                    NodeSettings.runningForMs(this@NodeService),
-                )
-                handler.post {
-                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+            if (reading.compareAndSet(false, true)) {
+                statusExecutor.execute {
+                    try {
+                        read()
+                    } finally {
+                        reading.set(false)
+                    }
                 }
             }
             handler.postDelayed(this, UPDATE_INTERVAL_MS)
+        }
+
+        private fun read() {
+            val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(this@NodeService))
+            val status = runCatching { rpc.status() }.getOrNull()
+            val startPhase = if (status == null) readStartPhase(this@NodeService, rpc) else null
+            val now = SystemClock.uptimeMillis()
+            val answered = status != null || startPhase != null
+            watch?.let { if (answered) it.answered(now) else it.failed() }
+            if (answered && !restarting) freezeHandled = false
+            val silentFor = watch?.takeIf { !freezeHandled && it.frozen(now) }?.silentFor(now)
+            if (silentFor != null) {
+                freezeHandled = true
+                thread(name = "node-freeze") { handleFreeze(silentFor) }
+            }
+            val text = if (restarting) "Restarting the node: it had stopped answering" else notificationText(status, startPhase, NodeSettings.runningForMs(this@NodeService))
+            handler.post {
+                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+            }
+        }
+    }
+
+    /**
+     * The node did not answer for [silentFor] ms: writes a node report, then has the app restart the node
+     * ([NodeRestartReceiver]: this process ends with it), unless it restarted it [MAX_RESTARTS] times lately.
+     */
+    private fun handleFreeze(silentFor: Long) {
+        val now = System.currentTimeMillis()
+        val allowed = restartAllowed(now, NodeReports.restarts(this))
+        val minutes = silentFor / 60_000
+        val why = "The node had not answered for $minutes min. " +
+            if (allowed) "The app restarted it." else "The app did not restart it: it had restarted it $MAX_RESTARTS times in ${RESTART_WINDOW_MS / 3_600_000} h."
+        Log.w(TAG, why)
+        runCatching { NodeReports.write(this, why, NodeReports.collectGoroutines(this), now) }.onFailure { Log.w(TAG, "Node report: $it") }
+        if (allowed) {
+            restarting = true
+            runCatching { NodeReports.recordRestart(this, now) }
+            sendBroadcast(Intent(this, NodeRestartReceiver::class.java))
         }
     }
 
@@ -256,6 +309,13 @@ class NodeService : Service() {
         private const val SOCIAL_CHECK_INTERVAL_MS = 10 * 60_000L
         const val ACTION_STOP = "io.github.truongfelix.idenanode.STOP"
         const val ACTION_ROUTER_SEARCH = "io.github.truongfelix.idenanode.ROUTER_SEARCH"
+        const val ACTION_REPORT = "io.github.truongfelix.idenanode.REPORT"
+
+        /** Asks the running node's process for a node report ([NodeReports]); nothing without a node process. */
+        fun makeReport(context: Context) {
+            if (!nodeProcessRuns(context)) return
+            context.startService(Intent(context, NodeService::class.java).setAction(ACTION_REPORT))
+        }
 
         /** Asks the running node's process to look for the router of this Wi-Fi ([RouterSearch]). */
         fun searchRouter(context: Context) {
@@ -277,24 +337,38 @@ class NodeService : Service() {
         }
 
         /**
-         * Restarts the node, for a setting it reads at its start: ends the node process with sync left
-         * on, waits until the process is gone, then starts the node in a new one.
+         * Restarts the node, for a setting it reads at its start or a node that stopped answering: ends the node
+         * process with sync left on, waits until the process is gone (ends it if its stop did not), then starts the
+         * node in a new one; [done] runs after.
          */
-        fun restart(context: Context) {
+        fun restart(context: Context, done: () -> Unit = {}) {
             val app = context.applicationContext
             thread(name = "node-restart") {
-                // A stop sent with no node process would start one just to stop nothing.
-                if (nodeProcessRuns(app)) app.startService(Intent(app, NodeService::class.java).setAction(ACTION_STOP))
-                val deadline = SystemClock.elapsedRealtime() + RESTART_TIMEOUT_MS
-                while (nodeProcessRuns(app) && SystemClock.elapsedRealtime() < deadline) Thread.sleep(200)
-                start(app)
+                try {
+                    // A stop sent with no node process would start one just to stop nothing.
+                    if (nodeProcessRuns(app)) app.startService(Intent(app, NodeService::class.java).setAction(ACTION_STOP))
+                    val deadline = SystemClock.elapsedRealtime() + RESTART_TIMEOUT_MS
+                    while (nodeProcessRuns(app) && SystemClock.elapsedRealtime() < deadline) Thread.sleep(200)
+                    nodeProcessPid(app)?.let {
+                        Log.w(TAG, "The node process did not stop: ending it")
+                        Process.killProcess(it)
+                        Thread.sleep(1_000)
+                    }
+                    // From the background, Android lets the app start the node only while its battery
+                    // optimization is off (the Node card says so otherwise).
+                    runCatching { start(app) }.onFailure { Log.w(TAG, "Node restart: $it") }
+                } finally {
+                    done()
+                }
             }
         }
 
         private const val RESTART_TIMEOUT_MS = 15_000L
 
-        private fun nodeProcessRuns(context: Context): Boolean =
+        private fun nodeProcessRuns(context: Context): Boolean = nodeProcessPid(context) != null
+
+        private fun nodeProcessPid(context: Context): Int? =
             context.getSystemService(ActivityManager::class.java).runningAppProcesses
-                ?.any { it.processName == context.packageName + ":node" } == true
+                ?.firstOrNull { it.processName == context.packageName + ":node" }?.pid
     }
 }

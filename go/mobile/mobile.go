@@ -15,6 +15,7 @@ import (
 // as its node key: the private key (32 bytes), which the app keeps encrypted (NodeKeys.kt). The node neither reads
 // nor writes a key file. It returns when the node runs.
 func Start(dir string, cfg string, key []byte) string {
+	keepCrashOutput(dir)
 	nodeKey, err := crypto.ToECDSA(key)
 	if err != nil {
 		return "the node key is not valid"

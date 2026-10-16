@@ -95,5 +95,10 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Runs an Idena blockchain node that keeps syncing while the user has sync switched on" />
         </service>
+
+        <!-- The node's watchdog restarts it from the app's main process (NodeWatch.kt). -->
+        <receiver
+            android:name=".NodeRestartReceiver"
+            android:exported="false" />
     </application>
 </manifest>

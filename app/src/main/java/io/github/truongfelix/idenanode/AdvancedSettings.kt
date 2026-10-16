@@ -35,10 +35,10 @@ import androidx.compose.ui.unit.dp
 import java.time.Instant
 
 /**
- * Advanced settings in the Node card, folded until opened, in three groups: Mining (the [delegation], once the node has
+ * Advanced settings in the Node card, folded until opened, in four groups: Mining (the [delegation], once the node has
  * the account), Connections (the [routerPort] on Wi-Fi, the direct peers ([DirectPeersSection]), the peer level
- * ([PeerLevel]) and the IPFS connection limit ([IpfsConnections])) and Storage (the write buffer of each database,
- * [WriteBuffer]). The node takes the connection and storage settings at its start: while it runs with others, a line
+ * ([PeerLevel]) and the IPFS connection limit ([IpfsConnections])), Storage (the write buffer of each database,
+ * [WriteBuffer]) and the [NodeReportsSection]. The node takes the connection and storage settings at its start: while it runs with others, a line
  * under the title, shown folded too, offers the restart that applies them. [onChanged] runs after a choice is saved.
  */
 @Composable
@@ -137,6 +137,8 @@ fun AdvancedSettings(
                 },
             )
         }
+        GroupTitle("Node reports")
+        NodeReportsSection(state.syncEnabled)
     }
     if (confirm) {
         val status = state.status
