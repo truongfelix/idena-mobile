@@ -254,6 +254,16 @@ object SocialStore {
         topicsFile(context).writeText(topics.sorted().joinToString("\n"))
     }
 
+    private fun hiddenWordsFile(context: Context) = File(dir(context), "hidden_words")
+
+    /** The hidden words ([WordFilter]), kept on the phone only: one per line. */
+    fun hiddenWords(context: Context): Set<String> =
+        runCatching { hiddenWordsFile(context).readLines() }.getOrDefault(emptyList()).mapNotNull(::cleanHiddenWord).toSet()
+
+    fun setHiddenWords(context: Context, words: Set<String>) {
+        hiddenWordsFile(context).writeText(words.sorted().joinToString("\n"))
+    }
+
     private fun peopleFile(context: Context) = File(dir(context), "people.json")
 
     /** The People list ([Person]); empty when there is none yet. */

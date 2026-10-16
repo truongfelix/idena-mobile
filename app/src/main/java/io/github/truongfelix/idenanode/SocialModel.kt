@@ -2,6 +2,7 @@ package io.github.truongfelix.idenanode
 
 import android.content.Context
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -59,6 +60,12 @@ sealed interface SocialPage {
 
     /** Social settings ([SocialSettingsView]). */
     data object Settings : SocialPage
+
+    /** The accounts blocked ([BlockedView]). */
+    data object Blocked : SocialPage
+
+    /** The hidden words ([HiddenWordsView]). */
+    data object HiddenWords : SocialPage
 }
 
 /** What an open page keeps while another page is opened over it: its place in its list. */
@@ -140,9 +147,12 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private val scanNewOnce = AtomicBoolean(false)
     private var wake by mutableIntStateOf(0)
 
-    /** The likes, answers and tips of others on the identity's posts, newest first. */
-    var activity by mutableStateOf<List<ActivityItem>>(emptyList())
-        private set
+    // The likes, answers and tips of others on the identity's posts, newest first, before hiding.
+    private var allActivity by mutableStateOf<List<ActivityItem>>(emptyList())
+
+    /** The likes, answers and tips of others on the identity's posts, newest first; none hidden ([visibleActivity]). */
+    val activity: List<ActivityItem>
+        get() = visibleActivity(allActivity, blocked, wordFilter, myAddress)
 
     /** The kinds of activity that notify. */
     var notify by mutableStateOf(SocialStore.notifyKinds(context))
@@ -191,9 +201,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
     }
 
-    /** The names, the people and the topics followed, as Social's settings export them ([socialListsToJson]). */
+    /** The names, the people and the topics followed, the hidden words, as Social's settings export them ([socialListsToJson]). */
     val lists: SocialLists
-        get() = SocialLists(people, followedTopics)
+        get() = SocialLists(people, followedTopics, hiddenWords)
 
     /** Merges an exported file's lists into these ([mergeLists]) and saves them. */
     fun importLists(imported: SocialLists): ListsImport {
@@ -202,8 +212,28 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         savePeople()
         followedTopics = result.lists.topics
         saveTopics()
+        changeHiddenWords(result.lists.words)
         return result
     }
+
+    /** The accounts blocked ([Person.blocked]). */
+    val blocked: Set<String> by derivedStateOf { blockedAddresses(people) }
+
+    /** The hidden words and phrases, kept on the phone. */
+    var hiddenWords by mutableStateOf(SocialStore.hiddenWords(context))
+        private set
+
+    /** [hiddenWords] as a filter. */
+    val wordFilter: WordFilter by derivedStateOf { WordFilter(hiddenWords) }
+
+    fun changeHiddenWords(words: Set<String>) {
+        if (words == hiddenWords) return
+        hiddenWords = words
+        scope.launch(Dispatchers.IO) { peopleSave.withLock { runCatching { SocialStore.setHiddenWords(context, words) } } }
+    }
+
+    /** The feed as shown: without the blocked accounts and the posts with a hidden word ([visibleFeed]). */
+    val shownFeed: List<SocialPost> by derivedStateOf { visibleFeed(feed, blocked, wordFilter, myAddress) }
 
     private fun savePeople() {
         // One save at a time, each of the newest list.
@@ -353,9 +383,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
     val chats = SocialChats(context)
 
-    /** The account's conversations, the latest first, those of strangers in Requests ([conversations]). */
+    /** The account's conversations, the latest first, those of strangers in Requests ([conversations]); none with a blocked account. */
     val conversations: List<Conversation>
-        get() = myAddress?.let { conversations(chats.store.messages, it, people) }.orEmpty()
+        get() = myAddress?.let { visibleConversations(conversations(chats.store.messages, it, people), blocked) }.orEmpty()
 
     /** The conversations (not Requests) with a message not read yet. */
     val unreadConversations: Int
@@ -432,7 +462,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private suspend fun updateActivity() {
         val me = myAddress ?: return
         val current = feed
-        activity = withContext(Dispatchers.Default) { socialActivity(current, me) }
+        allActivity = withContext(Dispatchers.Default) { socialActivity(current, me) }
         val through = cache?.authorsHeight ?: return
         if (seenThrough == null) {
             // The first scan: what is there already is not news.

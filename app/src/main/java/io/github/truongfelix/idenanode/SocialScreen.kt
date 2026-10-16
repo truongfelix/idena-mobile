@@ -96,7 +96,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     // The feed's filter sheet is open.
     var filtering by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val feed = model.feed
+    val feed = model.shownFeed
     val states = model.states
     val myAddress = model.myAddress
     val canAct = model.ready && !model.sending.busy
@@ -118,6 +118,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     }
     CompositionLocalProvider(
         LocalNames provides model.names,
+        LocalHiddenWords provides HiddenWords(model.wordFilter, myAddress),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
@@ -211,6 +212,18 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     SocialSettingsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
+            page is SocialPage.Blocked -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    BlockedView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.HiddenWords -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    HiddenWordsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
             page is SocialPage.Following -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -230,6 +243,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         person = model.person(page.address),
                         onFollow = { model.setPerson(it) },
                         onName = { naming = it },
+                        onBlock = { model.setPerson(it) },
                         listState = model.pageState(page).list,
                         tab = model.profileTabs[page.address] ?: ProfileTab.Posts,
                         onTab = { model.profileTabs[page.address] = it },
@@ -384,6 +398,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 person = model.person(myAddress),
                                 onFollow = { model.setPerson(it) },
                                 onName = { naming = it },
+                                onBlock = { model.setPerson(it) },
                                 listState = model.myProfileState,
                                 mine = MyProfileLinks(
                                     people = followedPeople(model.people).size,
