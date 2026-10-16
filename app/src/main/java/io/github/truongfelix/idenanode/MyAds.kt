@@ -103,14 +103,15 @@ private fun reviewProgress(voting: OracleVoting, now: Instant): String = when (v
 }
 
 /**
- * Whether an ad for [other] competes with one for [mine], as the desktop's areCompetingAds: some setting of [other]
- * is open, or includes [mine] (same language or system, at most its age or stake).
+ * Whether an ad for [other] competes with one for [mine]: one viewer can be shown both, as the desktop's
+ * canReachSameViewer (idena-desktop #77). Their languages and systems meet (the same, or one left open); a minimum
+ * age or stake never keeps two ads apart (a viewer above both minimums meets both).
  */
 fun competes(other: AdTarget, mine: AdTarget): Boolean =
-    other.language.isEmpty() || other.language.equals(mine.language, ignoreCase = true) ||
-        other.os.isEmpty() || other.os.equals(mine.os, ignoreCase = true) ||
-        other.age == 0 || mine.age >= other.age ||
-        other.stake == 0 || mine.stake >= other.stake
+    meets(other.language, mine.language) && meets(other.os, mine.os)
+
+/** A language or system left open takes any viewer; two set ones meet only when they are the same. */
+private fun meets(a: String, b: String): Boolean = a.isEmpty() || b.isEmpty() || a.equals(b, ignoreCase = true)
 
 /** The other ads competing with [cid] for [target]: how many, and the most burnt for one of them over the last day. */
 data class Competition(val ads: Int, val topBurn: BigDecimal?)

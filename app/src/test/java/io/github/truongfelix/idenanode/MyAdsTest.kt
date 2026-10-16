@@ -93,10 +93,14 @@ class MyAdsTest {
     }
 
     @Test
-    fun otherAdsCompeteAsOnTheDesktop() {
+    fun otherAdsCompeteWhenOneViewerCanBeShownBoth() {
         val mine = AdTarget(language = "fr", os = "android", age = 3, stake = 100)
         assertTrue(competes(AdTarget(), mine))
-        assertTrue(competes(AdTarget(language = "fr", os = "ios", age = 9, stake = 500), mine))
+        assertTrue(competes(AdTarget(language = "FR"), mine))
+        assertTrue(competes(AdTarget(language = "fr", os = "android", age = 9, stake = 500), mine))
+        assertTrue(competes(mine, AdTarget()))
+        assertFalse(competes(AdTarget(language = "fr", os = "ios"), mine))
+        assertFalse(competes(AdTarget(language = "de"), mine))
         assertFalse(competes(AdTarget(language = "de", os = "ios", age = 9, stake = 500), mine))
         val burns = listOf(
             AdBurn("0xA", "50", "bafkreimine", AdTarget()),
