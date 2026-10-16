@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -38,7 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 /**
  * A post with its answers, as Reddit shows a post and its comments: the replies, and under each reply
  * its comments nested by what they answer ([commentTree]), each level foldable. Every item has its pills.
- * Opened at [focusId] (from a profile or the Activity), the thread scrolls to it once and marks it.
+ * Opened at [focusId] (from a profile or the Activity), the thread scrolls to it once and marks it. The item a
+ * reply is being written to ([answeringId]) is marked too; [footer] (the reply bar) stays under the list, over the
+ * keyboard.
  */
 @Composable
 fun ThreadView(
@@ -55,8 +58,10 @@ fun ThreadView(
     onAnswer: (Draft) -> Unit,
     onTip: (SocialPost) -> Unit,
     onWho: (SocialPost) -> Unit,
+    answeringId: Long? = null,
+    footer: @Composable (SocialPost) -> Unit = {},
 ) {
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         header()
         if (post == null) {
             Text("This post is not in the scanned blocks.", Modifier.padding(16.dp))
@@ -94,10 +99,11 @@ fun ThreadView(
             }
             items(post.replies, key = { it.id }) { reply ->
                 val tree = remember(reply) { commentTree(reply.id, reply.replies) }
-                val thread = ThreadContext(states, myAddress, canAct, focusId, pageState.collapsed, onProfile, onLike, onAnswer, onTip, onWho, post.call.author)
+                val thread = ThreadContext(states, myAddress, canAct, focusId, answeringId, pageState.collapsed, onProfile, onLike, onAnswer, onTip, onWho, post.call.author)
                 ThreadItem(reply, tree, depth = 0, replyId = reply.id, thread = thread)
             }
         }
+        footer(post)
     }
 }
 
@@ -107,6 +113,8 @@ private class ThreadContext(
     val myAddress: String?,
     val canAct: Boolean,
     val focusId: Long?,
+    /** The reply or comment the reply bar answers. */
+    val answeringId: Long?,
     val collapsed: MutableMap<Long, Boolean>,
     val onProfile: (String) -> Unit,
     val onLike: (PostTarget) -> Unit,
@@ -153,7 +161,7 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
             FoldedLine(item, hidden = children.sumOf { 1 + it.descendants }, onProfile = thread.onProfile, onUnfold = { toggle() })
             return@Column
         }
-        Column(Modifier.focused(item.id == thread.focusId), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.focused(item.id == thread.focusId || item.id == thread.answeringId), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(Modifier.fillMaxWidth().clickable { toggle() }) {
                 PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp, op = item.call.author == thread.opAuthor)
             }

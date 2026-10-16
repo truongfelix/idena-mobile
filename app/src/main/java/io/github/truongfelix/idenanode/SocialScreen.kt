@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,10 +69,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -128,6 +130,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     Column(modifier.fillMaxSize()) {
     val current = model.sending.draft
     val page = model.pages.lastOrNull()
+    // The full editor shows a new post; a reply on its thread stays in the reply bar until 🖼 opens the editor.
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(current == null) { if (current == null) expanded = false }
+    val editing = current?.takeIf { it.target == PostTarget.NEW_POST || page !is SocialPage.Thread || expanded }
     // Over the feed, the title row floats with the search (see the feed below); elsewhere it stays on top.
     if (current != null || page != null || model.view != SocialView.Feed) topBar()
     // The bottom bar fades out while the content scrolls down and back in when it scrolls up; it is back on
@@ -148,7 +154,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         val likePost = { post: SocialPost -> model.sending.preparePost("Like", LIKE, PostTarget.onPost(post.id)) }
         val openThread = { threadId: Long, focusId: Long? -> model.open(SocialPage.Thread(threadId, focusId)) }
         when {
-            current != null -> Editor(model, current, canPost = canAct)
+            editing != null -> Editor(model, editing, canPost = canAct)
             page is SocialPage.Thread -> key(page) {
                 // 2 posts of each 5 in a row, at random, show an ad under the post, above the answers.
                 val rank = remember(feed, page.postId) { feed.map { it.id }.sorted().binarySearch(page.postId) }
@@ -166,6 +172,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     onAnswer = { model.sending.draft = it },
                     onTip = { tipping = it },
                     onWho = { who = it },
+                    answeringId = current?.target?.replyTo?.takeIf { current.target.channel != null },
+                    footer = { if (!it.isOlder) ReplyBar(model, it, canPost = canAct, onExpand = { expanded = true }) },
                 )
             }
             page is SocialPage.Topic -> key(page) {
@@ -175,10 +183,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         name = page.name,
                         feed = feed,
                         following = page.name in model.followedTopics,
-                        canPost = canAct,
                         listState = model.pageState(page).list,
                         onFollow = { model.setTopicFollowed(page.name, it) },
-                        onPost = { newPost(model, page.name) },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                     ) { post ->
                         PostCard(
@@ -281,7 +287,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     LazyColumn(
                         Modifier.fillMaxSize().nestedScroll(slide).padding(horizontal = 16.dp),
                         state = model.feedState,
-                        contentPadding = PaddingValues(top = headerDp, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = headerDp, bottom = POST_BUTTON_ROOM),
                     ) {
                         if (topicSearch) {
                             topicItems(feed, query, model.followedTopics, model::openTopic, model::setTopicFollowed)
@@ -400,6 +406,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 }
             }
         }
+        // + writes a new post, from the lists posts are read in (in the topic, on a topic's page); it fades with the bar.
+        val topic = (page as? SocialPage.Topic)?.name
+        val postHere = current == null && (if (page == null) model.view == SocialView.Feed || model.view == SocialView.Me else topic != null)
+        androidx.compose.animation.AnimatedVisibility(postHere && barShown, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+            PostButton(enabled = canAct) { newPost(model, topic) }
+        }
     }
     // A conversation keeps the room for its messages and the keyboard.
     AnimatedVisibility(current == null && barShown && page !is SocialPage.Chat, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
@@ -458,6 +470,18 @@ private fun newPost(model: SocialModel, topic: String?) {
     model.sending.draft = Draft("Post", "New post", PostTarget.NEW_POST, null)
 }
 
+/** The room a list leaves under its last item for [PostButton]. */
+val POST_BUTTON_ROOM = 88.dp
+
+/** + at the bottom right: the editor for a new post. */
+@Composable
+private fun PostButton(enabled: Boolean, onClick: () -> Unit) {
+    FloatingActionButton(
+        onClick = { if (enabled) onClick() },
+        containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+    ) { Icon(Icons.Filled.Add, contentDescription = "New post") }
+}
+
 /** Back, at the top of a thread, a profile or a topic. */
 @Composable
 private fun BackRow(onBack: () -> Unit) {
@@ -477,9 +501,9 @@ private const val BAR_SCROLL_STEP = 2f
 val SOCIAL_BAR_HEIGHT = 60.dp
 
 /**
- * The bottom bar, as the usual social apps': the Feed, Messages, Post (the editor), Notifications and the
- * identity's Profile, the lists shown over the open pages, with what is new. A list is marked while it shows with
- * no page over it. Each label keeps one line: the longer ones get the wider slots.
+ * The bottom bar, as the usual social apps': the Feed, Messages, Notifications and the identity's Profile, four
+ * slots of one width, the lists shown over the open pages, with what is new. A list is marked while it shows with
+ * no page over it. A new post is written from [PostButton].
  */
 @Composable
 private fun BottomBar(model: SocialModel) {
@@ -487,31 +511,29 @@ private fun BottomBar(model: SocialModel) {
     val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem("Feed", Icons.Filled.Home, weight = 0.8f, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem("Feed", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
             BarItem("Messages", Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
                 model.showList(SocialView.Messages)
             }
-            // On a topic's page, the new post goes in that topic.
-            BarItem("Post", Icons.Filled.AddCircle, weight = 0.8f, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
-            BarItem("Notifications", Icons.Filled.Notifications, weight = 1.5f, selected = onList && model.view == SocialView.Activity, badge = unread) {
+            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread) {
                 model.showList(SocialView.Activity)
             }
-            BarItem("Profile", Icons.Filled.AccountCircle, weight = 0.9f, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
+            BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
         }
     }
 }
 
 @Composable
-private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, weight: Float = 1f, badge: Int = 0, onClick: () -> Unit) {
+private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
     val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
-        Modifier.weight(weight).fillMaxHeight().clickable(onClick = onClick),
+        Modifier.weight(1f).fillMaxHeight().clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) {
             Icon(icon, contentDescription = null, tint = color)
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null, maxLines = 1, softWrap = false)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
