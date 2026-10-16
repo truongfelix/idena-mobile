@@ -3,7 +3,10 @@ package io.github.truongfelix.idenanode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 class NodeStartTest {
     // Lines of a PC node's output.log (2026-09-29), the format of the phone's: an earlier run, a start, its compaction.
@@ -14,6 +17,37 @@ class NodeStartTest {
     private val ipfsUp = "INFO [09-29|05:33:42.646] Ipfs initialized                         peerId=QmbgyFxBqitpPWKdnPchJECgDpGBm9nRXpBGCWhu7a3A3y"
 
     private fun log(vararg lines: String) = (listOf(earlier) + lines).joinToString("\n")
+
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    @Test
+    fun aLogAboveTheLimitKeepsItsLastWholeLines() {
+        val file = folder.newFile("output.log")
+        val lines = (1..2_000).map { "INFO [10-16|12:00:00.000] line $it of the node's log" }
+        file.writeText(lines.joinToString("\n", postfix = "\n"))
+        val size = file.length()
+
+        trimLog(file, limit = size - 1, keep = 1_000)
+
+        val kept = file.readText()
+        assertTrue(file.length() <= 1_000)
+        assertTrue(kept.startsWith("INFO ["))
+        assertTrue(kept.endsWith("line 2000 of the node's log\n"))
+        assertEquals(kept.lines().filter { it.isNotEmpty() }, lines.takeLast(kept.lines().count { it.isNotEmpty() }))
+        assertFalse(File(file.path + ".tmp").exists())
+    }
+
+    @Test
+    fun aLogUpToTheLimitStaysWhole() {
+        val file = folder.newFile("output.log")
+        file.writeText(log(start, compactionStarts, compactionEnds))
+        val text = file.readText()
+        trimLog(file, limit = file.length(), keep = 10)
+        assertEquals(text, file.readText())
+        // A missing log is no error.
+        trimLog(File(folder.root, "missing.log"))
+    }
 
     @Test
     fun aCompactionRunsFromItsFirstLineToItsLast() {

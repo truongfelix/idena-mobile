@@ -56,6 +56,34 @@ fun startLabel(phase: StartPhase, runningForMs: Long?): String =
 /** The node's log, output.log in its folder (idena-go node.StartMobileNodeWithKey). */
 fun nodeLogFile(context: Context): File = File(NodeSettings.nodeDir(context), "output.log")
 
+/**
+ * The node's log above which a start cuts it, and what it keeps: the node only appends to it (idena-go
+ * log.FileHandler), ~4.5 MB a day synced. Its readers read its end only: the start's step, the node report, the
+ * router's peers (RouterNet.kt, 512 KiB).
+ */
+const val LOG_LIMIT_BYTES = 5L * 1024 * 1024
+const val LOG_KEPT_BYTES = 1L * 1024 * 1024
+
+/**
+ * Cuts [file] above [limit] bytes to its last [keep] bytes, from the first whole line in them; nothing below the
+ * limit, or when it cannot be read. Run while the node does not write it: before its start.
+ */
+fun trimLog(file: File, limit: Long = LOG_LIMIT_BYTES, keep: Long = LOG_KEPT_BYTES) {
+    if (file.length() <= limit) return
+    runCatching {
+        val tail = RandomAccessFile(file, "r").use { f ->
+            val buffer = ByteArray(keep.toInt())
+            f.seek(f.length() - keep)
+            f.readFully(buffer)
+            buffer
+        }
+        val lineStart = tail.indexOf('\n'.code.toByte()) + 1
+        val tmp = File(file.path + ".tmp")
+        tmp.outputStream().use { it.write(tail, lineStart, tail.size - lineStart) }
+        if (!tmp.renameTo(file)) tmp.delete()
+    }
+}
+
 /** The last [bytes] of [file] as text; null when it cannot be read. */
 fun readTail(file: File, bytes: Int = LOG_TAIL_BYTES): String? = runCatching {
     RandomAccessFile(file, "r").use { f ->

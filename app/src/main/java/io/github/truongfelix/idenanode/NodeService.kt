@@ -115,6 +115,7 @@ class NodeService : Service() {
         val dir = NodeSettings.nodeDir(this)
         dir.mkdirs()
         NodeSettings.startErrorFile(this).delete()
+        trimLog(nodeLogFile(this))
         // The screens count the wait for a first peer from here.
         runCatching { NodeSettings.startedAtFile(this).writeText(System.currentTimeMillis().toString()) }
         // The screen compares them with the user's choices: a change applies from the next start.
