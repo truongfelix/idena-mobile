@@ -7,7 +7,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledIconButton
@@ -86,7 +85,7 @@ private fun preview(message: ChatMessage): String = when {
 
 /**
  * The Messages tab: the conversations, the latest first, with what was not read; Requests (strangers) behind their
- * own line. The search finds conversations and people by name or address; ✎ opens [NewChatView].
+ * own line. The search finds conversations and people by name or address: a person found opens a new conversation.
  */
 @Composable
 fun MessagesList(model: SocialModel, modifier: Modifier) {
@@ -103,10 +102,7 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
         chatCandidates(query, model.people, all, me).filter { it !in withChat }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (requests) "Requests" else "Messages", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = { model.open(SocialPage.NewChat) }) { Icon(Icons.Filled.Create, contentDescription = "New message") }
-        }
+        Text(if (requests) "Requests" else "Messages", style = MaterialTheme.typography.titleLarge)
         RoundSearchField(query, { query = it }, "Search a name or address")
         LazyColumn(Modifier.weight(1f), state = model.messagesState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             if (!searching) item(key = "head") {

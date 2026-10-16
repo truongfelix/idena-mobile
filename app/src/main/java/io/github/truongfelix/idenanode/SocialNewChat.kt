@@ -117,33 +117,3 @@ fun PersonRow(address: String, names: Map<String, String>, onOpen: () -> Unit) {
         }
     }
 }
-
-/** The page ✎ opens: the search, focused, and who to write to. */
-@Composable
-fun NewChatView(model: SocialModel, listState: LazyListState, modifier: Modifier = Modifier) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val candidates = remember(query, model.people, model.conversations) {
-        chatCandidates(query, model.people, model.conversations, model.myAddress.orEmpty())
-    }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("New message", style = MaterialTheme.typography.titleLarge)
-        RoundSearchField(query, { query = it }, "Name or address", Modifier.focusRequester(focus))
-        LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
-            if (candidates.isEmpty()) item(key = "none") {
-                Text(
-                    if (query.isBlank()) "Follow or name someone, or paste an address." else "No one by that name: paste their address.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            items(candidates, key = { it }) { address ->
-                PersonRow(address, model.names) {
-                    model.back()
-                    model.openChat(listOf(address))
-                }
-            }
-        }
-    }
-}

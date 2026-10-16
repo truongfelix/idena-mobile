@@ -57,9 +57,6 @@ sealed interface SocialPage {
     /** The conversation of [key] ([conversationKey]: its participants, the account included). */
     data class Chat(val key: String) : SocialPage
 
-    /** Who to write to: a new conversation. */
-    data object NewChat : SocialPage
-
     /** Social settings ([SocialSettingsView]). */
     data object Settings : SocialPage
 }

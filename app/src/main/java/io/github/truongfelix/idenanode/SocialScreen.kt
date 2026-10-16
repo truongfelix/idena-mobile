@@ -205,12 +205,6 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     SocialSettingsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
-            page is SocialPage.NewChat -> key(page) {
-                Column(Modifier.fillMaxSize()) {
-                    BackRow(model::back)
-                    NewChatView(model, model.pageState(page).list, Modifier.weight(1f).padding(horizontal = 16.dp))
-                }
-            }
             page is SocialPage.Following -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -485,7 +479,7 @@ val SOCIAL_BAR_HEIGHT = 60.dp
 /**
  * The bottom bar, as the usual social apps': the Feed, Messages, Post (the editor), Notifications and the
  * identity's Profile, the lists shown over the open pages, with what is new. A list is marked while it shows with
- * no page over it.
+ * no page over it. Each label keeps one line: the longer ones get the wider slots.
  */
 @Composable
 private fun BottomBar(model: SocialModel) {
@@ -493,31 +487,31 @@ private fun BottomBar(model: SocialModel) {
     val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem("Feed", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem("Feed", Icons.Filled.Home, weight = 0.8f, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
             BarItem("Messages", Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
                 model.showList(SocialView.Messages)
             }
             // On a topic's page, the new post goes in that topic.
-            BarItem("Post", Icons.Filled.AddCircle, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
-            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread) {
+            BarItem("Post", Icons.Filled.AddCircle, weight = 0.8f, selected = false) { newPost(model, (model.pages.lastOrNull() as? SocialPage.Topic)?.name) }
+            BarItem("Notifications", Icons.Filled.Notifications, weight = 1.5f, selected = onList && model.view == SocialView.Activity, badge = unread) {
                 model.showList(SocialView.Activity)
             }
-            BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
+            BarItem("Profile", Icons.Filled.AccountCircle, weight = 0.9f, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
         }
     }
 }
 
 @Composable
-private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
+private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, weight: Float = 1f, badge: Int = 0, onClick: () -> Unit) {
     val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
-        Modifier.weight(1f).fillMaxHeight().clickable(onClick = onClick),
+        Modifier.weight(weight).fillMaxHeight().clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) {
             Icon(icon, contentDescription = null, tint = color)
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null, maxLines = 1, softWrap = false)
     }
 }
