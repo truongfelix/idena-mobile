@@ -90,6 +90,7 @@ fun NodeCard(
             mining()
             if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundWarning(state)
             LanguageRow()
+            ReleaseRow()
             advanced()
         }
     }
