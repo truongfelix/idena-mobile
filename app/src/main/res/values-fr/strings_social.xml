@@ -74,10 +74,14 @@
     <string name="social_waiting_address">En attente de l\'adresse du nœud…</string>
     <string name="social_confirm_title">%1$s %2$s</string>
     <string name="social_tip_detail">Pourboire de %1$d iDNA à %2$s pour cette publication</string>
-    <string name="social_tab_feed">Fil</string>
+    <string name="social_post_wait_title">Pas encore</string>
+    <string name="social_post_wait_sync">Votre nœud n\'est pas encore synchronisé : vous pourrez publier une fois qu\'il le sera. Le panneau du nœud (en haut à droite) montre où il en est.</string>
+    <string name="social_post_wait_validation">Une validation est en cours : vous pourrez publier de nouveau une fois qu\'elle sera terminée.</string>
+    <string name="social_post_wait_sending">Une transaction est en cours d\'envoi : vous pourrez publier une fois qu\'elle sera partie.</string>
+    <string name="social_tab_feed">Accueil</string>
     <string name="social_tab_messages">Messages</string>
     <string name="social_tab_notifications">Notifications</string>
-    <string name="social_tab_profile">Profil</string>
+    <string name="social_tab_profile">Toi</string>
     <string name="social_draft_back">Le brouillon est de retour dans l\'éditeur.</string>
     <string name="social_draft_not_back">L\'éditeur contient un autre brouillon : celui-ci n\'y a pas été remis.</string>
     <string name="social_file_text">texte</string>

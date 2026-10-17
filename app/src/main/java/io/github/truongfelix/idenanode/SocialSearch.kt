@@ -40,8 +40,8 @@ fun SearchField(model: SocialModel, trailing: @Composable () -> Unit) {
         value = model.searchQuery,
         onValueChange = {
             model.searchQuery = it.take(200)
-            // The results show in the feed.
-            if (model.view != SocialView.Feed) model.view = SocialView.Feed
+            // The results show in the feed's list.
+            model.showFeedList()
         },
         modifier = Modifier.fillMaxWidth().height(40.dp),
         singleLine = true,

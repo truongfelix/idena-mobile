@@ -352,9 +352,24 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
     }
 }
 
-/** The node's keyword list (keywords/keywords.json of idena-go): flip_words gives indexes into it. */
-internal fun loadKeywords(context: Context): List<Keyword> {
-    val array = JSONArray(context.assets.open("keywords.json").bufferedReader().use { it.readText() })
+/**
+ * The node's keyword list (keywords/keywords.json of idena-go) in the app's language (`keywords-fr.json` in French, the
+ * same indexes, B-26): flip_words gives indexes into it.
+ */
+internal fun loadKeywords(context: Context): List<Keyword> = readKeywords(context, t(R.string.keywords_file))
+
+/** [keyword] of the English list in the app's language: the practice flips name theirs in English. */
+internal fun keywordTranslator(context: Context): (Keyword) -> Keyword {
+    val english = readKeywords(context, ENGLISH_KEYWORDS)
+    val shown = loadKeywords(context)
+    val byEnglish = english.indices.associate { (english[it].name to english[it].description) to shown[it] }
+    return { byEnglish[it.name to it.description] ?: it }
+}
+
+private const val ENGLISH_KEYWORDS = "keywords.json"
+
+private fun readKeywords(context: Context, file: String): List<Keyword> {
+    val array = JSONArray(context.assets.open(file).bufferedReader().use { it.readText() })
     return (0 until array.length()).map {
         val item = array.getJSONObject(it)
         Keyword(item.getString("name"), item.optString("desc"))

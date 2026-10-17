@@ -129,7 +129,7 @@ fun ValidationSection(status: NodeStatus) {
     Text(if (running != null) t(R.string.profile_validation_now) else t(R.string.profile_next_validation), style = MaterialTheme.typography.titleSmall)
     Field(t(R.string.profile_date), date)
     running?.let { Field(t(R.string.profile_now), it) }
-    if (status.period in listOf("FlipLottery", "ShortSession", "LongSession")) {
+    if (status.period in VALIDATION_SCREEN_PERIODS) {
         Button(
             onClick = { context.startActivity(Intent(context, ValidationActivity::class.java)) },
             modifier = Modifier.fillMaxWidth(),
@@ -200,3 +200,6 @@ private fun ProfileLink(title: String, detail: String? = null, onClick: () -> Un
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+/** The periods in which the validation screens open: the flip lottery and both sessions. */
+val VALIDATION_SCREEN_PERIODS = listOf("FlipLottery", "ShortSession", "LongSession")

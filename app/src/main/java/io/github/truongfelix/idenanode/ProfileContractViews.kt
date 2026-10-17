@@ -88,10 +88,9 @@ fun ContractProfileLines(profile: ContractProfile?, names: Map<String, String>, 
     // The account's own voucher shows with its End button (MyVouching).
     if (isMe) return
     profile.shownVoucher?.let { voucher ->
-        val mine = voucher == me?.lowercase()
+        // [me]'s own vouch shows as "Vouching ✓" on the row of buttons (owner 2026-10-17: no sentence for it).
+        if (voucher == me?.lowercase()) return
         val text = when {
-            mine && profile.inStanding -> t(R.string.profile_you_vouch)
-            mine -> t(R.string.profile_you_vouch_not_validated)
             profile.inStanding -> t(R.string.profile_vouched_for_by, displayName(voucher, names))
             else -> t(R.string.profile_vouched_for_by_not_validated, displayName(voucher, names))
         }

@@ -203,4 +203,6 @@
     <string name="flip_deleting_waiting">Suppression : en attente d\'un bloc</string>
     <string name="flip_made_elsewhere">Créé dans une autre application</string>
     <string name="flip_published_at">Publié · %1$s</string>
+    <!-- The flip keyword list of this language, in the assets (the same indexes as keywords.json). -->
+    <string name="keywords_file">keywords-fr.json</string>
 </resources>

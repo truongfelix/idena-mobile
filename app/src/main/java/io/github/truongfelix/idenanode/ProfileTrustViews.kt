@@ -41,30 +41,50 @@ typealias ProfileAction = (what: String, detail: String?, call: SocialCall) -> U
 fun TrustChip(target: String, trust: TrustCount?, me: String?, canAct: Boolean, onCall: ProfileAction?) {
     if (onCall == null || me == null || me.lowercase() == target.lowercase()) return
     val mine = trust?.givenBy(me) == true
-    // A Trust or its taking back waits for its block: no second one meanwhile (B-81).
-    val access = LocalProfileAccess.current
-    val waiting = access != null && (access.waiting(ProfileCalls.trust(target)) || access.waiting(ProfileCalls.untrust(target)))
+    val waiting = trustWaiting(target)
     FilterChip(
         selected = mine,
         enabled = canAct && trust != null && !waiting,
-        onClick = {
-            val topic = target.startsWith(TOPIC_PREFIX)
-            if (mine) {
-                onCall(
-                    t(R.string.profile_untrust_what),
-                    if (topic) t(R.string.profile_untrust_topic_detail, target) else t(R.string.profile_untrust_detail),
-                    ProfileCalls.untrust(target),
-                )
-            } else {
-                onCall(
-                    t(R.string.profile_trust),
-                    if (topic) t(R.string.profile_trust_topic_detail, target) else t(R.string.profile_trust_person_detail),
-                    ProfileCalls.trust(target),
-                )
-            }
-        },
-        label = { Text(if (waiting) t(R.string.profile_trust_waiting) else if (mine) t(R.string.profile_trusted) else t(R.string.profile_trust)) },
+        onClick = { sendTrust(target, mine, onCall) },
+        label = { Text(trustLabel(mine, waiting)) },
     )
+}
+
+/** A person's Trust on its profile's row of buttons ([ProfileRowButton]): filled while [me]'s Trust is given. */
+@Composable
+fun TrustButton(target: String, trust: TrustCount?, me: String?, canAct: Boolean, onCall: ProfileAction?) {
+    if (onCall == null || me == null || me.lowercase() == target.lowercase()) return
+    val mine = trust?.givenBy(me) == true
+    val waiting = trustWaiting(target)
+    ProfileRowButton(trustLabel(mine, waiting), done = mine, enabled = canAct && trust != null && !waiting) { sendTrust(target, mine, onCall) }
+}
+
+/** A Trust or its taking back waits for its block: no second one meanwhile (B-81). */
+@Composable
+private fun trustWaiting(target: String): Boolean {
+    val access = LocalProfileAccess.current
+    return access != null && (access.waiting(ProfileCalls.trust(target)) || access.waiting(ProfileCalls.untrust(target)))
+}
+
+private fun trustLabel(mine: Boolean, waiting: Boolean): String =
+    if (waiting) t(R.string.profile_trust_waiting) else if (mine) t(R.string.profile_trusted) else t(R.string.profile_trust)
+
+/** Gives [target] the Trust, or takes it back when [mine], through [onCall] (its fees shown first). */
+private fun sendTrust(target: String, mine: Boolean, onCall: ProfileAction) {
+    val topic = target.startsWith(TOPIC_PREFIX)
+    if (mine) {
+        onCall(
+            t(R.string.profile_untrust_what),
+            if (topic) t(R.string.profile_untrust_topic_detail, target) else t(R.string.profile_untrust_detail),
+            ProfileCalls.untrust(target),
+        )
+    } else {
+        onCall(
+            t(R.string.profile_trust),
+            if (topic) t(R.string.profile_trust_topic_detail, target) else t(R.string.profile_trust_person_detail),
+            ProfileCalls.trust(target),
+        )
+    }
 }
 
 /**

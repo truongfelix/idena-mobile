@@ -87,11 +87,19 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
  * and the editor; the status is in the app's title row ([SocialInfoDialog]).
  */
 @Composable
-fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () -> Unit, modifier: Modifier = Modifier) {
+fun SocialScreen(
+    model: SocialModel,
+    ads: List<ChainAd>,
+    topBar: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    myTask: (@Composable () -> Unit)? = null,
+) {
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
     var editingProfile by remember { mutableStateOf(false) }
+    // Why + cannot write a post now, while shown.
+    var postWait by remember { mutableStateOf<String?>(null) }
     // The person being named (the name dialog).
     var naming by remember { mutableStateOf<Person?>(null) }
     // The feed's filter sheet is open.
@@ -464,6 +472,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 reload = model.profileWrites,
                                 onProfileCall = model.profileAction,
                                 onPeople = { model.open(SocialPage.People(myAddress, it)) },
+                                myTask = myTask,
                             )
                         }
                         SocialView.Feed -> {}
@@ -475,7 +484,16 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
         val topic = (page as? SocialPage.Topic)?.name
         val postHere = current == null && (if (page == null) model.view == SocialView.Feed || model.view == SocialView.Me else topic != null)
         androidx.compose.animation.AnimatedVisibility(postHere && barShown, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
-            PostButton(enabled = canAct) { newPost(model, topic) }
+            PostButton(enabled = canAct, onBlocked = { postWait = postWaitText(model) }) { newPost(model, topic) }
+        }
+        // + while posting cannot go: why, instead of a tap that does nothing (owner 2026-10-17).
+        postWait?.let { text ->
+            AlertDialog(
+                onDismissRequest = { postWait = null },
+                title = { Text(t(R.string.social_post_wait_title)) },
+                text = { Text(text) },
+                confirmButton = { TextButton(onClick = { postWait = null }) { Text(t(R.string.common_ok)) } },
+            )
         }
     }
     // A conversation keeps the room for its messages and the keyboard.
@@ -553,11 +571,18 @@ private fun newPost(model: SocialModel, topic: String?) {
 /** The room a list leaves under its last item for [PostButton]. */
 val POST_BUTTON_ROOM = 88.dp
 
-/** + at the bottom right: the editor for a new post. */
+/** Why a post cannot be written now: the node syncing, a validation, or a call being sent. */
+private fun postWaitText(model: SocialModel): String = when {
+    model.node?.validation == true -> t(R.string.social_post_wait_validation)
+    !model.ready -> t(R.string.social_post_wait_sync)
+    else -> t(R.string.social_post_wait_sending)
+}
+
+/** + at the bottom right: the editor for a new post; [onBlocked] when it cannot be written now. */
 @Composable
-private fun PostButton(enabled: Boolean, onClick: () -> Unit) {
+private fun PostButton(enabled: Boolean, onBlocked: () -> Unit, onClick: () -> Unit) {
     FloatingActionButton(
-        onClick = { if (enabled) onClick() },
+        onClick = { if (enabled) onClick() else onBlocked() },
         containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
     ) { Icon(Icons.Filled.Add, contentDescription = t(R.string.social_new_post)) }
 }
@@ -581,30 +606,34 @@ private const val BAR_SCROLL_STEP = 2f
 val SOCIAL_BAR_HEIGHT = 60.dp
 
 /**
- * The bottom bar, as the usual social apps': the Feed, Messages, Notifications and the identity's Profile, four
- * slots of one width, the lists shown over the open pages, with what is new. A list is marked while it shows with
- * no page over it. A new post is written from [PostButton].
+ * The bottom bar, as the usual social apps': Home (the feed), Messages, Notifications and You (the identity's profile), four
+ * slots of one width, with what is new. The list shown is marked, with the pages it has open or none (each list
+ * keeps its own, B-101). A new post is written from [PostButton].
  */
 @Composable
 private fun BottomBar(model: SocialModel) {
     val unread = model.unread.size
-    val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem(t(R.string.social_tab_feed), Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
-            BarItem(t(R.string.social_tab_messages), Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
+            BarItem(t(R.string.social_tab_feed), Icons.Filled.Home, selected = model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem(t(R.string.social_tab_messages), Icons.Filled.Email, selected = model.view == SocialView.Messages, badge = model.unreadConversations) {
                 model.showList(SocialView.Messages)
             }
-            BarItem(t(R.string.social_tab_notifications), Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
+            BarItem(t(R.string.social_tab_notifications), Icons.Filled.Notifications, selected = model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
                 model.showList(SocialView.Activity)
             }
-            BarItem(t(R.string.social_tab_profile), Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
+            // You: the account's own picture (or its robot) instead of the generic icon (owner 2026-10-17).
+            val me = model.myAddress
+            BarItem(
+                t(R.string.social_tab_profile), Icons.Filled.AccountCircle, selected = model.view == SocialView.Me,
+                picture = me?.let { { PersonAvatar(it, 26.dp) } },
+            ) { model.showList(SocialView.Me) }
         }
     }
 }
 
 @Composable
-private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
+private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, picture: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         Modifier.weight(1f).fillMaxHeight().clickable(onClick = onClick),
@@ -612,7 +641,7 @@ private fun RowScope.BarItem(label: String, icon: ImageVector, selected: Boolean
         verticalArrangement = Arrangement.Center,
     ) {
         BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) {
-            Icon(icon, contentDescription = null, tint = color)
+            if (picture != null) picture() else Icon(icon, contentDescription = null, tint = color)
         }
         Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (selected) FontWeight.Bold else null, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

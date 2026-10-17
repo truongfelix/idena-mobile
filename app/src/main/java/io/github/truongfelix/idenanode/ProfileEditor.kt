@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -15,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -50,6 +53,7 @@ sealed interface ProfileEdit {
  * of its own, shown with its fees before it is sent ([onSave]): Save the name (claimName), Drop the name (dropName),
  * Save the profile (setProfile, the picture stored on IPFS first). [profile] is what the contract holds now.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileEditDialog(
     address: String,
@@ -90,6 +94,10 @@ fun ProfileEditDialog(
                     t(R.string.profile_public_note),
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
+                // Two parts, each its own transaction (owner 2026-10-17: it did not show the name goes alone): the name,
+                // then the bio and the picture together (setProfile).
+                Text(t(R.string.profile_name_part), style = MaterialTheme.typography.titleSmall)
+                Text(t(R.string.profile_name_part_note), style = MaterialTheme.typography.bodySmall, color = muted)
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.lowercase().filter { c -> c in 'a'..'z' || c in '0'..'9' || c == '_' }.take(20) },
@@ -102,11 +110,15 @@ fun ProfileEditDialog(
                     t(R.string.profile_name_rules),
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // On two lines when both do not fit ("Abandonner le nom" was squeezed).
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { onSave(ProfileEdit.Name(name)) }, enabled = nameValid && name != profile?.name && !nameWaits) { Text(t(R.string.profile_save_name)) }
-                    if (profile?.name != null) TextButton(onClick = { onSave(ProfileEdit.DropName) }, enabled = !nameWaits) { Text(t(R.string.profile_drop_name)) }
+                    if (profile?.name != null) OutlinedButton(onClick = { onSave(ProfileEdit.DropName) }, enabled = !nameWaits) { Text(t(R.string.profile_drop_name)) }
                 }
                 if (nameWaits) Text(t(R.string.profile_name_waits), style = MaterialTheme.typography.bodySmall, color = muted)
+                HorizontalDivider()
+                Text(t(R.string.profile_bio_part), style = MaterialTheme.typography.titleSmall)
+                Text(t(R.string.profile_bio_part_note), style = MaterialTheme.typography.bodySmall, color = muted)
                 OutlinedTextField(
                     value = bio,
                     onValueChange = { bio = it.take(MAX_BIO) },
@@ -133,14 +145,12 @@ fun ProfileEditDialog(
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
                 note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Button(onClick = { onSave(ProfileEdit.Profile(bio.trim(), newPicture, if (removed) "" else oldPicture)) }, enabled = profileChanged && !profileWaits) {
+                    Text(t(R.string.profile_save_profile))
+                }
             }
         },
-        confirmButton = {
-            TextButton(onClick = { onSave(ProfileEdit.Profile(bio.trim(), newPicture, if (removed) "" else oldPicture)) }, enabled = profileChanged && !profileWaits) {
-                Text(t(R.string.profile_save_profile))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 

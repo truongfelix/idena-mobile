@@ -191,8 +191,14 @@
     <string name="profile_list_trusts_given">Trusts given</string>
     <string name="profile_list_members">Members</string>
     <string name="profile_list_invitees">Invitees</string>
-    <string name="profile_count_trusted_by">%1$s trusted by</string>
-    <string name="profile_count_trusts_given">%1$s trusts given</string>
+    <plurals name="profile_count_trusts">
+        <item quantity="one">%1$s trust</item>
+        <item quantity="other">%1$s trusts</item>
+    </plurals>
+    <plurals name="profile_count_trusts_given">
+        <item quantity="one">%1$s trust given</item>
+        <item quantity="other">%1$s trusts given</item>
+    </plurals>
     <plurals name="profile_count_members">
         <item quantity="one">%1$s member</item>
         <item quantity="other">%1$s members</item>
@@ -224,7 +230,7 @@
     <string name="profile_vouch_cap">You vouch for %1$d of at most %2$d</string>
     <string name="profile_member_has_identity">has an identity now: End frees your slot</string>
     <string name="profile_end">End</string>
-    <string name="profile_end_vouch_what">End the vouch</string>
+    <string name="profile_end_vouch_what">Stop vouching</string>
     <string name="profile_end_vouch_detail">You no longer vouch for them</string>
     <string name="profile_heading_invited_by">Invited by</string>
     <string name="profile_node_refuses">The node refuses: %1$s</string>
@@ -243,8 +249,6 @@
     <string name="profile_untrust_detail_short">Your Trust no longer counts</string>
     <string name="profile_picture">Profile picture</string>
     <string name="profile_name_hidden">\@%1$s · hidden: not validated, nor vouched for</string>
-    <string name="profile_you_vouch">You vouch for them</string>
-    <string name="profile_you_vouch_not_validated">You vouch for them (their voucher is not validated now)</string>
     <string name="profile_vouched_for_by">Vouched for by %1$s</string>
     <string name="profile_vouched_for_by_not_validated">Vouched for by %1$s (their voucher is not validated now)</string>
     <string name="profile_picture_unreadable">Android cannot read this image</string>
@@ -263,7 +267,11 @@
     <string name="profile_new_picture">The new picture</string>
     <string name="profile_choose">Choose</string>
     <string name="profile_picture_rules">A square of %1$d pixels, at most %2$d KB, stored on IPFS (a storeToIpfs transaction with its own fee).</string>
-    <string name="profile_save_profile">Save the profile</string>
+    <string name="profile_save_profile">Save the bio and picture</string>
+    <string name="profile_name_part">Your name</string>
+    <string name="profile_name_part_note">Saved on its own: one transaction.</string>
+    <string name="profile_bio_part">Your bio and picture</string>
+    <string name="profile_bio_part_note">Saved together: one transaction for both.</string>
     <string name="profile_claim_what">Name @%1$s</string>
     <string name="profile_claim_detail">Claims the name @%1$s for your address</string>
     <string name="profile_drop_detail">Drops your name: it stays blocked for 2 epochs, for everyone</string>
@@ -274,12 +282,16 @@
     <string name="profile_trust_topic_detail">Gives your public Trust to %1$s: everyone sees it; you can take it back</string>
     <string name="profile_trust_person_detail">Gives your public Trust to this person: everyone sees it; you can take it back</string>
     <string name="profile_trust_waiting">Trust · waiting for a block</string>
-    <string name="profile_trusted">Trusted</string>
+    <string name="profile_trusted">Trusted ✓</string>
     <string name="profile_trust_no_answer">Trust: the node did not answer.</string>
     <string name="profile_trust_reading">Trust: reading…</string>
     <string name="profile_trusted_by_nobody">Trusted by nobody yet</string>
     <string name="profile_giver_vouched">%1$s (vouched)</string>
-    <string name="profile_they_have_identity">They have an identity now: End frees your slot.</string>
+    <string name="profile_they_have_identity">They have an identity now: Stop vouching frees your slot.</string>
+    <string name="profile_vouching">Vouching ✓</string>
+    <string name="profile_vouch_button">Vouch</string>
+    <string name="profile_offer_sent">Offer sent</string>
+    <string name="profile_leave_voucher">Leave my voucher</string>
     <string name="profile_vouch_for_them">Vouch for them</string>
     <string name="profile_vouch_detail">They become a member once they accept; you vouch for at most %1$d members at a time</string>
     <string name="profile_offer_waits">Your offer waits for them to accept it.</string>
@@ -299,4 +311,7 @@
     <string name="profile_decline">Decline</string>
     <string name="profile_decline_offer">Decline the offer</string>
     <string name="profile_decline_detail">The offer of %1$s ends</string>
+    <string name="profile_get_vouched_title">Get vouched for</string>
+    <string name="profile_get_vouched_text">A validated member can vouch for you: you may then hold a name, write a profile and give Trust. Share your address with someone you know on Idena; their offer then shows on this page.</string>
+    <string name="profile_share_address">Share my address</string>
 </resources>

@@ -165,7 +165,7 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
         }
         Column(Modifier.focused(item.id == thread.focusId || item.id == thread.answeringId), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(Modifier.fillMaxWidth().clickable { toggle() }) {
-                PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp, op = item.call.author == thread.opAuthor)
+                PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 42.dp else 34.dp, op = item.call.author == thread.opAuthor)
             }
             PostContent(item.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
             val target = if (isReply) PostTarget.onReply(item.id) else PostTarget.onComment(replyId, item.id)
