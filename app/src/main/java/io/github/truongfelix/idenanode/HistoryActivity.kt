@@ -278,11 +278,13 @@ private fun TransactionsList(address: String, modifier: Modifier) {
         }
     }
     LaunchedEffect(address) { load(null) }
+    // The other sides' names, as the desktop's History (given in Social, else claimed): read again as pages come.
+    val names = rememberShownNames(txs.mapNotNull { it.counterParty(address) })
 
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         error?.let { item { Text("The node did not answer: $it", color = MaterialTheme.colorScheme.error) } }
         if (!loading && txs.isEmpty() && error == null) item { Text("No transactions", style = MaterialTheme.typography.bodyMedium) }
-        items(txs, key = { it.hash }) { tx -> TxCard(tx, address) }
+        items(txs, key = { it.hash }) { tx -> TxCard(tx, address, names) }
         when {
             loading -> item { CircularProgressIndicator() }
             token != null -> item { OutlinedButton(onClick = { load(token) }) { Text("Show more") } }
@@ -291,7 +293,7 @@ private fun TransactionsList(address: String, modifier: Modifier) {
 }
 
 @Composable
-private fun TxCard(tx: HistoryTx, address: String) {
+private fun TxCard(tx: HistoryTx, address: String, names: Map<String, String>) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -307,6 +309,7 @@ private fun TxCard(tx: HistoryTx, address: String) {
             }
             Note("${timeFormat.format(Instant.ofEpochSecond(tx.timestamp))} · epoch ${tx.epoch}")
             tx.counterParty(address)?.let {
+                names[it.lowercase()]?.let { name -> Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) }
                 Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (tx.fee.signum() > 0) Note("Fee ${idna(tx.fee.toPlainString())}")

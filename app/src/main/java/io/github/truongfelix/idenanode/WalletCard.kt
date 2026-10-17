@@ -62,7 +62,7 @@ private enum class WalletDialog { Send, Receive, Stake }
  * refuses a stake replenishment from the flip lottery on).
  */
 @Composable
-fun WalletCard(status: NodeStatus, people: Map<String, Person>, network: NetworkRewards?, onChanged: () -> Unit) {
+fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<String, String>, network: NetworkRewards?, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf<WalletDialog?>(null) }
@@ -142,9 +142,9 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, network: Network
 
     when (dialog) {
         WalletDialog.Receive -> ReceiveDialog(status.address) { dialog = null }
-        WalletDialog.Send -> SendDialog(status, people, onDismiss = { dialog = null }) { to, name, amount ->
+        WalletDialog.Send -> SendDialog(status, people, names, onDismiss = { dialog = null }) { to, name, amount ->
             dialog = null
-            val shown = name?.let { "@$it ($to)" } ?: recipientText(to, people)
+            val shown = name?.let { "@$it ($to)" } ?: recipientText(to, names)
             prepare(PendingTx(SEND_TX, to, amount, "Send", "Send ${idna(amount.toPlainString())} to $shown."))
         }
         WalletDialog.Stake -> StakeDialog(status, onDismiss = { dialog = null }) { amount ->
@@ -216,11 +216,11 @@ internal fun qrCode(text: String): ImageBitmap {
  * here, then by the node's fee estimate. [onNext] gets the address and, for "@name", the name.
  */
 @Composable
-private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismiss: () -> Unit, onNext: (String, String?, BigDecimal) -> Unit) {
+private fun SendDialog(status: NodeStatus, people: Map<String, Person>, names: Map<String, String>, onDismiss: () -> Unit, onNext: (String, String?, BigDecimal) -> Unit) {
     val context = LocalContext.current
     var to by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf(false) }
-    val named = remember(people) { sortedPeople(people).filter { it.name.isNotEmpty() && it.address != status.address.lowercase() } }
+    val named = remember(people, names) { pickablePeople(people, names, status.address) }
     var amountText by remember { mutableStateOf("") }
     val amount = parseIdna(amountText)
     val balance = status.balance.toBigDecimalOrNull() ?: BigDecimal.ZERO
@@ -251,15 +251,15 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismis
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 )
                 name?.let { RecipientLine(it, resolved) }
-                if (recipient is Recipient.Address) people[recipient.address]?.name?.takeIf { it.isNotEmpty() }?.let {
+                if (recipient is Recipient.Address) names[recipient.address]?.let {
                     Text("To: $it", style = MaterialTheme.typography.bodyMedium)
                 }
                 if (named.isNotEmpty()) {
                     TextButton(onClick = { picking = !picking }) { Text(if (picking) "Hide the contacts" else "Choose from Contacts") }
                     if (picking) {
-                        named.forEach { person ->
-                            TextButton(onClick = { to = person.address; picking = false }) {
-                                Text("${person.name}  ·  ${shortAddress(person.address)}", maxLines = 1)
+                        named.forEach { (address, name) ->
+                            TextButton(onClick = { to = address; picking = false }) {
+                                Text("$name  ·  ${shortAddress(address)}", maxLines = 1)
                             }
                         }
                     }

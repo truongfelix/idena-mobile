@@ -130,9 +130,20 @@ class PeopleTest {
 
     @Test
     fun theConfirmationNamesTheRecipient() {
-        val people = mapOf(a to Person(a, "Alice"))
-        assertEquals("Alice ($a)", recipientText(a, people))
-        assertEquals(b, recipientText(b, people))
+        val names = mapOf(a to "Alice")
+        assertEquals("Alice ($a)", recipientText(a, names))
+        assertEquals("Alice (${a.uppercase().replace("0X", "0x")})", recipientText(a.uppercase().replace("0X", "0x"), names))
+        assertEquals(b, recipientText(b, names))
+    }
+
+    @Test
+    fun sendOffersThePeopleWithANameGivenOrClaimed() {
+        val c = "0xcccc000000000000000000000000000000000003"
+        val people = mapOf(a to Person(a, "zed"), b to Person(b, ""), c to Person(c, ""))
+        // b claimed a name in the profiles contract, c has none; the account itself is left out.
+        val names = mapOf(a to "zed", b to "@alice")
+        assertEquals(listOf(b to "@alice", a to "zed"), pickablePeople(people, names, "0xdddd000000000000000000000000000000000004"))
+        assertEquals(listOf(a to "zed"), pickablePeople(people, names, b.uppercase().replace("0X", "0x")))
     }
 
     @Test
