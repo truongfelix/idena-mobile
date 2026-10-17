@@ -84,7 +84,7 @@ private fun ActivityCard(item: ActivityItem, isNew: Boolean, onProfile: (String)
             val styles = addressLinkStyles()
             if (isNew) Text("● New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(item.actor, 32.dp, Modifier.clickable { onProfile(item.actor) })
+                PersonAvatar(item.actor, 32.dp, Modifier.clickable { onProfile(item.actor) })
                 Spacer(Modifier.width(10.dp))
                 Text(
                     buildAnnotatedString {

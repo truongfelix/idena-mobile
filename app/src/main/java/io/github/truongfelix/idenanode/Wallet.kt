@@ -63,6 +63,19 @@ data class StakePreview(
 /** Whether the identity can receive stake: the node refuses Undefined and Killed identities. */
 fun canReceiveStake(state: String): Boolean = state != "Undefined" && state != "Killed" && state.isNotEmpty()
 
-/** The recipient as the confirmation shows it: the address in full, after its name in the People list if any. */
-fun recipientText(to: String, people: Map<String, Person>): String =
-    people[to.trim().lowercase()]?.name?.takeIf { it.isNotEmpty() }?.let { "$it ($to)" } ?: to
+/**
+ * The recipient as the confirmation shows it: the address in full, after its name if any ([names]: given in Social,
+ * else claimed in the profiles contract, by lowercase address).
+ */
+fun recipientText(to: String, names: Map<String, String>): String =
+    names[to.trim().lowercase()]?.let { "$it ($to)" } ?: to
+
+/**
+ * The people Send offers to pick: those of the People list ([people]) with a name ([names]: given in Social, else
+ * claimed), but [me], sorted by name.
+ */
+fun pickablePeople(people: Map<String, Person>, names: Map<String, String>, me: String): List<Pair<String, String>> =
+    people.keys.map { it.lowercase() }.distinct()
+        .filter { it != me.lowercase() }
+        .mapNotNull { address -> names[address]?.let { address to it } }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.second })

@@ -140,7 +140,7 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
 private fun ConversationRow(conversation: Conversation, names: Map<String, String>, unread: Int, onOpen: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box {
-            Avatar(conversation.others.first(), 44.dp)
+            PersonAvatar(conversation.others.first(), 44.dp)
             if (conversation.isGroup) {
                 Text(
                     "+${conversation.others.size - 1}",
@@ -214,7 +214,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 Modifier.weight(1f).clickable(enabled = others.size == 1) { model.openProfile(others.first()) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Avatar(others.first(), 36.dp)
+                PersonAvatar(others.first(), 36.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(othersTitle(others, model.names), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

@@ -93,7 +93,7 @@ fun HitCard(
     when (hit) {
         is SearchHit.Address -> Card(Modifier.fillMaxWidth().clickable { onProfile(hit.address) }) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(hit.address, 40.dp)
+                PersonAvatar(hit.address, 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Open the profile of ${displayName(hit.address, LocalNames.current)}  ›", style = MaterialTheme.typography.titleSmall)

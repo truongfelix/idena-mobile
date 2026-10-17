@@ -64,6 +64,8 @@ class PendingPost(
     val fromEditor: Boolean = false,
     /** For a like: the post, reply or comment it likes. */
     val likeOf: Long? = null,
+    /** For a profile call from a vouched member: the extra amount it sends, burned by the contract. */
+    val memberExtra: MemberExtra? = null,
 ) {
     val totalFee: BigDecimal
         get() = fee.fee + files.sumOf { it.fee }
@@ -162,13 +164,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 throw IOException("\"${draftTopic.trim()}\" is not a topic name (a-z, 0-9 and _, 3 to 21 characters)")
             }
             val files = ArrayList<IpfsFile>()
-            fun file(what: String, bytes: ByteArray): IpfsFile {
-                if (bytes.size > MAX_IPFS_FILE) throw IOException("the $what is too large (${bytes.size / 1000} KB, at most ${MAX_IPFS_FILE / 1000} KB)")
-                val cid = posting.cid(bytes)
-                val file = if (cid in stored) IpfsFile(what, bytes, cid, BigDecimal.ZERO, stored = true)
-                else IpfsFile(what, bytes, cid, posting.estimateStore(from, cid, bytes.size))
-                return file.also { files += it }
-            }
+            fun file(what: String, bytes: ByteArray) = ipfsFile(posting, from, what, bytes).also { files += it }
             val message = if (textFile) "ipfs://" + file("text", text.toByteArray(Charsets.UTF_8)).cid else text
             val media = image?.let { "ipfs://" + file("image", it).cid }
             val call = SocialPosting.post(
@@ -182,6 +178,42 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             PendingPost(current.what, call, from, fee, null, files, fromEditor = true)
         }
     }
+
+    /** A file to store on IPFS from [from] before a call: its CID and fee; no fee when this app stored it already. */
+    private fun ipfsFile(posting: SocialPosting, from: String, what: String, bytes: ByteArray): IpfsFile {
+        if (bytes.size > MAX_IPFS_FILE) throw IOException("the $what is too large (${bytes.size / 1000} KB, at most ${MAX_IPFS_FILE / 1000} KB)")
+        val cid = posting.cid(bytes)
+        return if (cid in stored) IpfsFile(what, bytes, cid, BigDecimal.ZERO, stored = true)
+        else IpfsFile(what, bytes, cid, posting.estimateStore(from, cid, bytes.size))
+    }
+
+    /**
+     * A call to the profiles contract ([ProfileCalls]) made by [makeCall] with the "ipfs://" reference of [picture]
+     * (a WebP from [encodePicture]), stored on IPFS first with its own fee, as a post's image. A vouched member's call
+     * sends the extra amount the contract reads ([NodeProfilesSource.memberExtra]). A first dry run sizes the
+     * callbacks' gas ([callbackGas], [keepStateGas]), a second gives the fee; the max fee covers what the callbacks
+     * reserve ([profileFee]). [detail] tells what it does.
+     */
+    fun prepareProfile(what: String, detail: String?, picture: ByteArray? = null, makeCall: (picture: String?) -> SocialCall) =
+        prepareWith(what) { posting, from ->
+            val files = listOfNotNull(picture?.let { ipfsFile(posting, from, "picture", it) })
+            var call = makeCall(files.firstOrNull()?.let { "ipfs://${it.cid}" })
+            val extra = if (memberPays(call)) NodeProfilesSource(rpc(context)).memberExtra(from, posting.feePerGas().toBigInteger()) else null
+            extra?.let { call = call.copy(amount = it.amount) }
+            var receipt = posting.estimateReceipt(from, call)
+            val gas = callbackGas(receipt)
+            val keepGas = keepStateGas(receipt)
+            if (gas != null || keepGas != null) {
+                call = withCallbackGas(call, gas, keepGas)
+                receipt = posting.estimateReceipt(from, call)
+            }
+            val fee = profileFee(receipt)
+            // Every transaction may take up to twice its fee: the balance must cover them all, and the extra amount.
+            val most = fee.maxFee + files.sumOf { it.fee * BigDecimal(2) } + BigDecimal(call.amount)
+            val balance = posting.balance(from)
+            if (balance < most) throw IOException("up to ${most.setScale(2, java.math.RoundingMode.UP)} iDNA needed, the balance is ${balance.setScale(2, java.math.RoundingMode.DOWN)}")
+            PendingPost(what, call, from, fee, detail, files, memberExtra = extra)
+        }
 
     private fun prepareWith(what: String, build: (SocialPosting, String) -> PendingPost) {
         busy = true

@@ -89,21 +89,33 @@ data class PostFee(val fee: BigDecimal, val maxFee: BigDecimal)
 
 /**
  * A call of the idena.social contract: [method] with its one JSON [argument] and [amount] iDNA sent, as
- * idena.social makes them (a post sends [SocialPosting.POST_AMOUNT], a tip the tipped amount).
+ * idena.social makes them (a post sends [SocialPosting.POST_AMOUNT], a tip the tipped amount). Another
+ * [contract] takes its calls the same way (the profiles contract, [ProfileCalls]); a call without argument
+ * (null) sends none.
  */
-data class SocialCall(val method: String, val argument: String, val amount: String)
+data class SocialCall(val method: String, val argument: String?, val amount: String, val contract: String = SOCIAL_CONTRACT)
 
 /** Calling idena.social with the node's key: posts (makePost) and tips (sendTip). */
 class SocialPosting(private val rpc: NodeRpc) {
     private fun callArgs(from: String, call: SocialCall, maxFee: BigDecimal?): JSONArray {
         val args = JSONObject()
             .put("from", from)
-            .put("contract", SOCIAL_CONTRACT)
+            .put("contract", call.contract)
             .put("method", call.method)
             .put("amount", call.amount)
-            .put("args", JSONArray().put(JSONObject().put("index", 0).put("format", "string").put("value", call.argument)))
+            .put("args", call.argument?.let { JSONArray().put(JSONObject().put("index", 0).put("format", "string").put("value", it)) } ?: JSONArray())
         maxFee?.let { args.put("maxFee", it.toPlainString()) }
         return JSONArray().put(args)
+    }
+
+    /**
+     * The node's dry run of [call] from [from] (its receipt). Throws with the first refusal, of the call or of any
+     * promise or callback it made ([receiptErrors]): a callback runs after the call, in the same transaction.
+     */
+    fun estimateReceipt(from: String, call: SocialCall): JSONObject {
+        val receipt = rpc.call("contract_estimateCall", callArgs(from, call, null)) as JSONObject
+        receiptErrors(receipt).firstOrNull()?.let { throw IOException(it) }
+        return receipt
     }
 
     /**

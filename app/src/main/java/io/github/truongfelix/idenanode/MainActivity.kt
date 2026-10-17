@@ -190,7 +190,7 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
                 if (tab == MainTab.Node) titleBar()
                 // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
                 when (tab) {
-                    MainTab.Node -> NodeScreen(node, social.people, Modifier.weight(1f))
+                    MainTab.Node -> NodeScreen(node, social.people, social.names, Modifier.weight(1f))
                     MainTab.Social -> SocialScreen(social, ads.ads, titleBar, Modifier.weight(1f))
                 }
                 if (tab == MainTab.Node) AdBanner(ads.ads)
@@ -256,7 +256,7 @@ fun AppTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: Modifier = Modifier) {
+private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map<String, String>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -323,7 +323,7 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, modifier: 
         // title row). The epoch and the flips are current once the fast sync has downloaded the state.
         val ready = state.status?.takeUnless { it.accountPending }
         ProfileCard(state, people) { scope.launch { refresh() } }
-        ready?.let { WalletCard(it, people, network) { scope.launch { refresh() } } }
+        ready?.let { WalletCard(it, people, names, network) { scope.launch { refresh() } } }
         NodeCard(
             state,
             mining = { ready?.let { MiningSection(it, mining) { scope.launch { refresh() } } } },

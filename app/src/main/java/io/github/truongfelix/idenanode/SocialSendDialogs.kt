@@ -40,9 +40,19 @@ fun confirmText(pending: PendingPost): String = buildString {
         }
         append("\n\nStoring the ${file.what} on IPFS (${kilobytes(file.bytes.size)}): about ${fee(file.fee)} iDNA (at most ${fee(file.fee * BigDecimal(2))}).")
     }
-    append("\n\n${if (pending.files.isEmpty()) "Fee" else "The post"}: about ${fee(pending.fee.fee)} iDNA (at most ${fee(pending.fee.maxFee)}).")
+    val callName = if (pending.call.contract == PROFILE_CONTRACT) "The call" else "The post"
+    append("\n\n${if (pending.files.isEmpty()) "Fee" else callName}: about ${fee(pending.fee.fee)} iDNA (at most ${fee(pending.fee.maxFee)}).")
+    pending.memberExtra?.let {
+        append(
+            if (it.lapsed) "\n\nThe contract still lists you as a vouched member: you also send ${it.amount} iDNA, burned by the contract (about one more fee). Ending the vouch first avoids it."
+            else "\n\nAs a vouched member, you also send ${it.amount} iDNA, burned by the contract (about one more fee).",
+        )
+    }
     if (pending.files.isNotEmpty()) append("\n\nTotal: about ${fee(pending.totalFee)} iDNA.")
 }
+
+/** Where a paid action goes, for its confirmation's title. */
+fun placeOf(pending: PendingPost) = if (pending.call.contract == PROFILE_CONTRACT) "in your public profile" else "on idena.social"
 
 fun fee(amount: BigDecimal): String = amount.setScale(2, RoundingMode.UP).toPlainString()
 

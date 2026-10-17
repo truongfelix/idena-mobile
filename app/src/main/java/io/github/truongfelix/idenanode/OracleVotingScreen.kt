@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -169,7 +171,13 @@ private fun VotingDetails(voting: OracleVoting, me: String) {
     Text(votingTitle(voting), style = MaterialTheme.typography.titleMedium)
     if (voting.fact.desc.isNotBlank()) SelectionContainer { Text(voting.fact.desc, style = MaterialTheme.typography.bodyMedium) }
     Field("State", votingStateText(voting.state))
-    Field("Author", shortAddress(voting.author) + if (voting.author.equals(me, ignoreCase = true)) " (you)" else "")
+    // The author's name (given in Social, else claimed) and robot, as Social shows a person.
+    val names = rememberShownNames(listOf(voting.author))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Field("Author", namedAddress(voting.author, names, me))
+        Spacer(Modifier.width(8.dp))
+        Avatar(voting.author, 24.dp)
+    }
     val running = voting.state in listOf(VotingState.OPEN, VotingState.VOTED)
     if (running) voting.votingEnd?.let { Field("Secret vote", "until ${dateText(it)}") }
     if (running || voting.state == VotingState.COUNTING || voting.state == VotingState.CAN_BE_PROLONGED) {

@@ -41,7 +41,13 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
      * Calls [method] once per entry of [params] in one request (a JSON-RPC batch) and returns the results
      * in the same order. Throws if any call fails.
      */
-    fun batch(method: String, params: List<JSONArray>): List<Any?> {
+    fun batch(method: String, params: List<JSONArray>): List<Any?> = batchSettled(method, params).map { it.getOrThrow() }
+
+    /**
+     * Calls [method] once per entry of [params] in one request (a JSON-RPC batch): each call's result, or its error
+     * as an [IOException] with the node's message, in the same order. Throws only when the request itself fails.
+     */
+    fun batchSettled(method: String, params: List<JSONArray>): List<Result<Any?>> {
         if (params.isEmpty()) return emptyList()
         val conn = URL("http://127.0.0.1:$port").openConnection() as HttpURLConnection
         try {
@@ -56,15 +62,7 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
                 requests.put(JSONObject().put("jsonrpc", "2.0").put("id", id).put("method", method).put("params", p).put("key", apiKey))
             }
             conn.outputStream.use { it.write(requests.toString().toByteArray()) }
-            val responses = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
-            val results = arrayOfNulls<Any?>(params.size)
-            for (i in 0 until responses.length()) {
-                val response = responses.getJSONObject(i)
-                val error = response.optJSONObject("error")
-                if (error != null) throw IOException(error.optString("message", "RPC error"))
-                results[response.getInt("id")] = if (response.isNull("result")) null else response.get("result")
-            }
-            return results.toList()
+            return settledResults(JSONArray(conn.inputStream.bufferedReader().use { it.readText() }), params.size)
         } finally {
             conn.disconnect()
         }
@@ -408,4 +406,21 @@ data class NodeStatus(
             syncing -> "Not mining (offline)"
             else -> "Not mining"
         }
+}
+
+/**
+ * The results of a JSON-RPC batch's [responses] in the order of their ids (0 until [count]): a result, or an error with
+ * the node's message; a call the node did not answer is an error too.
+ */
+internal fun settledResults(responses: JSONArray, count: Int): List<Result<Any?>> {
+    val results = MutableList<Result<Any?>>(count) { Result.failure(IOException("no answer")) }
+    for (i in 0 until responses.length()) {
+        val response = responses.getJSONObject(i)
+        val id = response.optInt("id", -1)
+        if (id !in 0 until count) continue
+        val error = response.optJSONObject("error")
+        results[id] = if (error != null) Result.failure(IOException(error.optString("message", "RPC error")))
+        else Result.success(if (response.isNull("result")) null else response.get("result"))
+    }
+    return results
 }

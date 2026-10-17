@@ -91,6 +91,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
+    var editingProfile by remember { mutableStateOf(false) }
     // The person being named (the name dialog).
     var naming by remember { mutableStateOf<Person?>(null) }
     // The feed's filter sheet is open.
@@ -118,6 +119,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     }
     CompositionLocalProvider(
         LocalNames provides model.names,
+        LocalPictures provides shownPictures(model.profiles.values),
         LocalHiding provides HiddenContent(model.hiding, myAddress),
         LocalPostMenu provides PostMenu(
             me = myAddress,
@@ -126,6 +128,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             onBlock = model::setPerson,
             onBlockTopic = { model.setTopicBlocked(it, true) },
         ),
+        LocalProfileAccess provides ProfileAccess(myAddress, canAct, model.profileAction),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
@@ -195,6 +198,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         onFollow = { model.setTopicFollowed(page.name, it) },
                         onBlock = { model.setTopicBlocked(page.name, it) },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                        trust = { TopicTrust(page.name, myAddress, canAct, model.profileWrites, model.profileAction, model::openProfile) },
                     ) { post ->
                         PostCard(
                             post = post,
@@ -273,6 +277,11 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         onTip = { tipping = it },
                         onWho = { who = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                        contract = model.profiles[page.address.lowercase()],
+                        myContract = myAddress?.let { model.profiles[it.lowercase()] },
+                        onContract = { model.profiles[it.address] = it },
+                        reload = model.profileWrites,
+                        onProfileCall = model.profileAction,
                     )
                 }
             }
@@ -434,6 +443,11 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 onTip = { tipping = it },
                                 onWho = { who = it },
                                 modifier = Modifier.weight(1f),
+                                contract = model.profiles[myAddress.lowercase()],
+                                onContract = { model.profiles[it.address] = it },
+                                onEditProfile = { editingProfile = true },
+                                reload = model.profileWrites,
+                                onProfileCall = model.profileAction,
                             )
                         }
                         SocialView.Feed -> {}
@@ -457,11 +471,22 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     model.sending.confirm?.let { pending ->
         AlertDialog(
             onDismissRequest = { model.sending.confirm = null },
-            title = { Text("${pending.what} on idena.social") },
+            title = { Text("${pending.what} ${placeOf(pending)}") },
             text = { Text(confirmText(pending)) },
             confirmButton = { TextButton(onClick = { model.sending.confirm = null; model.sending.send(pending) }) { Text("Send") } },
             dismissButton = { TextButton(onClick = { model.sending.confirm = null }) { Text("Cancel") } },
         )
+    }
+
+    if (editingProfile) {
+        myAddress?.let { me ->
+            ProfileEditDialog(
+                address = me,
+                profile = model.profiles[me.lowercase()],
+                onSave = { editingProfile = false; sendProfileEdit(model.sending, it) },
+                onDismiss = { editingProfile = false },
+            )
+        }
     }
 
     tipping?.let { post ->
