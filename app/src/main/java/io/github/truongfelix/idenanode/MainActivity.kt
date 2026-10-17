@@ -59,6 +59,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -133,6 +136,18 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
     var nodeInfo by remember { mutableStateOf(false) }
     var socialInfo by remember { mutableStateOf(false) }
     val panelOpen = panel.targetValue == DrawerValue.Open
+    // The panel's offset once it rests closed; the panel is shown from the first pixel a swipe moves it.
+    var closedOffset by remember { mutableFloatStateOf(Float.NaN) }
+    LaunchedEffect(panel) {
+        snapshotFlow { if (panel.currentValue == DrawerValue.Closed && panel.targetValue == DrawerValue.Closed && !panel.isAnimationRunning) panel.currentOffset else Float.NaN }
+            .collect { if (!it.isNaN()) closedOffset = it }
+    }
+    val panelShown by remember {
+        derivedStateOf {
+            panel.targetValue == DrawerValue.Open || panel.currentValue == DrawerValue.Open || panel.isAnimationRunning ||
+                !closedOffset.isNaN() && panel.currentOffset > closedOffset + 0.5f
+        }
+    }
     LaunchedEffect(social) { social.run(lifecycle) }
     LaunchedEffect(node) { node.run(lifecycle) }
     LaunchedEffect(ads) { ads.run(lifecycle) }
@@ -173,18 +188,17 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             ModalNavigationDrawer(
                 drawerState = panel,
-                // Swipes on the screen stay the feed's; the panel opens from the title row's node button.
-                gesturesEnabled = panelOpen,
+                // A swipe to the left opens the panel, where nothing under the finger scrolls sideways (the chips'
+                // rows, a zoomed picture take it first); the system's Back gesture keeps the screen's edges.
+                gesturesEnabled = true,
                 drawerContent = {
                     CompositionLocalProvider(LocalLayoutDirection provides direction) {
                         ModalDrawerSheet(Modifier.fillMaxWidth(0.9f)) {
                             // The drawer composes its content while closed too: the panel only while it shows, so
-                            // that the Node tab's reads (router port, network rewards) stop when it is closed, and its
-                            // Back, added when it opens, comes before the Social screen's.
-                            if (panel.currentValue == DrawerValue.Open || panelOpen || panel.isAnimationRunning) {
-                                BackHandler { scope.launch { panel.close() } }
-                                NodePanel(node, social, ads.ads, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
-                            }
+                            // that the Node tab's reads (router port, network rewards, wallet) stop when it is closed.
+                            if (panelShown) NodePanel(node, social, ads.ads, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
+                            // Back added each time the panel opens, so that it comes before the Social screen's.
+                            if (panelOpen) BackHandler { scope.launch { panel.close() } }
                         }
                     }
                 },
@@ -248,7 +262,8 @@ private fun NodeButton(health: Health, peers: Int?, task: Boolean, onClick: () -
             Text("$it", style = MaterialTheme.typography.labelLarge)
         }
         Spacer(Modifier.width(6.dp))
-        val mark = @Composable { Icon(Icons.Filled.Menu, contentDescription = t(R.string.node_tab_node), Modifier.size(18.dp), tint = colors.onSurfaceVariant) }
+        // The button's label is its click label: the mark itself says nothing more.
+        val mark = @Composable { Icon(Icons.Filled.Menu, contentDescription = null, Modifier.size(18.dp), tint = colors.onSurfaceVariant) }
         if (task) BadgedBox(badge = { Badge() }) { mark() } else mark()
     }
 }
