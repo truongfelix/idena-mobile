@@ -299,4 +299,7 @@
     <string name="profile_decline">Decline</string>
     <string name="profile_decline_offer">Decline the offer</string>
     <string name="profile_decline_detail">The offer of %1$s ends</string>
+    <string name="profile_get_vouched_title">Get vouched for</string>
+    <string name="profile_get_vouched_text">A validated member can vouch for you: you may then hold a name, write a profile and give Trust. Share your address with someone you know on Idena; their offer shows here.</string>
+    <string name="profile_share_address">Share my address</string>
 </resources>

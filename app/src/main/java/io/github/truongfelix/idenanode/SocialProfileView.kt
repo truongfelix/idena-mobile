@@ -94,6 +94,7 @@ fun ProfileList(
     reload: Int = 0,
     onProfileCall: ProfileAction? = null,
     onPeople: (PeopleList) -> Unit = {},
+    myTask: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
@@ -124,6 +125,11 @@ fun ProfileList(
     val trustChip: @Composable () -> Unit = { TrustChip(address, trust?.getOrNull(), myAddress, canAct, onProfileCall) }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
         item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustChip) }
+        // Own profile: the node's task (flips to make), then, for an account without an identity, how to be vouched for.
+        if (isMe) {
+            item { myTask() }
+            identity?.getOrNull()?.takeIf { wantsVouch(it.state, contract?.voucher) }?.let { item { GetVouchedCard(address) } }
+        }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {

@@ -314,4 +314,7 @@
     <string name="profile_decline">Refuser</string>
     <string name="profile_decline_offer">Refuser l\'offre</string>
     <string name="profile_decline_detail">L\'offre de %1$s prend fin</string>
+    <string name="profile_get_vouched_title">Obtenir un garant</string>
+    <string name="profile_get_vouched_text">Un membre validé peut se porter garant de vous : vous pourrez alors avoir un nom, écrire un profil et donner votre Confiance. Partagez votre adresse avec quelqu\'un que vous connaissez sur Idena ; son offre s\'affichera ici.</string>
+    <string name="profile_share_address">Partager mon adresse</string>
 </resources>

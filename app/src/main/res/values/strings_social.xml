@@ -77,7 +77,7 @@
     <string name="social_tab_feed">Feed</string>
     <string name="social_tab_messages">Messages</string>
     <string name="social_tab_notifications">Notifications</string>
-    <string name="social_tab_profile">Profile</string>
+    <string name="social_tab_profile">Me</string>
     <string name="social_draft_back">The draft is back in the editor.</string>
     <string name="social_draft_not_back">The editor holds another draft, so this one was not put back.</string>
     <string name="social_file_text">text</string>

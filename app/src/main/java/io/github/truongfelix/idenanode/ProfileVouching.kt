@@ -17,6 +17,9 @@ fun vouchCap(state: String?) = when (state) {
 }
 
 /** Whether [profile] acts as a vouched member: no identity, a validated voucher. */
+/** Whether [state] (the identity's, read) and no [voucher] leave the account to be vouched for: the "Get vouched for" card. */
+fun wantsVouch(state: String?, voucher: String?) = voucher == null && isVouchable(state)
+
 fun isActingMember(profile: ContractProfile?) =
     profile?.voucher != null && isVouchable(profile.state) && isValidated(profile.voucherState)
 

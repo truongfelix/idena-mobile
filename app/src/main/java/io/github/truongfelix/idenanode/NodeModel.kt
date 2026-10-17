@@ -69,10 +69,13 @@ class NodeModel(private val context: Context) {
     /** The speed of the sync's step: headers while they download, else blocks. */
     fun stepSpeed(step: SyncStep): Double? = if (step.phase == SyncPhase.Headers) state.headersPerSecond else state.blocksPerSecond
 
-    /** The required flips not made yet, at the last full read (0 before it, and once the validation started). */
+    /** The flips to make before the validation, at the last full read: null before it, and once the validation started. */
+    val flipQuota: FlipQuota?
+        get() = state.status?.takeIf { it.period == "None" }?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips) }
+
+    /** The required flips not made yet (0 with no [flipQuota]). */
     val flipsMissing: Int
-        get() = state.status?.takeIf { it.period == "None" }
-            ?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips).missing } ?: 0
+        get() = flipQuota?.missing ?: 0
 
     /** Whether the validation's screens are open now: the flip lottery and both sessions, at the last full read. */
     val validationOpen: Boolean

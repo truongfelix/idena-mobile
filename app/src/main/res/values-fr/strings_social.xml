@@ -77,7 +77,7 @@
     <string name="social_tab_feed">Fil</string>
     <string name="social_tab_messages">Messages</string>
     <string name="social_tab_notifications">Notifications</string>
-    <string name="social_tab_profile">Profil</string>
+    <string name="social_tab_profile">Moi</string>
     <string name="social_draft_back">Le brouillon est de retour dans l\'éditeur.</string>
     <string name="social_draft_not_back">L\'éditeur contient un autre brouillon : celui-ci n\'y a pas été remis.</string>
     <string name="social_file_text">texte</string>

@@ -103,4 +103,14 @@ class ProfileVouchingTest {
         assertNull("another giver's", trustGivenBy("$alice:$holder", "231", bob))
         assertNull(trustGivenBy("nothing", "1", bob))
     }
+
+    @Test
+    fun theGetVouchedCardShowsToAnAccountWithoutIdentityNorVoucher() {
+        assertTrue("no identity", wantsVouch("Undefined", null))
+        assertTrue("an empty state is Undefined", wantsVouch("", null))
+        assertTrue("killed", wantsVouch("Killed", null))
+        assertFalse("already vouched for", wantsVouch("Undefined", bob))
+        assertFalse("validated", wantsVouch("Verified", null))
+        assertFalse("suspended comes back at the next validation", wantsVouch("Suspended", null))
+    }
 }

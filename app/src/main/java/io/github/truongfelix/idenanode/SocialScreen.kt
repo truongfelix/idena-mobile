@@ -87,7 +87,13 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
  * and the editor; the status is in the app's title row ([SocialInfoDialog]).
  */
 @Composable
-fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () -> Unit, modifier: Modifier = Modifier) {
+fun SocialScreen(
+    model: SocialModel,
+    ads: List<ChainAd>,
+    topBar: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    myTask: @Composable () -> Unit = {},
+) {
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
     var who by remember { mutableStateOf<SocialPost?>(null) }
@@ -464,6 +470,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 reload = model.profileWrites,
                                 onProfileCall = model.profileAction,
                                 onPeople = { model.open(SocialPage.People(myAddress, it)) },
+                                myTask = myTask,
                             )
                         }
                         SocialView.Feed -> {}

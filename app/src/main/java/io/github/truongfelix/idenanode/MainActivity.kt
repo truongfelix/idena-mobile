@@ -33,6 +33,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
@@ -216,7 +217,7 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                                 }
                             }
                         }
-                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize())
+                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize(), myTask = { node.flipQuota?.takeIf { it.missing > 0 }?.let { FlipsDueCard(it) } })
                         SnackbarHost(notices, Modifier.align(Alignment.BottomCenter).padding(bottom = SOCIAL_BAR_HEIGHT))
                     }
                 }
@@ -249,6 +250,22 @@ private fun NodeButton(health: Health, peers: Int?, task: Boolean, onClick: () -
         Spacer(Modifier.width(6.dp))
         val mark = @Composable { Icon(Icons.Filled.Menu, contentDescription = t(R.string.node_tab_node), Modifier.size(18.dp), tint = colors.onSurfaceVariant) }
         if (task) BadgedBox(badge = { Badge() }) { mark() } else mark()
+    }
+}
+
+/** On my Social profile while required flips are missing: what happens without them, and Make a flip. */
+@Composable
+private fun FlipsDueCard(quota: FlipQuota) {
+    val context = LocalContext.current
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                tp(R.plurals.profile_flips_missing, quota.missing, quota.missing, quota.missingOutcomeLabel),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            if (quota.canMake) Button(onClick = { context.startActivity(Intent(context, FlipActivity::class.java)) }) { Text(t(R.string.profile_make_flip)) }
+        }
     }
 }
 
