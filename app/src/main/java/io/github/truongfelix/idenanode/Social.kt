@@ -709,17 +709,33 @@ fun timeAgo(time: Long, now: Long): String {
 }
 
 /** What a profile shows of an identity (dna_identity), as idena.social: its state, age and stake. */
-data class ProfileIdentity(val state: String, val age: Int, val stake: BigDecimal) {
+data class ProfileIdentity(
+    val state: String,
+    val age: Int,
+    val stake: BigDecimal,
+    /** Who invited it, while the node keeps the link (until it is Verified or Human, or killed); lowercase. */
+    val inviter: String? = null,
+    /** Whom it invited and the node still links to it (Invite, Candidate, Newbie): lowercase, in the node's order. */
+    val invitees: List<String> = emptyList(),
+) {
     /** The state as idena.social names it ([identityStatus]). */
     val status: String
         get() = identityStatus(state)
 
     companion object {
-        fun fromJson(json: JSONObject) = ProfileIdentity(
-            state = json.optString("state"),
-            age = json.optInt("age"),
-            stake = json.optString("stake").toBigDecimalOrNull() ?: BigDecimal.ZERO,
-        )
+        fun fromJson(json: JSONObject): ProfileIdentity {
+            val invitees = json.optJSONArray("invitees")
+            return ProfileIdentity(
+                state = json.optString("state"),
+                age = json.optInt("age"),
+                stake = json.optString("stake").toBigDecimalOrNull() ?: BigDecimal.ZERO,
+                inviter = json.optJSONObject("inviter")?.optString("address")?.lowercase()?.takeIf(::isAddress),
+                // The node writes each as {"TxHash", "Address"} (state.TxAddr, no JSON names).
+                invitees = (0 until (invitees?.length() ?: 0)).mapNotNull { i ->
+                    invitees?.optJSONObject(i)?.optString("Address")?.lowercase()?.takeIf(::isAddress)
+                }.distinct(),
+            )
+        }
     }
 }
 

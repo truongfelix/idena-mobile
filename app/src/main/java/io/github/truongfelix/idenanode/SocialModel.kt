@@ -94,6 +94,10 @@ enum class SocialView { Feed, Me, Activity, Messages }
 /** The lists of a profile, as idena.social's profile page has them. */
 enum class ProfileTab(val title: String) {
     Posts("Posts"), Replies("Replies"), Comments("Comments"), Likes("Likes"), Tips("Tips"), Media("Media"),
+    /** Whom the identity invited, until each is Verified ([ProfileIdentity.invitees]). */
+    Invitees("Invitees"),
+    /** The members it vouches for in the profiles contract. */
+    Members("Members"),
 }
 
 /**
