@@ -2,6 +2,11 @@
 <!-- The Node tab's texts: the title row and its details, the Node card, mining, advanced settings (peers, direct peers, router port, write buffers, node reports), the node's notification. -->
 <resources>
     <string name="node_tab_node">Node</string>
+    <plurals name="node_button_peers">
+        <item quantity="one">%1$d peer</item>
+        <item quantity="other">%1$d peers</item>
+    </plurals>
+    <string name="node_button_flips">flips to make</string>
     <string name="node_notice_view">View</string>
     <string name="node_no_key">There is no node key.</string>
     <string name="node_account_not_created">The account was not created: %1$s</string>

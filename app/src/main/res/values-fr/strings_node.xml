@@ -2,6 +2,12 @@
 <!-- The Node tab's texts: the title row and its details, the Node card, mining, advanced settings (peers, direct peers, router port, write buffers, node reports), the node's notification. -->
 <resources>
     <string name="node_tab_node">Nœud</string>
+    <plurals name="node_button_peers">
+        <item quantity="one">%1$d pair</item>
+        <item quantity="other">%1$d pairs</item>
+        <item quantity="many">%1$d pairs</item>
+    </plurals>
+    <string name="node_button_flips">flips à faire</string>
     <string name="node_notice_view">Voir</string>
     <string name="node_no_key">Il n\'y a pas de clé du nœud.</string>
     <string name="node_account_not_created">Le compte n\'a pas été créé : %1$s</string>

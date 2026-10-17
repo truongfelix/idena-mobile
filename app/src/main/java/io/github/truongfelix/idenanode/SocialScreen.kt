@@ -92,7 +92,7 @@ fun SocialScreen(
     ads: List<ChainAd>,
     topBar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    myTask: @Composable () -> Unit = {},
+    myTask: (@Composable () -> Unit)? = null,
 ) {
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }

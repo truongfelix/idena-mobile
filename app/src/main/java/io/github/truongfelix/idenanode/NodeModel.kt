@@ -69,9 +69,9 @@ class NodeModel(private val context: Context) {
     /** The speed of the sync's step: headers while they download, else blocks. */
     fun stepSpeed(step: SyncStep): Double? = if (step.phase == SyncPhase.Headers) state.headersPerSecond else state.blocksPerSecond
 
-    /** The flips to make before the validation, at the last full read: null before it, and once the validation started. */
+    /** The flips to make before the validation, at the last full read: null before it, while syncing, and once the validation started. */
     val flipQuota: FlipQuota?
-        get() = state.status?.takeIf { it.period == "None" }?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips) }
+        get() = state.status?.takeIf { it.period == "None" && !it.syncing }?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips) }
 
     /** The required flips not made yet (0 with no [flipQuota]). */
     val flipsMissing: Int
@@ -79,11 +79,11 @@ class NodeModel(private val context: Context) {
 
     /** Whether the validation's screens are open now: the flip lottery and both sessions, at the last full read. */
     val validationOpen: Boolean
-        get() = state.status?.period in VALIDATION_SCREEN_PERIODS
+        get() = state.status?.takeIf { !it.syncing }?.period in VALIDATION_SCREEN_PERIODS
 
-    /** Less than 10 minutes before the validation, or during it. */
+    /** Less than 10 minutes before the validation, or during it; not while the node catches up with old epochs. */
     private val validationNear: Boolean
-        get() = state.status?.let {
+        get() = state.status?.takeIf { !it.syncing }?.let {
             it.period.isNotEmpty() && it.period != "None" ||
                 parseValidationTime(it.nextValidation)?.let { start -> Duration.between(Instant.now(), start) < Duration.ofMinutes(10) } == true
         } == true

@@ -94,7 +94,7 @@ fun ProfileList(
     reload: Int = 0,
     onProfileCall: ProfileAction? = null,
     onPeople: (PeopleList) -> Unit = {},
-    myTask: @Composable () -> Unit = {},
+    myTask: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
@@ -106,9 +106,12 @@ fun ProfileList(
     }
     // The profile and its Trust read again at each opening and after each profile call in a block ([reload]): a name,
     // a bio, a vouch or a Trust may have changed since.
+    var contractRead by remember(address) { mutableStateOf(false) }
     LaunchedEffect(address, reload) {
         val source = NodeProfilesSource(rpc(context))
-        withContext(Dispatchers.IO) { runCatching { source.profiles(listOf(address)) }.getOrNull() }?.values?.firstOrNull()?.let(onContract)
+        val read = withContext(Dispatchers.IO) { runCatching { source.profiles(listOf(address)) }.getOrNull() }
+        read?.values?.firstOrNull()?.let(onContract)
+        if (read != null) contractRead = true
         trust = withContext(Dispatchers.IO) { runCatching { source.trust(address) } }
     }
     val isMe = address.equals(myAddress, ignoreCase = true)
@@ -127,8 +130,9 @@ fun ProfileList(
         item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustChip) }
         // Own profile: the node's task (flips to make), then, for an account without an identity, how to be vouched for.
         if (isMe) {
-            item { myTask() }
-            identity?.getOrNull()?.takeIf { wantsVouch(it.state, contract?.voucher) }?.let { item { GetVouchedCard(address) } }
+            myTask?.let { item { it() } }
+            // Only once the contract was read: a voucher not read yet is no voucher.
+            identity?.getOrNull()?.takeIf { contractRead && wantsVouch(it.state, contract?.voucher) }?.let { item { GetVouchedCard(address) } }
         }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

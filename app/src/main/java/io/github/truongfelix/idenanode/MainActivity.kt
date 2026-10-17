@@ -34,6 +34,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
@@ -193,10 +200,19 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                 gesturesEnabled = true,
                 drawerContent = {
                     CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                        ModalDrawerSheet(Modifier.fillMaxWidth(0.9f)) {
+                        // Laid out left to right again: the screen's side of the panel is its start, rounded, and
+                        // its outer side, the end, keeps clear of the system bars.
+                        ModalDrawerSheet(
+                            Modifier.fillMaxWidth(0.9f),
+                            drawerShape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
+                            windowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Vertical + WindowInsetsSides.End),
+                        ) {
                             // The drawer composes its content while closed too: the panel only while it shows, so
                             // that the Node tab's reads (router port, network rewards, wallet) stop when it is closed.
-                            if (panelShown) NodePanel(node, social, ads.ads, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
+                            // Its body (and its reads) once the panel opens or a swipe passes half of it: a swipe let go
+                            // early shows its title only.
+                            val open = panelOpen || panel.currentValue == DrawerValue.Open
+                            if (panelShown) NodePanel(node, social, ads.ads, open, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
                             // Back added each time the panel opens, so that it comes before the Social screen's.
                             if (panelOpen) BackHandler { scope.launch { panel.close() } }
                         }
@@ -231,11 +247,15 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                                 }
                             }
                         }
-                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize(), myTask = { node.flipQuota?.takeIf { it.missing > 0 }?.let { FlipsDueCard(it) } })
-                        SnackbarHost(notices, Modifier.align(Alignment.BottomCenter).padding(bottom = SOCIAL_BAR_HEIGHT))
+                        val quota = node.flipQuota?.takeIf { it.missing > 0 }
+                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize(), myTask = quota?.let { { FlipsDueCard(it) } })
                     }
                 }
             }
+        }
+        // The Social notices over the panel and its scrim too: above the panel's ad banner, or the Social bar.
+        Box(modifier.fillMaxSize()) {
+            SnackbarHost(notices, Modifier.align(Alignment.BottomCenter).padding(bottom = if (panelShown) AD_BANNER_HEIGHT else SOCIAL_BAR_HEIGHT))
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
         if (socialInfo) SocialInfoDialog(social, node.view?.peers) { socialInfo = false }
@@ -252,7 +272,14 @@ private fun NodeButton(health: Health, peers: Int?, task: Boolean, onClick: () -
         Modifier
             .clip(shape)
             .border(1.dp, colors.outlineVariant, shape)
-            .clickable(onClickLabel = t(R.string.node_tab_node), onClick = onClick)
+            .clickable(onClickLabel = t(R.string.node_tab_node), role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = listOfNotNull(
+                    t(R.string.node_tab_node),
+                    peers?.let { tp(R.plurals.node_button_peers, it, it) },
+                    t(R.string.node_button_flips).takeIf { task },
+                ).joinToString(", ")
+            }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -294,9 +321,9 @@ private fun ValidationLine() {
     }
 }
 
-/** The panel from the right: its title, then what the Node tab held, and the ad banner at its foot. */
+/** The panel from the right: its title, then, once [open], what the Node tab held and the ad banner at its foot. */
 @Composable
-private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, onInfo: () -> Unit, onClose: () -> Unit) {
+private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, open: Boolean, onInfo: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(t(R.string.node_tab_node), style = MaterialTheme.typography.titleLarge)
@@ -310,8 +337,10 @@ private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, 
             IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = t(R.string.common_close)) }
         }
-        NodeScreen(node, social.people, social.names, Modifier.weight(1f))
-        AdBanner(ads)
+        if (open) {
+            NodeScreen(node, social.people, social.names, Modifier.weight(1f))
+            AdBanner(ads)
+        }
     }
 }
 
