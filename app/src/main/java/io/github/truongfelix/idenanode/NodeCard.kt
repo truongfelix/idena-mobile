@@ -89,6 +89,7 @@ fun NodeCard(
             state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             mining()
             if (backgroundIssue(state.ignoringBatteryOptimizations) != null) BackgroundWarning(state)
+            LanguageRow()
             advanced()
         }
     }
