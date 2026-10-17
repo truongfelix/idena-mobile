@@ -559,6 +559,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         val switched = myAddress != null
         myAddress = address
         if (switched) {
+            ProfileReads.clear()
             markSeen()
             highlightAfter = seenThrough
             scope.launch { myProfileState.scrollToItem(0) }
