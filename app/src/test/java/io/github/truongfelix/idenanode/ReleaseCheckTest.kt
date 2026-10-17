@@ -30,7 +30,7 @@ class ReleaseCheckTest {
     fun theNewestNewerReleaseIsFoundWhateverTheOrder() {
         val list = JSONArray().put(release("v0.2.0-beta.21")).put(release("v0.2.0-beta.24")).put(release("v0.2.0-beta.23"))
         val found = newerRelease(list, "0.2.0-beta.22")!!
-        assertEquals("0.2.0-beta.99", found.version)
+        assertEquals("0.2.0-beta.24", found.version)
         assertEquals("note of v0.2.0-beta.24", found.note)
         // The page is GitHub's for the tag, never the address the answer gives.
         assertEquals("https://github.com/truongfelix/idena-mobile/releases/tag/v0.2.0-beta.24", found.page)
