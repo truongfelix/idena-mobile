@@ -28,15 +28,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /*
  * Blocking an account (⋮ on its profile, ⋯ on its posts), hiding a post, blocking a topic (⋯, or its page), and the
@@ -63,26 +67,60 @@ fun BlockMenu(person: Person, onBlock: (Person) -> Unit) {
     if (asking) BlockDialog(person, onBlock) { asking = false }
 }
 
-/** Asks before blocking [person]. */
+/** Who sends calls to the profiles contract in the Social tab: the account, whether it can act now, and the call. */
+class ProfileAccess(val me: String?, val canAct: Boolean, val onCall: ProfileAction)
+
+/** The Social tab's [ProfileAccess]; none outside it. */
+val LocalProfileAccess = staticCompositionLocalOf<ProfileAccess?> { null }
+
+/**
+ * Asks before blocking [person], as the desktop's. When the account gives them Trust, it asks whether to take the
+ * Trust back too: a transaction, its fee shown next (never silently).
+ */
 @Composable
 private fun BlockDialog(person: Person, onBlock: (Person) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val name = displayName(person.address, LocalNames.current)
+    val access = LocalProfileAccess.current
+    val giver by produceState(false, person.address, access?.me) {
+        val me = access?.me ?: return@produceState
+        value = withContext(Dispatchers.IO) {
+            runCatching { NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).trust(person.address).givenBy(me) }
+                .getOrDefault(false)
+        }
+    }
+    val block = {
+        onDismiss()
+        onBlock(person.copy(blocked = true))
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Block $name?") },
         text = {
-            Text(
-                "Their posts, replies, comments, likes, tips and messages are hidden on this phone. The posts stay public " +
-                    "on the chain: they can still see and answer yours. Unblock in Social settings, or on their profile.",
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Their posts, replies, comments, likes, tips and messages are hidden on this phone. The posts stay public " +
+                        "on the chain: they can still see and answer yours. Unblock in Social settings, or on their profile.",
+                )
+                if (giver) Text("You give $name your Trust. Remove it too? It is a transaction: its fee shows before it is sent.")
+            }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onDismiss()
-                onBlock(person.copy(blocked = true))
-            }) { Text("Block") }
+            if (giver && access != null) {
+                TextButton(onClick = {
+                    block()
+                    access.onCall("Take your Trust back", "Your Trust in this person no longer counts", ProfileCalls.untrust(person.address))
+                }, enabled = access.canAct) { Text("Block and remove my Trust") }
+            } else {
+                TextButton(onClick = block) { Text("Block") }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                if (giver) TextButton(onClick = block) { Text("Block only") }
+            }
+        },
     )
 }
 

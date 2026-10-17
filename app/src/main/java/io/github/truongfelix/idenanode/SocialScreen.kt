@@ -128,6 +128,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             onBlock = model::setPerson,
             onBlockTopic = { model.setTopicBlocked(it, true) },
         ),
+        LocalProfileAccess provides ProfileAccess(myAddress, canAct, model.profileAction),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
