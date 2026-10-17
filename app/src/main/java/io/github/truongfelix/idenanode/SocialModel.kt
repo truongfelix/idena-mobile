@@ -67,6 +67,9 @@ sealed interface SocialPage {
     /** The accounts muted ([MutedView]). */
     data object Muted : SocialPage
 
+    /** One of the people lists of [address]'s profile ([ProfilePeopleView], B-89). */
+    data class People(val address: String, val list: PeopleList) : SocialPage
+
     /** The hidden words ([HiddenWordsView]). */
     data object HiddenWords : SocialPage
 
@@ -94,12 +97,6 @@ enum class SocialView { Feed, Me, Activity, Messages }
 /** The lists of a profile, as idena.social's profile page has them. */
 enum class ProfileTab(val title: String) {
     Posts("Posts"), Replies("Replies"), Comments("Comments"), Likes("Likes"), Tips("Tips"), Media("Media"),
-    /** Whom the identity invited, until each is Verified ([ProfileIdentity.invitees]). */
-    Invitees("Invitees"),
-    /** The members it vouches for in the profiles contract. */
-    Members("Members"),
-    /** The people and topics one's own account gives Trust (its own profile only, B-81). */
-    Trusts("Trusts given"),
 }
 
 /**

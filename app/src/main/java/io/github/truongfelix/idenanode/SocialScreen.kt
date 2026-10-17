@@ -236,6 +236,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     BlockedTopicsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
+            page is SocialPage.People -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    ProfilePeopleView(page.address, page.list, myAddress, model.profileWrites, model::openProfile, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
             page is SocialPage.Muted -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -288,6 +294,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         onContract = { model.profiles[it.address] = it },
                         reload = model.profileWrites,
                         onProfileCall = model.profileAction,
+                        onPeople = { model.open(SocialPage.People(page.address, it)) },
                     )
                 }
             }
@@ -456,6 +463,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 onEditProfile = { editingProfile = true },
                                 reload = model.profileWrites,
                                 onProfileCall = model.profileAction,
+                                onPeople = { model.open(SocialPage.People(myAddress, it)) },
                             )
                         }
                         SocialView.Feed -> {}

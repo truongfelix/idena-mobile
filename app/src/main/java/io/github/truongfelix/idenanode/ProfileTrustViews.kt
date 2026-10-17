@@ -34,30 +34,37 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
 typealias ProfileAction = (what: String, detail: String?, call: SocialCall) -> Unit
 
 /**
- * Trust or take it back, for a person (an address) or a topic ("r/<name>"), and "Trusted by 12 (+3 vouched)": a tap
- * lists the givers counted now ([onProfile] opens one). [trust] null while it is read; [failed] when the node did
- * not answer. Selected while [me]'s Trust is given, counted or not (it can always be taken back).
+ * Trust or take it back, for a person (an address) or a topic ("r/<name>"): selected while [me]'s Trust is given,
+ * counted or not (it can always be taken back); none for [me] itself. [trust] null while it is read.
+ */
+@Composable
+fun TrustChip(target: String, trust: TrustCount?, me: String?, canAct: Boolean, onCall: ProfileAction?) {
+    if (onCall == null || me == null || me.lowercase() == target.lowercase()) return
+    val mine = trust?.givenBy(me) == true
+    // A Trust or its taking back waits for its block: no second one meanwhile (B-81).
+    val access = LocalProfileAccess.current
+    val waiting = access != null && (access.waiting(ProfileCalls.trust(target)) || access.waiting(ProfileCalls.untrust(target)))
+    FilterChip(
+        selected = mine,
+        enabled = canAct && trust != null && !waiting,
+        onClick = {
+            if (mine) onCall("Take your Trust back", "Your Trust in ${trustName(target)} no longer counts", ProfileCalls.untrust(target))
+            else onCall("Trust", "Gives your public Trust to ${trustName(target)}: everyone sees it; you can take it back", ProfileCalls.trust(target))
+        },
+        label = { Text(if (waiting) "Trust · waiting for a block" else if (mine) "Trusted" else "Trust") },
+    )
+}
+
+/**
+ * A topic's Trust: the button ([TrustChip]) and "Trusted by 15", the sum; a tap lists the givers counted now, split in
+ * identities and vouched members ([onProfile] opens one). [failed] when the node did not answer.
  */
 @Composable
 fun TrustRow(target: String, trust: TrustCount?, failed: Boolean, me: String?, canAct: Boolean, onCall: ProfileAction?, onProfile: (String) -> Unit) {
     var listing by remember(target) { mutableStateOf(false) }
     val body = MaterialTheme.typography.bodyMedium
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (onCall != null && me != null && me.lowercase() != target.lowercase()) {
-            val mine = trust?.givenBy(me) == true
-            // A Trust or its taking back waits for its block: no second one meanwhile (B-81).
-            val access = LocalProfileAccess.current
-            val waiting = access != null && (access.waiting(ProfileCalls.trust(target)) || access.waiting(ProfileCalls.untrust(target)))
-            FilterChip(
-                selected = mine,
-                enabled = canAct && trust != null && !waiting,
-                onClick = {
-                    if (mine) onCall("Take your Trust back", "Your Trust in ${trustName(target)} no longer counts", ProfileCalls.untrust(target))
-                    else onCall("Trust", "Gives your public Trust to ${trustName(target)}: everyone sees it; you can take it back", ProfileCalls.trust(target))
-                },
-                label = { Text(if (waiting) "Trust · waiting for a block" else if (mine) "Trusted" else "Trust") },
-            )
-        }
+        TrustChip(target, trust, me, canAct, onCall)
         when {
             failed -> Text("Trust: the node did not answer.", style = body)
             trust == null -> Text("Trust: reading…", style = body)
@@ -70,22 +77,23 @@ fun TrustRow(target: String, trust: TrustCount?, failed: Boolean, me: String?, c
         }
     }
     if (listing && trust != null) {
-        TrustGiversDialog(trust.counted, onDismiss = { listing = false }) { listing = false; onProfile(it) }
+        TrustGiversDialog(trust, onDismiss = { listing = false }) { listing = false; onProfile(it) }
     }
 }
 
 private fun trustName(target: String) = if (target.startsWith(TOPIC_PREFIX)) target else "this person"
 
-/** The givers counted now, each opening its profile; those who give as vouched members marked so. */
+/** The givers counted now, each opening its profile: the split, then the identities, then the vouched members. */
 @Composable
-private fun TrustGiversDialog(givers: List<TrustGiver>, onDismiss: () -> Unit, onProfile: (String) -> Unit) {
+private fun TrustGiversDialog(trust: TrustCount, onDismiss: () -> Unit, onProfile: (String) -> Unit) {
     val names = LocalNames.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Trusted by") },
+        title = { Text("Trusted by ${trust.total}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                givers.forEach { giver ->
+                Text(trustSplit(trust), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                trust.counted.sortedBy { it.vouched }.forEach { giver ->
                     Row(
                         Modifier.fillMaxWidth().clickable { onProfile(giver.address) }.padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
