@@ -5,7 +5,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
@@ -16,7 +15,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
-import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,9 +31,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -52,7 +60,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,45 +108,44 @@ class MainActivity : AppActivity() {
     }
 }
 
-/** The main tabs, which stay at the top of the screen. */
-private enum class MainTab(@StringRes val title: Int) { Node(R.string.node_tab_node), Social(R.string.node_tab_social) }
-
 @Composable
 private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var tab by rememberSaveable { mutableStateOf(MainTab.Node) }
-    // The Social tab's state lives while the app runs, so that its notifications work from the Node tab.
+    // Social is the app; the node (identity, validation, wallet, settings) is a panel from the right side, open at
+    // the start while the phone has no key yet (B-101).
+    val panel = rememberDrawerState(if (NodeSettings.hasKey(context)) DrawerValue.Closed else DrawerValue.Open)
+    // The Social state lives while the app runs, so that its notifications work while the panel is open.
     val scope = rememberCoroutineScope()
     val social = remember { SocialModel(context.applicationContext, scope) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val notices = remember { SnackbarHostState() }
-    // The node's state, for the Node tab and the status bar of the title row (both tabs).
+    // The node's state, for the panel and the status in the title row.
     val node = remember { NodeModel(context.applicationContext) }
-    // The Idena ads: the banner at the bottom of the Node tab, in the Social feed.
+    // The Idena ads, in the Social feed.
     val ads = remember { AdsModel(context.applicationContext) }
     var nodeInfo by remember { mutableStateOf(false) }
     var socialInfo by remember { mutableStateOf(false) }
+    val panelOpen = panel.targetValue == DrawerValue.Open
     LaunchedEffect(social) { social.run(lifecycle) }
     LaunchedEffect(node) { node.run(lifecycle) }
     LaunchedEffect(ads) { ads.run(lifecycle) }
-    LaunchedEffect(tab) {
-        social.visible = tab == MainTab.Social
-        node.nodeTabVisible = tab == MainTab.Node
+    LaunchedEffect(panelOpen) {
+        social.visible = !panelOpen
+        node.nodeTabVisible = panelOpen
     }
     LaunchedEffect(showActivity) {
         if (showActivity > 0) {
-            tab = MainTab.Social
+            panel.close()
             social.showActivity()
         }
     }
-    // Back on the Social tab, once it has nothing to close, shows the Node tab instead of leaving the app
-    // (the Social tab's own Back, composed later, comes first).
-    BackHandler(enabled = tab == MainTab.Social) { tab = MainTab.Node }
+    // Back closes the panel first (the Social screen's own Back, composed later, comes after it).
+    BackHandler(enabled = panelOpen) { scope.launch { panel.close() } }
     LaunchedEffect(social) {
         for (notice in social.notices) {
             val result = notices.showSnackbar(notice, actionLabel = t(R.string.node_notice_view), withDismissAction = true, duration = SnackbarDuration.Long)
             if (result == SnackbarResult.ActionPerformed) {
-                tab = MainTab.Social
+                panel.close()
                 social.showActivity()
             }
         }
@@ -153,58 +159,53 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
 
     // The tabs' text a bit larger than Material's defaults (the validation screens keep them).
     MaterialTheme(typography = MaterialTheme.typography.scaled(1.12f)) {
-        Box(modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                // One row: the title, the Node | Social switch and the status (a dot with the peers; ⓘ has the
-                // details): the node's on the Node tab, the scan's on the Social tab, where the feed slides it away.
-                // The peers are the node's last read on both.
-                val unread = social.unread.size
-                val titleBar: @Composable () -> Unit = {
-                    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-                        Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Idena", style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.width(14.dp))
-                            TabSwitch(tab, unread) { tab = it }
-                            Spacer(Modifier.weight(1f))
-                            val peers = node.view?.peers
-                            val health = if (tab == MainTab.Node) node.bar.health else social.status(peers).health
-                            val onInfo = { if (tab == MainTab.Node) nodeInfo = true else socialInfo = true }
-                            Row(Modifier.clickable(onClick = onInfo).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                StatusDot(health)
-                                peers?.let {
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("$it", style = MaterialTheme.typography.labelLarge)
-                                }
-                            }
-                            IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
-                        }
-                        // The paid action of the Social tab while it runs (sending, waiting for its block).
-                        // Everything sent and waiting for its block, one line (B-81).
-                        if (tab == MainTab.Social) InFlightLine(social.sending.inFlight)
-                        social.sending.sendStatus?.takeIf { tab == MainTab.Social }?.let {
-                            Text(
-                                it,
-                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+        // A drawer opens from the start side: the right side is the start of a right-to-left layout, and both the
+        // panel and the screen are laid out left to right again inside it.
+        val direction = LocalLayoutDirection.current
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            ModalNavigationDrawer(
+                drawerState = panel,
+                // Swipes on the screen stay the feed's; the panel opens from the title row's node button.
+                gesturesEnabled = panelOpen,
+                drawerContent = {
+                    CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                        ModalDrawerSheet(Modifier.fillMaxWidth(0.9f)) {
+                            NodePanel(node, social, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
                         }
                     }
+                },
+            ) {
+                CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                    Box(modifier.fillMaxSize()) {
+                        // One row: the title, the node button (its state, the peers; opens the panel) and ⓘ (the
+                        // Social scan's details). The feed slides it away.
+                        val titleBar: @Composable () -> Unit = {
+                            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+                                Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Idena", style = MaterialTheme.typography.headlineSmall)
+                                    Spacer(Modifier.weight(1f))
+                                    NodeButton(node.bar.health, node.view?.peers, node.flipsMissing > 0) { scope.launch { panel.open() } }
+                                    IconButton(onClick = { socialInfo = true }) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
+                                }
+                                // Everything sent and waiting for its block, one line (B-81).
+                                InFlightLine(social.sending.inFlight)
+                                social.sending.sendStatus?.let {
+                                    Text(
+                                        it,
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize())
+                        SnackbarHost(notices, Modifier.align(Alignment.BottomCenter).padding(bottom = SOCIAL_BAR_HEIGHT))
+                    }
                 }
-                if (tab == MainTab.Node) titleBar()
-                // Each tab reads the node only while it is shown, but for the title row and the Social notifications.
-                when (tab) {
-                    MainTab.Node -> NodeScreen(node, social.people, social.names, Modifier.weight(1f))
-                    MainTab.Social -> SocialScreen(social, ads.ads, titleBar, Modifier.weight(1f))
-                }
-                if (tab == MainTab.Node) AdBanner(ads.ads)
             }
-            SnackbarHost(
-                notices,
-                Modifier.align(Alignment.BottomCenter).padding(bottom = if (tab == MainTab.Node) AD_BANNER_HEIGHT else SOCIAL_BAR_HEIGHT),
-            )
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
         if (socialInfo) SocialInfoDialog(social, node.view?.peers) { socialInfo = false }
@@ -212,32 +213,47 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** Node | Social as two pills in the title row; a badge counts the Social notifications not seen. */
+/** The node's button in the title row: its state as a dot, the peers, and the panel's mark, with a badge while [task]. */
 @Composable
-private fun TabSwitch(tab: MainTab, unread: Int, onSelect: (MainTab) -> Unit) {
+private fun NodeButton(health: Health, peers: Int?, task: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(50)
-    Row(Modifier.clip(shape).border(1.dp, colors.outlineVariant, shape)) {
-        MainTab.entries.forEach {
-            val selected = tab == it
-            Box(
-                Modifier
-                    .clip(shape)
-                    .background(if (selected) colors.secondaryContainer else Color.Transparent)
-                    .clickable { onSelect(it) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            ) {
-                val label = @Composable {
-                    Text(
-                        t(it.title),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
-                    )
-                }
-                if (it == MainTab.Social && unread > 0) BadgedBox(badge = { Badge { Text("$unread") } }) { label() } else label()
-            }
+    Row(
+        Modifier
+            .clip(shape)
+            .border(1.dp, colors.outlineVariant, shape)
+            .clickable(onClickLabel = t(R.string.node_tab_node), onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusDot(health)
+        peers?.let {
+            Spacer(Modifier.width(6.dp))
+            Text("$it", style = MaterialTheme.typography.labelLarge)
         }
+        Spacer(Modifier.width(6.dp))
+        val mark = @Composable { Icon(Icons.Filled.Menu, contentDescription = t(R.string.node_tab_node), Modifier.size(18.dp), tint = colors.onSurfaceVariant) }
+        if (task) BadgedBox(badge = { Badge() }) { mark() } else mark()
+    }
+}
+
+/** The panel from the right: its title, then what the Node tab held. */
+@Composable
+private fun NodePanel(node: NodeModel, social: SocialModel, onInfo: () -> Unit, onClose: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(t(R.string.node_tab_node), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.width(10.dp))
+            StatusDot(node.bar.health)
+            node.view?.peers?.let {
+                Spacer(Modifier.width(6.dp))
+                Text("$it", style = MaterialTheme.typography.labelLarge)
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = t(R.string.common_close)) }
+        }
+        NodeScreen(node, social.people, social.names, Modifier.weight(1f))
     }
 }
 

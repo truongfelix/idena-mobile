@@ -67,6 +67,10 @@ class NodeModel(private val context: Context) {
     /** The speed of the sync's step: headers while they download, else blocks. */
     fun stepSpeed(step: SyncStep): Double? = if (step.phase == SyncPhase.Headers) state.headersPerSecond else state.blocksPerSecond
 
+    /** The required flips not made yet, at the last full read (0 before it). */
+    val flipsMissing: Int
+        get() = state.status?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips).missing } ?: 0
+
     /** The title row's status bar. */
     val bar: BarState
         get() = nodeBarState(
@@ -137,10 +141,14 @@ class NodeModel(private val context: Context) {
 
     suspend fun run(lifecycle: Lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            // Closed, the panel still reads everything once a minute: the title row tells of the flips to make.
+            var lastFull = 0L
             while (true) {
-                if (nodeTabVisible) {
+                val now = SystemClock.elapsedRealtime()
+                if (nodeTabVisible || now - lastFull >= 60_000) {
                     refresh()
-                    delay(3_000)
+                    lastFull = now
+                    delay(if (nodeTabVisible) 3_000 else 5_000)
                 } else {
                     refreshBar()
                     delay(5_000)
