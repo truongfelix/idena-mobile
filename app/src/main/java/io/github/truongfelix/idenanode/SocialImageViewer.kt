@@ -72,7 +72,7 @@ internal fun savedImageName(key: String, extension: String): String =
 
 /** Saves [bytes] in Pictures/Idena; returns the file's name. Throws when the file is not an image or cannot be written. */
 fun saveImageToGallery(context: Context, key: String, bytes: ByteArray): String {
-    val (mime, extension) = imageFileType(bytes) ?: throw IOException("this file is not a picture the gallery takes")
+    val (mime, extension) = imageFileType(bytes) ?: throw IOException(t(R.string.social_error_not_picture))
     val name = savedImageName(key, extension)
     val resolver = context.contentResolver
     val values = ContentValues().apply {
@@ -82,9 +82,9 @@ fun saveImageToGallery(context: Context, key: String, bytes: ByteArray): String 
         put(MediaStore.Images.Media.IS_PENDING, 1)
     }
     val uri = resolver.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
-        ?: throw IOException("the gallery refused the file")
+        ?: throw IOException(t(R.string.social_error_gallery_refused))
     try {
-        resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IOException("the gallery file cannot be opened")
+        resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IOException(t(R.string.social_error_gallery_open))
         resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
     } catch (e: Exception) {
         resolver.delete(uri, null, null)
@@ -106,7 +106,7 @@ fun ImageViewer(key: String, bitmap: ImageBitmap, bytes: ByteArray, onClose: () 
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             Image(
                 bitmap = bitmap,
-                contentDescription = "Image of the post, full screen",
+                contentDescription = t(R.string.social_image_full_screen),
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
@@ -126,7 +126,7 @@ fun ImageViewer(key: String, bitmap: ImageBitmap, bytes: ByteArray, onClose: () 
                 Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onClose) { Text("Close", color = Color.White) }
+                TextButton(onClick = onClose) { Text(t(R.string.common_close), color = Color.White) }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp),
@@ -147,11 +147,11 @@ fun ImageViewer(key: String, bitmap: ImageBitmap, bytes: ByteArray, onClose: () 
                         saving = true
                         scope.launch {
                             val saved = withContext(Dispatchers.IO) { runCatching { saveImageToGallery(context, key, bytes) } }
-                            note = saved.fold({ "Saved in the gallery: Pictures/Idena/$it" }, { "Not saved: ${it.message}" })
+                            note = saved.fold({ t(R.string.social_image_saved, it) }, { t(R.string.social_image_not_saved, "${it.message}") })
                             saving = false
                         }
                     },
-                ) { Text(if (saving) "Saving…" else "Save to the gallery") }
+                ) { Text(if (saving) t(R.string.social_image_saving) else t(R.string.social_image_save)) }
             }
         }
     }

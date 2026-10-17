@@ -60,29 +60,29 @@ fun AdContentPreview(content: AdContent, onClose: () -> Unit) {
     val small = MaterialTheme.typography.bodySmall
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Preview") },
+        title = { Text(t(R.string.ads_preview)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("In the banner:", style = small)
+                Text(t(R.string.ads_preview_in_banner), style = small)
                 Surface(
                     Modifier.fillMaxWidth().height(AD_BANNER_HEIGHT).clip(RoundedCornerShape(12.dp)),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         AdImage(content.thumb, maxSide = 160, Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
-                        BannerText(content.title.ifBlank { "Title" }, content.desc.ifBlank { "Description" }, Modifier.weight(1f))
-                        Label("Ad")
+                        BannerText(content.title.ifBlank { t(R.string.ads_field_title) }, content.desc.ifBlank { t(R.string.ads_field_description) }, Modifier.weight(1f))
+                        Label(t(R.string.ads_label_ad))
                     }
                 }
-                Text("Opened:", style = small)
+                Text(t(R.string.ads_preview_opened), style = small)
                 if (content.media != null) {
                     AdImage(content.media, maxSide = 1080, Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(8.dp)), ContentScale.Fit)
                 }
-                Text(content.title.ifBlank { "Title" }, style = MaterialTheme.typography.titleMedium)
+                Text(content.title.ifBlank { t(R.string.ads_field_title) }, style = MaterialTheme.typography.titleMedium)
                 if (content.desc.isNotEmpty()) Text(content.desc)
                 if (content.url.isNotEmpty()) Text(content.url, fontFamily = FontFamily.Monospace, style = small)
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onClose) { Text(t(R.string.common_close)) } },
     )
 }

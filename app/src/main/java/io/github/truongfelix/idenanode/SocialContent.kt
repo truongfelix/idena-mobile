@@ -68,7 +68,7 @@ internal fun rememberIpfs(cid: String): Pair<Fetched, () -> Unit> {
             try {
                 IpfsStore.fetch(context, cid)?.let { Fetched.Loaded(it) } ?: Fetched.Unavailable
             } catch (e: Exception) {
-                Fetched.Failed(e.message ?: "no answer")
+                Fetched.Failed(e.message ?: t(R.string.social_no_answer))
             }
         }
     }
@@ -113,7 +113,7 @@ fun PostContent(
     val cid = ipfsCid(call.message)
     when {
         cid != null -> IpfsText(cid, style, maxLines, selectable, hides, { ipfsHidden = it }) { shown = true }
-        call.message.startsWith("ipfs://") -> Note("Text on IPFS with an invalid address.")
+        call.message.startsWith("ipfs://") -> Note(t(R.string.social_text_invalid_address))
         hides(call.message) -> {
             HiddenNote(byUser = false) { shown = true }
             return
@@ -124,14 +124,14 @@ fun PostContent(
         val tapToShow = hidden.hiding.pictures == PicturesMode.TapToShow && call.author != hidden.me
         var mediaShown by remember(call.hash) { mutableStateOf(false) }
         when {
-            !showMedia -> Note("🖼 Media")
+            !showMedia -> Note(t(R.string.social_media))
             tapToShow && !mediaShown && inThread -> Text(
-                "🖼 A picture. Tap to show it.",
+                t(R.string.social_picture_tap),
                 Modifier.clickable { mediaShown = true },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            tapToShow && !mediaShown -> Note("🖼 A picture: open the post to show it.")
+            tapToShow && !mediaShown -> Note(t(R.string.social_picture_open_post))
             else -> PostMedia(call, mediaMaxHeight, inThread)
         }
     }
@@ -155,7 +155,7 @@ private fun IpfsText(
 ) {
     val (state, retry) = rememberIpfs(cid)
     when (state) {
-        Fetched.Loading -> Note("Loading the text from IPFS through the node…")
+        Fetched.Loading -> Note(t(R.string.social_loading_text))
         is Fetched.Loaded -> {
             val text = remember(state) { String(state.bytes, Charsets.UTF_8) }
             val hidden = hides(text)
@@ -163,7 +163,7 @@ private fun IpfsText(
             if (hidden) HiddenNote(byUser = false, onShow) else PostText(text, style, maxLines, selectable)
         }
         Fetched.Unavailable -> Unavailable(retry)
-        is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
+        is Fetched.Failed -> Note(t(R.string.social_scan_no_answer, state.reason))
     }
 }
 
@@ -173,22 +173,22 @@ private fun PostMedia(call: PostCall, maxHeight: Dp, inThread: Boolean) {
     val type = call.mediaType.lowercase()
     val cid = ipfsCid(call.media)
     when {
-        call.media.isEmpty() -> Note("🖼 Media too large to keep on the phone.")
-        type.startsWith("video/") || type.startsWith("audio/") -> Note("🎞 Video or audio, not shown here.")
-        type == "image/svg+xml" -> Note("🖼 SVG image, not shown here.")
+        call.media.isEmpty() -> Note(t(R.string.social_media_too_large))
+        type.startsWith("video/") || type.startsWith("audio/") -> Note(t(R.string.social_media_video))
+        type == "image/svg+xml" -> Note(t(R.string.social_media_svg))
         cid != null -> {
             val (state, retry) = rememberIpfs(cid)
             when (state) {
-                Fetched.Loading -> Note("Loading the image from IPFS through the node…")
+                Fetched.Loading -> Note(t(R.string.social_loading_image))
                 is Fetched.Loaded -> PostImage(cid, state.bytes, maxHeight, inThread)
                 Fetched.Unavailable -> Unavailable(retry)
-                is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
+                is Fetched.Failed -> Note(t(R.string.social_scan_no_answer, state.reason))
             }
         }
-        call.media.startsWith("ipfs://") -> Note("Media on IPFS with an invalid address.")
+        call.media.startsWith("ipfs://") -> Note(t(R.string.social_media_invalid_address))
         else -> {
             val bytes = remember(call.hash) { runCatching { Base64.getDecoder().decode(call.media) }.getOrNull() }
-            if (bytes == null) Note("🖼 Unreadable image.") else PostImage(call.hash, bytes, maxHeight, inThread)
+            if (bytes == null) Note(t(R.string.social_media_unreadable)) else PostImage(call.hash, bytes, maxHeight, inThread)
         }
     }
 }
@@ -211,13 +211,13 @@ private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp, inThread: Bo
     when {
         bitmap != null -> Image(
             bitmap = bitmap,
-            contentDescription = "Image of the post",
+            contentDescription = t(R.string.social_image_description),
             modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp))
                 .then(if (inThread) Modifier.clickable { open = true } else Modifier),
             contentScale = ContentScale.Fit,
         )
-        decoded.first -> Note("🖼 An image this phone cannot show.")
-        else -> Note("Decoding the image…")
+        decoded.first -> Note(t(R.string.social_image_cannot_show))
+        else -> Note(t(R.string.social_image_decoding))
     }
     if (open && bitmap != null) ImageViewer(key, bitmap, bytes) { open = false }
 }
@@ -244,26 +244,26 @@ internal fun decodeScaled(bytes: ByteArray, maxSide: Int = 1080): ImageBitmap? {
 fun MessageText(text: String, password: String, style: TextStyle) {
     val cid = ipfsCid(text)
     if (cid == null) {
-        if (text.startsWith("ipfs://")) Note("Text on IPFS with an invalid address.") else SelectionContainer { Text(text, style = style) }
+        if (text.startsWith("ipfs://")) Note(t(R.string.social_text_invalid_address)) else SelectionContainer { Text(text, style = style) }
         return
     }
     val (state, retry) = rememberIpfs(cid)
     when (state) {
-        Fetched.Loading -> Note("Loading the text from IPFS through the node…")
+        Fetched.Loading -> Note(t(R.string.social_loading_text))
         is Fetched.Loaded -> {
             val opened = remember(state, password) { if (password.isEmpty()) String(state.bytes, Charsets.UTF_8) else decryptIpfsText(state.bytes, password) }
-            if (opened == null) Note("🔒 This text on IPFS does not open with its key.") else SelectionContainer { Text(opened, style = style) }
+            if (opened == null) Note(t(R.string.social_text_locked)) else SelectionContainer { Text(opened, style = style) }
         }
         Fetched.Unavailable -> Unavailable(retry)
-        is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
+        is Fetched.Failed -> Note(t(R.string.social_scan_no_answer, state.reason))
     }
 }
 
 @Composable
 private fun Unavailable(retry: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Note("No longer available on IPFS: no node has it.")
-        AssistChip(onClick = retry, label = { Text("Retry") })
+        Note(t(R.string.social_ipfs_gone))
+        AssistChip(onClick = retry, label = { Text(t(R.string.social_retry)) })
     }
 }
 
@@ -276,7 +276,7 @@ private fun Note(text: String) {
 @Composable
 private fun HiddenNote(byUser: Boolean, onShow: () -> Unit) {
     Text(
-        if (byUser) "Hidden by you. Tap to show." else "Hidden: a word of your list. Tap to show.",
+        if (byUser) t(R.string.social_hidden_by_you) else t(R.string.social_hidden_word),
         Modifier.clickable(onClick = onShow),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

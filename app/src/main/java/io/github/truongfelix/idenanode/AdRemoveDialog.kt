@@ -30,21 +30,21 @@ fun RemoveFromProfileDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var plan by remember { mutableStateOf<RemovalPlan?>(null) }
-    var busy by remember { mutableStateOf<String?>("Reading your profile…") }
+    var busy by remember { mutableStateOf<String?>(t(R.string.ads_reading_profile)) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(ad) {
         val entry = ad.entry
         val planned = withContext(Dispatchers.IO) {
-            runCatching { myAdsNode(context).planRemoval(me, entry ?: error("this ad is not in your profile")) }
+            runCatching { myAdsNode(context).planRemoval(me, entry ?: error(t(R.string.ads_not_in_profile))) }
         }
         busy = null
-        planned.onSuccess { plan = it }.onFailure { error = "It cannot be sent: ${it.message}" }
+        planned.onSuccess { plan = it }.onFailure { error = t(R.string.ads_cannot_be_sent, it.message.toString()) }
     }
     val ready = plan
     AlertDialog(
         onDismissRequest = { if (busy == null) onClose() },
         properties = DialogProperties(dismissOnClickOutside = false),
-        title = { Text("Remove from my profile") },
+        title = { Text(t(R.string.ads_remove_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (ready != null) Text(removeConfirmText(ad.title, ready.fees))
@@ -55,7 +55,7 @@ fun RemoveFromProfileDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (
         confirmButton = {
             if (ready != null && busy == null) {
                 TextButton(onClick = {
-                    busy = "Updating your profile…"
+                    busy = t(R.string.ads_updating_profile)
                     scope.launch {
                         val sent = withContext(Dispatchers.IO) {
                             runCatching {
@@ -67,15 +67,15 @@ fun RemoveFromProfileDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (
                         onDone(
                             sent.fold(
                                 onSuccess = { block ->
-                                    if (block == null) "Not removed: $NOT_SENT" else "“${ad.title}” is no longer in your profile."
+                                    if (block == null) t(R.string.ads_not_removed, NOT_SENT) else t(R.string.ads_removed, ad.title)
                                 },
-                                onFailure = { "Not sent: ${it.message}" },
+                                onFailure = { t(R.string.ads_not_sent, it.message.toString()) },
                             ),
                         )
                     }
-                }) { Text("Remove") }
+                }) { Text(t(R.string.common_remove)) }
             }
         },
-        dismissButton = { if (busy == null || ready == null) TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = { if (busy == null || ready == null) TextButton(onClick = onClose) { Text(t(R.string.common_cancel)) } },
     )
 }

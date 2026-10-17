@@ -32,17 +32,15 @@ fun MutedView(model: SocialModel, modifier: Modifier = Modifier) {
     val muted = sortedPeople(model.people).filter { it.muted }
     val names = model.names
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        item { Text("Muted accounts", style = MaterialTheme.typography.titleLarge) }
+        item { Text(t(R.string.socialb_muted_accounts), style = MaterialTheme.typography.titleLarge) }
         item {
             Text(
-                "Their posts leave Home, Following and the topics, and their replies show folded in threads, on this phone " +
-                    "only. Their likes, replies and tips on your posts still notify you, their messages still arrive, and " +
-                    "their profile still lists their posts.",
+                t(R.string.socialb_muted_accounts_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (muted.isEmpty()) item { Text("Nobody is muted. To mute an account: ⋮ on its profile, or ⋯ on its posts.", style = MaterialTheme.typography.bodyMedium) }
+        if (muted.isEmpty()) item { Text(t(R.string.socialb_nobody_muted), style = MaterialTheme.typography.bodyMedium) }
         items(muted, key = { it.address }) { person ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -52,7 +50,7 @@ fun MutedView(model: SocialModel, modifier: Modifier = Modifier) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                OutlinedButton(onClick = { model.setPerson(person.copy(muted = false)) }) { Text("Unmute") }
+                OutlinedButton(onClick = { model.setPerson(person.copy(muted = false)) }) { Text(t(R.string.socialb_unmute)) }
             }
         }
     }
@@ -63,22 +61,22 @@ fun MutedView(model: SocialModel, modifier: Modifier = Modifier) {
 fun PicturesSetting(mode: PicturesMode, onChange: (PicturesMode) -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Pictures in posts", style = MaterialTheme.typography.bodyLarge)
+        Text(t(R.string.socialb_pictures_in_posts), style = MaterialTheme.typography.bodyLarge)
         PicturesMode.entries.forEach { choice ->
             Row(
                 Modifier.fillMaxWidth().selectable(selected = mode == choice, role = Role.RadioButton) { onChange(choice) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = mode == choice, onClick = null)
-                Text(choice.title, Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                Text(t(choice.title), Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp), style = MaterialTheme.typography.bodyMedium)
             }
         }
         Text(
             when (mode) {
-                PicturesMode.Show -> "Pictures show in the posts."
-                PicturesMode.TapToShow -> "A post's picture is one line until you tap it in its thread: nothing is downloaded before."
-                PicturesMode.Hide -> "Posts with a picture leave Home, Following and the topics; a reply with one shows folded in its thread."
-            } + " Your own posts never change.",
+                PicturesMode.Show -> t(R.string.socialb_pictures_show_note)
+                PicturesMode.TapToShow -> t(R.string.socialb_pictures_tap_note)
+                PicturesMode.Hide -> t(R.string.socialb_pictures_hide_note)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = muted,
         )

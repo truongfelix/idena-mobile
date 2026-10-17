@@ -62,14 +62,7 @@ val LocalOpenChat = staticCompositionLocalOf<ChatAccess?> { null }
 
 /** Why no message can be sent to [addresses]: no public key is known for them. */
 fun noKeyText(addresses: List<String>, names: Map<String, String>): String =
-    "${addresses.joinToString(", ") { displayName(it, names) }} cannot receive private messages: no public key is known " +
-        "for ${if (addresses.size == 1) "this address" else "these addresses"} (never an Idena identity, and no " +
-        "transaction it signed on idena.social), so nothing can be encrypted for it."
-
-/** What the public sees of a message, said above every conversation. */
-private const val PRIVACY_NOTE =
-    "Only the people in the conversation can read the text. Who writes, when, how long the message is and how many " +
-        "people it goes to are public, on the chain for good; who gets it is not."
+    tp(R.plurals.socialb_no_key, addresses.size, addresses.joinToString(", ") { displayName(it, names) })
 
 /** The people of a conversation as a title: their names, or short addresses. */
 private fun othersTitle(others: List<String>, names: Map<String, String>): String =
@@ -77,9 +70,9 @@ private fun othersTitle(others: List<String>, names: Map<String, String>): Strin
 
 /** One line of a message for the list: its text, or what it is. */
 private fun preview(message: ChatMessage): String = when {
-    message.text.startsWith("ipfs://") -> "Text on IPFS"
+    message.text.startsWith("ipfs://") -> t(R.string.socialb_preview_ipfs)
     message.text.isNotEmpty() -> message.text.replace('\n', ' ')
-    message.hasMedia -> "🖼 Picture"
+    message.hasMedia -> t(R.string.socialb_preview_picture)
     else -> "…"
 }
 
@@ -102,15 +95,15 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
         chatCandidates(query, model.people, all, me).filter { it !in withChat }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(if (requests) "Requests" else "Messages", style = MaterialTheme.typography.titleLarge)
-        RoundSearchField(query, { query = it }, "Search a name or address")
+        Text(if (requests) t(R.string.socialb_requests) else t(R.string.socialb_messages), style = MaterialTheme.typography.titleLarge)
+        RoundSearchField(query, { query = it }, t(R.string.socialb_search_name_or_address))
         LazyColumn(Modifier.weight(1f), state = model.messagesState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             if (!searching) item(key = "head") {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (requests) TextButton(onClick = { requests = false }) { Text("‹ Conversations") }
-                    else if (waiting > 0) TextButton(onClick = { requests = true }) { Text("Requests ($waiting) ›") }
+                    if (requests) TextButton(onClick = { requests = false }) { Text(t(R.string.socialb_back_to_conversations)) }
+                    else if (waiting > 0) TextButton(onClick = { requests = true }) { Text(t(R.string.socialb_requests_count, waiting)) }
                     if (requests) Text(
-                        "Messages from people you do not follow and never wrote to. Answer or accept to move them to your conversations.",
+                        t(R.string.socialb_requests_note),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -119,10 +112,10 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             if (shown.isEmpty() && people.isEmpty()) item(key = "none") {
                 Text(
                     when {
-                        searching -> "No one by that name: paste their address."
-                        requests -> "No request."
-                        model.cache?.messagesPending == true -> "No conversation yet. The messages of the blocks read before are still being read."
-                        else -> "No conversation yet."
+                        searching -> t(R.string.socialb_no_one_by_name)
+                        requests -> t(R.string.socialb_no_request)
+                        model.cache?.messagesPending == true -> t(R.string.socialb_no_conversation_pending)
+                        else -> t(R.string.socialb_no_conversation)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -193,9 +186,10 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     val others = conversation?.others ?: key.split('-').filter { it != me }.ifEmpty { listOf(me) }
     val messages = conversation?.messages.orEmpty()
     var draft by rememberSaveable(key) { mutableStateOf("") }
-    // The text stays until the message is sent (the fee's dialog can be cancelled).
-    LaunchedEffect(model.sending.sendStatus) {
-        if (model.sending.sendStatus?.startsWith("Message sent") == true) draft = ""
+    // The text stays until the message is sent (the fee's dialog can be cancelled): sent, it waits for its block.
+    val sentMessage = model.sending.inFlight.lastOrNull { it.call.method == "sendMessage" }?.hash
+    LaunchedEffect(sentMessage) {
+        if (sentMessage != null) draft = ""
     }
     LaunchedEffect(key) { model.lookUpKeys(others) }
     val noKey = others.filter { model.messageKeys[it] == "" }
@@ -209,7 +203,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     LaunchedEffect(key) { if (messages.isEmpty()) runCatching { focus.requestFocus() } }
     Column(modifier.imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t(R.string.common_back)) }
             Row(
                 Modifier.weight(1f).clickable(enabled = others.size == 1) { model.openProfile(others.first()) },
                 verticalAlignment = Alignment.CenterVertically,
@@ -218,7 +212,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 Spacer(Modifier.width(10.dp))
                 Text(othersTitle(others, model.names), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            IconButton(onClick = { privacy = true }) { Icon(Icons.Outlined.Info, contentDescription = "Who sees what") }
+            IconButton(onClick = { privacy = true }) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.socialb_who_sees_what)) }
         }
         LazyColumn(
             Modifier.weight(1f).padding(horizontal = 16.dp),
@@ -230,11 +224,11 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (conversation?.isRequest == true) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Not in your conversations yet.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            OutlinedButton(onClick = { model.acceptChat(conversation) }) { Text("Accept") }
+                            Text(t(R.string.socialb_not_in_conversations), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            OutlinedButton(onClick = { model.acceptChat(conversation) }) { Text(t(R.string.socialb_accept)) }
                         }
                     }
-                    if (messages.isEmpty()) Text("No message yet.", style = MaterialTheme.typography.bodyMedium)
+                    if (messages.isEmpty()) Text(t(R.string.socialb_no_message_yet), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             items(messages, key = { it.hash }) { message -> Bubble(message, mine = message.from == me, showSender = others.size > 1, names = model.names) }
@@ -242,14 +236,14 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
         Column(Modifier.padding(horizontal = 16.dp)) {
             when {
                 noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                looking -> Text("Looking up the keys to encrypt for…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                looking -> Text(t(R.string.socialb_looking_up_keys), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { draft = it.take(MAX_MESSAGE) },
                     modifier = Modifier.weight(1f).focusRequester(focus),
-                    placeholder = { Text("Message") },
+                    placeholder = { Text(t(R.string.socialb_message_placeholder)) },
                     maxLines = 5,
                     shape = RoundedCornerShape(24.dp),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -260,15 +254,15 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                     onClick = { model.sendMessage(others, draft.trim()) },
                     enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
                     modifier = Modifier.size(52.dp),
-                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send") }
+                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.common_send)) }
             }
         }
     }
     if (privacy) {
         AlertDialog(
             onDismissRequest = { privacy = false },
-            text = { Text(PRIVACY_NOTE) },
-            confirmButton = { TextButton(onClick = { privacy = false }) { Text("OK") } },
+            text = { Text(t(R.string.socialb_privacy_note)) },
+            confirmButton = { TextButton(onClick = { privacy = false }) { Text(t(R.string.common_ok)) } },
         )
     }
 }
@@ -288,9 +282,9 @@ private fun Bubble(message: ChatMessage, mine: Boolean, showSender: Boolean, nam
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (showSender && !mine) Text(displayName(message.from, names), style = MaterialTheme.typography.labelMedium, color = colors.primary)
-            if (message.isReply) Text("↩ An answer to another message", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            if (message.isReply) Text(t(R.string.socialb_reply_note), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             if (message.text.isNotEmpty()) MessageText(message.text, message.textPassword, MaterialTheme.typography.bodyLarge)
-            if (message.hasMedia) Text("🖼 A picture, not shown here yet", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            if (message.hasMedia) Text(t(R.string.socialb_picture_not_shown), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             Text(ago(message.time), Modifier.align(Alignment.End), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
         }
     }

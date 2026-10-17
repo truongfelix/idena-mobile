@@ -82,14 +82,14 @@ internal fun decimal(value: Any?): BigDecimal = try {
 }
 
 private val rewardKinds = listOf(
-    "staking" to "Staking",
-    "candidate" to "Candidate",
-    "flips" to "Flips",
-    "extraFlips" to "Extra flips",
-    "invitations" to "Invitations",
-    "invitee" to "Invitee",
-    "reports" to "Reports",
-    "validation" to "Validation",
+    "staking" to R.string.wallet_history_reward_staking,
+    "candidate" to R.string.wallet_history_reward_candidate,
+    "flips" to R.string.wallet_history_reward_flips,
+    "extraFlips" to R.string.wallet_history_reward_extra_flips,
+    "invitations" to R.string.wallet_history_reward_invitations,
+    "invitee" to R.string.wallet_history_reward_invitee,
+    "reports" to R.string.wallet_history_reward_reports,
+    "validation" to R.string.wallet_history_reward_validation,
 )
 
 internal fun parseValidationReport(json: JSONObject): ValidationReport {
@@ -114,7 +114,7 @@ internal fun parseValidationReport(json: JSONObject): ValidationReport {
         rewards = rewardKinds.mapNotNull { (key, label) ->
             val reward = rewards?.optJSONObject(key) ?: return@mapNotNull null
             val missed = if (reward.isNull("missed")) null else decimal(reward.opt("missed"))
-            RewardLine(label, decimal(reward.opt("earned")), missed, reward.optString("reason"))
+            RewardLine(t(label), decimal(reward.opt("earned")), missed, reward.optString("reason"))
         },
         delegatee = delegatee?.optString("address")?.ifEmpty { null },
         delegated = decimal(delegatee?.opt("amount")),
@@ -240,35 +240,35 @@ fun parseTransactions(json: JSONObject?): Pair<List<HistoryTx>, String?> {
 }
 
 private val txTypeNames = mapOf(
-    "send" to "Transfer",
-    "activation" to "Invitation activated",
-    "invite" to "Invitation issued",
-    "killInvitee" to "Invitation terminated",
-    "kill" to "Identity terminated",
-    "killDelegator" to "Delegator removed",
-    "submitFlip" to "Flip submitted",
-    "deleteFlip" to "Flip deleted",
-    "submitAnswersHash" to "Short answers (hash)",
-    "submitShortAnswers" to "Short answers",
-    "submitLongAnswers" to "Long answers",
-    "evidence" to "Validation evidence",
-    "changeProfile" to "Profile changed",
-    "deployContract" to "Contract deployed",
-    "callContract" to "Contract call",
-    "terminateContract" to "Contract terminated",
-    "delegate" to "Delegation",
-    "undelegate" to "Undelegation",
-    "replenishStake" to "Stake replenished",
-    "burn" to "Burn",
-    "storeToIpfs" to "Stored to IPFS",
-    "changeGodAddress" to "God address changed",
+    "send" to R.string.wallet_history_tx_send,
+    "activation" to R.string.wallet_history_tx_activation,
+    "invite" to R.string.wallet_history_tx_invite,
+    "killInvitee" to R.string.wallet_history_tx_kill_invitee,
+    "kill" to R.string.wallet_history_tx_kill,
+    "killDelegator" to R.string.wallet_history_tx_kill_delegator,
+    "submitFlip" to R.string.wallet_history_tx_submit_flip,
+    "deleteFlip" to R.string.wallet_history_tx_delete_flip,
+    "submitAnswersHash" to R.string.wallet_history_tx_submit_answers_hash,
+    "submitShortAnswers" to R.string.wallet_history_tx_submit_short_answers,
+    "submitLongAnswers" to R.string.wallet_history_tx_submit_long_answers,
+    "evidence" to R.string.wallet_history_tx_evidence,
+    "changeProfile" to R.string.wallet_history_tx_change_profile,
+    "deployContract" to R.string.wallet_history_tx_deploy_contract,
+    "callContract" to R.string.wallet_history_tx_call_contract,
+    "terminateContract" to R.string.wallet_history_tx_terminate_contract,
+    "delegate" to R.string.wallet_history_tx_delegate,
+    "undelegate" to R.string.wallet_history_tx_undelegate,
+    "replenishStake" to R.string.wallet_history_tx_replenish_stake,
+    "burn" to R.string.wallet_history_tx_burn,
+    "storeToIpfs" to R.string.wallet_history_tx_store_to_ipfs,
+    "changeGodAddress" to R.string.wallet_history_tx_change_god_address,
 )
 
 fun txTypeName(type: String, payload: String): String =
     if (type == "online") {
-        if (payload == "0x") "Mining status Off" else "Mining status On"
+        t(if (payload == "0x") R.string.wallet_history_tx_mining_off else R.string.wallet_history_tx_mining_on)
     } else {
-        txTypeNames[type] ?: type
+        txTypeNames[type]?.let { t(it) } ?: type
     }
 
 /** The amount seen from the address: negative when it sent the coins. */
@@ -280,9 +280,9 @@ fun HistoryTx.counterParty(address: String): String? = if (from.equals(address, 
 
 /** Why a reward was lost, as the summary says it. */
 fun missedReason(reason: String): String = when (reason) {
-    "penalty" -> "penalty"
-    "not_validated" -> "not validated"
-    "missed" -> "validation missed"
-    "grades_ignored" -> "grades ignored"
+    "penalty" -> t(R.string.wallet_history_reason_penalty)
+    "not_validated" -> t(R.string.wallet_history_reason_not_validated)
+    "missed" -> t(R.string.wallet_history_reason_missed)
+    "grades_ignored" -> t(R.string.wallet_history_reason_grades_ignored)
     else -> reason
 }

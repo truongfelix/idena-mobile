@@ -161,7 +161,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     Box(Modifier.weight(1f).fillMaxWidth().nestedScroll(barScroll)) {
         val historyDone = model.cache?.historyDone == true
         // A like of a post of a list (a reply or comment is liked from its thread).
-        val likePost = { post: SocialPost -> model.sending.preparePost("Like", LIKE, PostTarget.onPost(post.id)) }
+        val likePost = { post: SocialPost -> model.sending.preparePost(t(R.string.social_what_like), LIKE, PostTarget.onPost(post.id)) }
         val openThread = { threadId: Long, focusId: Long? -> model.open(SocialPage.Thread(threadId, focusId)) }
         when {
             editing != null -> Editor(model, editing, canPost = canAct)
@@ -178,7 +178,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     canAct = canAct,
                     header = { BackRow(model::back) },
                     onProfile = model::openProfile,
-                    onLike = { target -> model.sending.preparePost("Like", LIKE, target) },
+                    onLike = { target -> model.sending.preparePost(t(R.string.social_what_like), LIKE, target) },
                     onAnswer = { model.sending.draft = it },
                     onTip = { tipping = it },
                     onWho = { who = it },
@@ -354,8 +354,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         val found = hits
                         if (query.length >= MIN_SEARCH) {
                             when {
-                                found == null -> item(key = "searching") { Text("Searching…", style = MaterialTheme.typography.bodySmall) }
-                                found.isEmpty() -> item(key = "none") { Text("Nothing found in the posts read so far.", style = MaterialTheme.typography.bodySmall) }
+                                found == null -> item(key = "searching") { Text(t(R.string.social_searching), style = MaterialTheme.typography.bodySmall) }
+                                found.isEmpty() -> item(key = "none") { Text(t(R.string.social_search_nothing), style = MaterialTheme.typography.bodySmall) }
                                 else -> itemsIndexed(found, key = { _, hit -> hitKey(hit) }) { i, hit ->
                                     HitCard(
                                         hit,
@@ -365,7 +365,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                         canAct = canAct,
                                         onProfile = model::openProfile,
                                         onOpen = openThread,
-                                        onLike = { target -> model.sending.preparePost("Like", LIKE, target) },
+                                        onLike = { target -> model.sending.preparePost(t(R.string.social_what_like), LIKE, target) },
                                         onTip = { tipping = it },
                                         onWho = { who = it },
                                     )
@@ -373,7 +373,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                             }
                             return@LazyColumn
                         }
-                        if (feed.isEmpty()) item(key = "empty") { Text("No posts found yet.", style = MaterialTheme.typography.bodySmall) }
+                        if (feed.isEmpty()) item(key = "empty") { Text(t(R.string.social_no_posts_yet), style = MaterialTheme.typography.bodySmall) }
                         else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
                         // An ad after each POSTS_PER_AD posts.
                         items(
@@ -426,12 +426,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             else -> {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Spacer(Modifier.height(2.dp))
-                    if (model.view == SocialView.Activity) Text("Notifications", style = MaterialTheme.typography.titleLarge)
+                    if (model.view == SocialView.Activity) Text(t(R.string.social_tab_notifications), style = MaterialTheme.typography.titleLarge)
                     when (model.view) {
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
                         SocialView.Messages -> MessagesList(model, Modifier.weight(1f))
                         SocialView.Me -> {
-                            if (myAddress == null) Text("Waiting for the node's address…", style = MaterialTheme.typography.bodyMedium)
+                            if (myAddress == null) Text(t(R.string.social_waiting_address), style = MaterialTheme.typography.bodyMedium)
                             else ProfileList(
                                 address = myAddress,
                                 feed = feed,
@@ -487,10 +487,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
     model.sending.confirm?.let { pending ->
         AlertDialog(
             onDismissRequest = { model.sending.confirm = null },
-            title = { Text("${pending.what} ${placeOf(pending)}") },
+            title = { Text(t(R.string.social_confirm_title, pending.what, placeOf(pending))) },
             text = { Text(confirmText(pending)) },
-            confirmButton = { TextButton(onClick = { model.sending.confirm = null; model.sending.send(pending) }) { Text("Send") } },
-            dismissButton = { TextButton(onClick = { model.sending.confirm = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { model.sending.confirm = null; model.sending.send(pending) }) { Text(t(R.string.common_send)) } },
+            dismissButton = { TextButton(onClick = { model.sending.confirm = null }) { Text(t(R.string.common_cancel)) } },
         )
     }
 
@@ -512,7 +512,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             onDismiss = { tipping = null },
             onTip = { amount ->
                 tipping = null
-                model.sending.prepare("Tip", SocialPosting.tip(post.id, amount), "Tip $amount iDNA to ${displayName(post.call.author, model.names)} for this post")
+                model.sending.prepare(
+                    t(R.string.social_what_tip), SocialPosting.tip(post.id, amount),
+                    t(R.string.social_tip_detail, amount, displayName(post.call.author, model.names)),
+                )
             },
         )
     }
@@ -544,7 +547,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
 /** Opens the editor for a new post, in topic [topic] when given (else in the topic typed last, if any). */
 private fun newPost(model: SocialModel, topic: String?) {
     topic?.let { model.sending.draftTopic = it }
-    model.sending.draft = Draft("Post", "New post", PostTarget.NEW_POST, null)
+    model.sending.draft = Draft(t(R.string.social_what_post), t(R.string.social_new_post), PostTarget.NEW_POST, null)
 }
 
 /** The room a list leaves under its last item for [PostButton]. */
@@ -556,7 +559,7 @@ private fun PostButton(enabled: Boolean, onClick: () -> Unit) {
     FloatingActionButton(
         onClick = { if (enabled) onClick() },
         containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-    ) { Icon(Icons.Filled.Add, contentDescription = "New post") }
+    ) { Icon(Icons.Filled.Add, contentDescription = t(R.string.social_new_post)) }
 }
 
 /** Back, at the top of a thread, a profile or a topic. */
@@ -566,7 +569,7 @@ private fun BackRow(onBack: () -> Unit) {
         TextButton(onClick = onBack, Modifier.height(48.dp), contentPadding = PaddingValues(start = 6.dp, end = 14.dp)) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.size(26.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Back", style = MaterialTheme.typography.titleMedium)
+            Text(t(R.string.common_back), style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -588,14 +591,14 @@ private fun BottomBar(model: SocialModel) {
     val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem("Feed", Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
-            BarItem("Messages", Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
+            BarItem(t(R.string.social_tab_feed), Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem(t(R.string.social_tab_messages), Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
                 model.showList(SocialView.Messages)
             }
-            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
+            BarItem(t(R.string.social_tab_notifications), Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
                 model.showList(SocialView.Activity)
             }
-            BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
+            BarItem(t(R.string.social_tab_profile), Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
         }
     }
 }

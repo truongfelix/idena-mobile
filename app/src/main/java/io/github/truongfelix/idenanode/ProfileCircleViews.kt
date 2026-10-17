@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,11 +43,15 @@ import java.math.RoundingMode
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
 /** The lists of a profile's people, each a page of its own ([ProfilePeopleView]). */
-enum class PeopleList(val title: String) {
-    TrustedBy("Trusted by"),
-    TrustsGiven("Trusts given"),
-    Members("Members"),
-    Invitees("Invitees"),
+enum class PeopleList(@StringRes private val titleId: Int) {
+    TrustedBy(R.string.profile_list_trusted_by),
+    TrustsGiven(R.string.profile_list_trusts_given),
+    Members(R.string.profile_list_members),
+    Invitees(R.string.profile_list_invitees),
+    ;
+
+    val title: String
+        get() = t(titleId)
 }
 
 /**
@@ -99,28 +104,27 @@ fun PeopleCounts(trust: TrustCount?, circle: ProfileCircle?, onOpen: (PeopleList
     fun n(value: Int?) = value?.let { blockNumber.format(it) } ?: "…"
     Row {
         Text("🤝 ", style = style)
-        Count("${n(trust?.total)} trusted by", PeopleList.TrustedBy)
+        Count(t(R.string.profile_count_trusted_by, n(trust?.total)), PeopleList.TrustedBy)
         Text(" · ", style = style)
-        Count("${n(circle?.trustsGiven?.size)} trusts given", PeopleList.TrustsGiven)
+        Count(t(R.string.profile_count_trusts_given, n(circle?.trustsGiven?.size)), PeopleList.TrustsGiven)
     }
     Row {
         Text("👥 ", style = style)
-        Count("${n(circle?.members?.size)} ${if (circle?.members?.size == 1) "member" else "members"}", PeopleList.Members)
+        Count(tp(R.plurals.profile_count_members, circle?.members?.size ?: 0, n(circle?.members?.size)), PeopleList.Members)
         Text(" · ", style = style)
-        Count("${n(circle?.invitees?.size)} ${if (circle?.invitees?.size == 1) "invitee" else "invitees"}", PeopleList.Invitees)
+        Count(tp(R.plurals.profile_count_invitees, circle?.invitees?.size ?: 0, n(circle?.invitees?.size)), PeopleList.Invitees)
     }
 }
 
 /** "Newbie · age 2", "Candidate": a person's state as a list shows it. */
 fun circleStatus(identity: ProfileIdentity?): String {
-    if (identity == null) return "Not validated"
-    val age = if (identity.age > 0) " · age ${identity.age}" else ""
-    return identity.status + age
+    if (identity == null) return t(R.string.profile_not_validated)
+    return if (identity.age > 0) t(R.string.profile_status_age, identity.status, identity.age) else identity.status
 }
 
 /** "12 identities · 3 vouched members": the split of a "Trusted by" sum. */
 fun trustSplit(trust: TrustCount): String =
-    "${count(trust.identities, "identity", "identities")} · ${count(trust.vouched, "vouched member", "vouched members")}"
+    tp(R.plurals.profile_n_identities, trust.identities, trust.identities) + " · " + tp(R.plurals.profile_n_vouched_members, trust.vouched, trust.vouched)
 
 /** One person of a profile's lists: picture or robot, name, state ([note] after it); a tap opens its profile. */
 @Composable
@@ -141,10 +145,10 @@ fun CirclePersonRow(address: String, identity: ProfileIdentity?, onProfile: (Str
 
 /** What an empty list says; [isMe]: one's own profile. */
 fun emptyPeopleText(list: PeopleList, isMe: Boolean): String = when (list) {
-    PeopleList.TrustedBy -> "Nobody's Trust counts yet."
-    PeopleList.TrustsGiven -> if (isMe) "You give no Trust yet: Trust on a profile or a topic's page." else "No Trust given."
-    PeopleList.Members -> "No vouched member."
-    PeopleList.Invitees -> "No invitee on the way: an invitee shows here from its invitation until it is Verified."
+    PeopleList.TrustedBy -> t(R.string.profile_empty_trusted_by)
+    PeopleList.TrustsGiven -> if (isMe) t(R.string.profile_empty_trusts_given_me) else t(R.string.profile_empty_trusts_given)
+    PeopleList.Members -> t(R.string.profile_empty_members)
+    PeopleList.Invitees -> t(R.string.profile_empty_invitees)
 }
 
 /**
@@ -182,8 +186,8 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
         item { Text("${displayName(address, names)} · ${list.title}", style = MaterialTheme.typography.titleLarge) }
         val loaded = page
         when {
-            loaded == null -> item { Text("Asking the node…", style = body) }
-            loaded.isFailure -> item { Text("The node did not answer: ${loaded.exceptionOrNull()?.message}", style = body) }
+            loaded == null -> item { Text(t(R.string.profile_asking_node), style = body) }
+            loaded.isFailure -> item { Text(t(R.string.profile_node_no_answer, "${loaded.exceptionOrNull()?.message}"), style = body) }
             else -> {
                 val p = loaded.getOrThrow()
                 val c = p.circle
@@ -194,12 +198,12 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
                         if (trust.counted.isEmpty()) item { Text(emptyPeopleText(list, isMe), style = body) }
                         val identities = trust.counted.filter { !it.vouched }
                         val vouched = trust.counted.filter { it.vouched }
-                        if (identities.isNotEmpty()) item { Heading("Identities") }
+                        if (identities.isNotEmpty()) item { Heading(t(R.string.profile_heading_identities)) }
                         items(identities, key = { "id:${it.address}" }) { CirclePersonRow(it.address, c.identities[it.address], onProfile) }
-                        if (vouched.isNotEmpty()) item { Heading("Vouched members") }
+                        if (vouched.isNotEmpty()) item { Heading(t(R.string.profile_heading_vouched_members)) }
                         items(vouched, key = { "vouched:${it.address}" }) { giver ->
                             val voucher = trust.vouchers[giver.address]
-                            CirclePersonRow(giver.address, c.identities[giver.address], onProfile, note = voucher?.let { "vouched by ${displayName(it, names)}" })
+                            CirclePersonRow(giver.address, c.identities[giver.address], onProfile, note = voucher?.let { t(R.string.profile_vouched_by, displayName(it, names)) })
                         }
                     }
                     PeopleList.TrustsGiven -> {
@@ -210,17 +214,17 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
                         // One's own: the cap, and End for each (B-91); the contract ends a member's vouch at its next
                         // call once it has an identity, End frees the slot now.
                         if (isMe && c.members.isNotEmpty()) {
-                            item { Text("You vouch for ${c.members.size} of at most ${vouchCap(p.identity.state)}", style = body, fontWeight = FontWeight.Medium) }
+                            item { Text(t(R.string.profile_vouch_cap, c.members.size, vouchCap(p.identity.state)), style = body, fontWeight = FontWeight.Medium) }
                         }
                         if (c.members.isEmpty()) item { Text(emptyPeopleText(list, isMe), style = body) }
                         items(c.members, key = { "member:$it" }) { member ->
                             val identity = c.identities[member]
-                            val note = if (isMe && identity != null && !isVouchable(identity.state)) "has an identity now: End frees your slot" else null
+                            val note = if (isMe && identity != null && !isVouchable(identity.state)) t(R.string.profile_member_has_identity) else null
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) { CirclePersonRow(member, identity, onProfile, note) }
                                 val access = LocalProfileAccess.current
                                 if (isMe && access != null) {
-                                    ActionButton("End", "End the vouch", "You no longer vouch for them", ProfileCalls.endVouch(member), access.canAct, access.onCall)
+                                    ActionButton(t(R.string.profile_end), t(R.string.profile_end_vouch_what), t(R.string.profile_end_vouch_detail), ProfileCalls.endVouch(member), access.canAct, access.onCall)
                                 }
                             }
                         }
@@ -231,10 +235,10 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
                         // Who invited this profile first, while the node keeps the link (B-91).
                         p.identity.inviter?.let { inviter ->
                             item {
-                                Heading("Invited by")
+                                Heading(t(R.string.profile_heading_invited_by))
                                 CirclePersonRow(inviter, c.identities[inviter], onProfile)
                             }
-                            item { Heading("Invitees") }
+                            item { Heading(t(R.string.profile_list_invitees)) }
                         }
                         if (c.invitees.isEmpty()) item { Text(emptyPeopleText(list, isMe), style = body) }
                         items(c.invitees, key = { "invitee:$it" }) { invitee ->
@@ -274,23 +278,20 @@ private fun TerminateButton(me: String, invitee: String, name: String, onDone: (
                 scope.launch {
                     withContext(Dispatchers.IO) { runCatching { rpc(context).estimateTx(KILL_INVITEE_TX, me, invitee, BigDecimal.ZERO) } }
                         .onSuccess { fee = it }
-                        .onFailure { note = "The node refuses: ${it.message}" }
+                        .onFailure { note = t(R.string.profile_node_refuses, "${it.message}") }
                     busy = false
                 }
             },
             enabled = !busy && !waiting,
-        ) { Text(if (waiting) "Terminate · waiting for a block" else "Terminate") }
+        ) { Text(if (waiting) t(R.string.profile_terminate_waiting) else t(R.string.profile_terminate)) }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
     fee?.let { f ->
         AlertDialog(
             onDismissRequest = { fee = null },
-            title = { Text("Terminate the invitation of $name?") },
+            title = { Text(t(R.string.profile_terminate_ask, name)) },
             text = {
-                Text(
-                    "They can no longer validate with this invitation, and your invitation is not given back. " +
-                        "Fee: about ${f.setScale(4, RoundingMode.UP).stripTrailingZeros().toPlainString()} iDNA.",
-                )
+                Text(t(R.string.profile_terminate_note, f.setScale(4, RoundingMode.UP).stripTrailingZeros().toPlainString()))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -298,14 +299,14 @@ private fun TerminateButton(me: String, invitee: String, name: String, onDone: (
                     waiting = true
                     scope.launch {
                         val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).sendTx(KILL_INVITEE_TX, me, invitee, BigDecimal.ZERO) } }
-                            .getOrElse { waiting = false; note = "The node refused: ${it.message}"; return@launch }
+                            .getOrElse { waiting = false; note = t(R.string.profile_node_refused, "${it.message}"); return@launch }
                         val mined = waitUntilMined(context, hash)
                         waiting = false
-                        if (mined) onDone() else note = "Not terminated: $NOT_SENT"
+                        if (mined) onDone() else note = t(R.string.profile_not_terminated, NOT_SENT)
                     }
-                }) { Text("Terminate") }
+                }) { Text(t(R.string.profile_terminate)) }
             },
-            dismissButton = { TextButton(onClick = { fee = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { fee = null }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -320,15 +321,15 @@ private fun Heading(text: String) {
 fun OffersSentSection(offers: List<VouchEntry>, identities: Map<String, ProfileIdentity>, onProfile: (String) -> Unit) {
     if (offers.isEmpty()) return
     val access = LocalProfileAccess.current
-    Heading("Offers waiting")
+    Heading(t(R.string.profile_offers_waiting))
     offers.forEach { offer ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 CirclePersonRow(offer.address, identities[offer.address], onProfile)
-                Text("Offered in epoch ${offer.epoch}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(t(R.string.profile_offered_in_epoch, "${offer.epoch}"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (access != null) {
-                ActionButton("Withdraw", "Withdraw the offer", "Your offer to vouch for them ends", ProfileCalls.cancelOffer(offer.address), access.canAct, access.onCall)
+                ActionButton(t(R.string.profile_withdraw), t(R.string.profile_withdraw_what), t(R.string.profile_withdraw_detail), ProfileCalls.cancelOffer(offer.address), access.canAct, access.onCall)
             }
         }
     }
@@ -356,7 +357,7 @@ fun TrustGivenRow(target: String, identity: ProfileIdentity?, onProfile: (String
             }
         }
         if (mine && access != null) {
-            ActionButton("Take back", "Take your Trust back", "Your Trust no longer counts", ProfileCalls.untrust(target), access.canAct, access.onCall)
+            ActionButton(t(R.string.profile_take_back), t(R.string.profile_untrust_what), t(R.string.profile_untrust_detail_short), ProfileCalls.untrust(target), access.canAct, access.onCall)
         }
     }
 }

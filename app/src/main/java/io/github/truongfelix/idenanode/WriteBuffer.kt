@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.roundToLong
@@ -11,12 +12,15 @@ import kotlin.math.roundToLong
  * phone (chain database, 2026-10-03/04): 3.1 MiB written a block at 4 MiB, 0.7 at 32 MiB; RAM 206, 235, 272,
  * 391 MB on average at 4, 16, 32, 64 MiB.
  */
-enum class WriteBuffer(val mib: Int, val label: String) {
-    MiB4(4, "Default"),
-    MiB16(16, "16 MiB"),
-    MiB32(32, "32 MiB"),
-    MiB64(64, "64 MiB"),
+enum class WriteBuffer(val mib: Int) {
+    MiB4(4),
+    MiB16(16),
+    MiB32(32),
+    MiB64(64),
     ;
+
+    /** "Default" for idena-go's size, else the size. */
+    val label: String get() = if (this == DEFAULT) t(R.string.node_buffer_default) else "$mib MiB"
 
     companion object {
         val DEFAULT = MiB4
@@ -27,26 +31,19 @@ enum class WriteBuffer(val mib: Int, val label: String) {
 }
 
 /** The node's databases with a write buffer setting, each set on its own. */
-enum class NodeDatabase(val title: String, val noun: String, val about: String) {
-    Chain(
-        "Chain database buffer",
-        "chain database",
-        "The chain database holds the blockchain: the node writes to it at every block.",
-    ),
-    Ipfs(
-        "IPFS database buffer",
-        "IPFS database",
-        "The IPFS database holds what the network uses to find content (which node has which flip, post or " +
-            "block). When nodes outside can reach the phone (a port open on the router), they store these " +
-            "records on it, and this database writes the most.",
-    ),
+enum class NodeDatabase(@StringRes private val titleId: Int, @StringRes private val nounId: Int, @StringRes private val aboutId: Int) {
+    Chain(R.string.node_chain_buffer_title, R.string.node_chain_database, R.string.node_chain_buffer_about),
+    Ipfs(R.string.node_ipfs_buffer_title, R.string.node_ipfs_database, R.string.node_ipfs_buffer_about),
+    ;
+
+    val title: String get() = t(titleId)
+    val noun: String get() = t(nounId)
+    val about: String get() = t(aboutId)
 }
 
 /** What the info of each buffer says after [NodeDatabase.about]. */
-const val WRITE_BUFFER_INFO =
-    "Default is 4 MiB, as on a computer. A higher level needs more RAM but writes less to the phone's storage " +
-        "(less wear, a little less work). If Android closes the node, choose a lower level. The node takes the " +
-        "size at its start."
+val WRITE_BUFFER_INFO: String
+    get() = t(R.string.node_write_buffer_info)
 
 /**
  * Whether the node runs with another setting than [chosen] (a write buffer, the peer level...): the node
@@ -73,7 +70,7 @@ fun pendingChanges(syncEnabled: Boolean, chosen: NodeOptions, running: RunningOp
     // The node takes ids only: a renamed peer needs no restart.
     val chosenIds = chosen.directPeers.map { it.id }.toSet()
     if (settingPending(syncEnabled, running.directPeers?.toSet(), chosenIds)) {
-        add(PendingChange(DIRECT_PEERS_TITLE, if (chosenIds.isEmpty()) "none" else chosen.directPeers.joinToString { it.name.ifEmpty { shortPeerId(it.id) } }))
+        add(PendingChange(DIRECT_PEERS_TITLE, if (chosenIds.isEmpty()) t(R.string.node_none) else chosen.directPeers.joinToString { it.name.ifEmpty { shortPeerId(it.id) } }))
     }
 }
 
@@ -85,10 +82,10 @@ data class RestartRisk(val message: String, val canRestart: Boolean)
 
 /** The [RestartRisk] of a restart at [now], for the validation at [start] and the ceremony [period]. */
 fun restartRisk(now: Instant, start: Instant?, period: String): RestartRisk? = when {
-    period.isNotEmpty() && period != "None" -> RestartRisk("The validation is running: restart the node after it.", canRestart = false)
+    period.isNotEmpty() && period != "None" -> RestartRisk(t(R.string.node_restart_risk_running), canRestart = false)
     start != null && now.isBefore(start) && Duration.between(now, start) < RESTART_MARGIN ->
         RestartRisk(
-            "The validation starts ${countdown(now, start)}: the node may still be looking for peers then.",
+            t(R.string.node_restart_risk_soon, countdown(now, start)),
             canRestart = true,
         )
     else -> null

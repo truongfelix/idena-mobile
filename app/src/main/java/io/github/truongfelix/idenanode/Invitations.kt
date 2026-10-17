@@ -120,11 +120,11 @@ fun inviteRows(sent: List<SentInvite>, invitees: List<Invitee>, states: Map<Stri
 
 /** What became of an invitation, in words. */
 fun inviteStatus(row: InviteRow): String = when {
-    row.pending -> "Sent, waiting for a block"
+    row.pending -> t(R.string.wallet_invite_status_pending)
     row.state == "Invite" ->
-        if (row.sent?.code != null) "Not activated yet: give the code" else "Not accepted yet"
-    row.state == "Candidate" -> "Activated: candidate for the next validation"
-    row.state in validatedStates -> "Validated: ${row.state}"
-    row.state == null || row.state == "Undefined" || row.state == "Killed" -> "Cancelled or spoiled"
-    else -> row.state
+        t(if (row.sent?.code != null) R.string.wallet_invite_status_give_code else R.string.wallet_invite_status_not_accepted)
+    row.state == "Candidate" -> t(R.string.wallet_invite_status_candidate)
+    row.state in validatedStates -> t(R.string.wallet_invite_status_validated, identityStateText(row.state.orEmpty()))
+    row.state == null || row.state == "Undefined" || row.state == "Killed" -> t(R.string.wallet_invite_status_cancelled)
+    else -> identityStateText(row.state)
 }

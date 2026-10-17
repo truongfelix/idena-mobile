@@ -59,7 +59,7 @@ class OracleVotingNode(private val rpc: NodeRpc) {
         }
         val voteBlock = (rpc.call("contract_readonlyCall", readonlyCallParams(contract, "voteBlock", "uint64")) as Number).toLong()
         val receipt = rpc.call("contract_estimateCall", secretVoteParams(from, contract, voteHash, payment, null)) as JSONObject
-        if (!receipt.optBoolean("success")) throw IOException(receipt.optString("error").ifEmpty { "the voting refused the vote" })
+        if (!receipt.optBoolean("success")) throw IOException(receipt.optString("error").ifEmpty { t(R.string.voting_refused_the_vote) })
         val fee = BigDecimal(receipt.optString("txFee", "0")) + BigDecimal(receipt.optString("gasCost", "0"))
         return VotePlan(from, contract, option, salt, voteHash, voteBlock, payment, fee, (fee * BigDecimal(2)).setScale(6, RoundingMode.UP))
     }

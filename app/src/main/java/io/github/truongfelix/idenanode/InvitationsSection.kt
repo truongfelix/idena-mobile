@@ -105,7 +105,7 @@ fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChange
 
     fun send(name: String, to: String?) {
         dialog = null
-        busy = "Sending the invitation…"
+        busy = t(R.string.wallet_invite_sending)
         message = null
         scope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -121,40 +121,40 @@ fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChange
             busy = null
             result.onSuccess { (invite, saved) ->
                 if (invite.code != null) dialog = InviteDialog.Code(invite, saved)
-                else message = "Invitation sent to ${shortAddress(invite.receiver)}: they accept it in their Idena app."
+                else message = t(R.string.wallet_invite_sent_to, shortAddress(invite.receiver))
                 reads++
                 onChanged()
-            }.onFailure { message = "The node refused the invitation: ${it.message}" }
+            }.onFailure { message = t(R.string.wallet_invite_refused, it.message.toString()) }
         }
     }
 
     fun askCancel(row: InviteRow) {
         message = null
-        busy = "Asking the node for the fee…"
+        busy = t(R.string.wallet_invite_asking_fee)
         scope.launch {
             val fee = withContext(Dispatchers.IO) {
                 runCatching { rpc(context).estimateTx(KILL_INVITEE_TX, status.address, row.address, BigDecimal.ZERO) }
             }
             busy = null
-            fee.onSuccess { dialog = InviteDialog.Cancel(row, it) }.onFailure { message = "The node refuses to cancel it: ${it.message}" }
+            fee.onSuccess { dialog = InviteDialog.Cancel(row, it) }.onFailure { message = t(R.string.wallet_invite_cancel_refused, it.message.toString()) }
         }
     }
 
     fun cancel(row: InviteRow) {
         dialog = null
-        busy = "Cancelling the invitation…"
+        busy = t(R.string.wallet_invite_cancelling)
         scope.launch {
             val hash = withContext(Dispatchers.IO) {
                 runCatching { rpc(context).sendTx(KILL_INVITEE_TX, status.address, row.address, BigDecimal.ZERO) }
             }.getOrElse {
                 busy = null
-                message = "The node refused: ${it.message}"
+                message = t(R.string.wallet_node_refused, it.message.toString())
                 return@launch
             }
-            busy = "Cancelled: waiting for a block…"
+            busy = t(R.string.wallet_invite_cancelled_waiting)
             val mined = waitUntilMined(context, hash)
             busy = null
-            message = if (mined) "Invitation cancelled." else "The invitation is not cancelled: $NOT_SENT"
+            message = if (mined) t(R.string.wallet_invite_cancelled) else t(R.string.wallet_invite_not_cancelled, NOT_SENT)
             reads++
             onChanged()
         }
@@ -162,31 +162,31 @@ fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChange
 
     fun spoil(code: String) {
         dialog = null
-        busy = "Spoiling the code…"
+        busy = t(R.string.wallet_invite_spoiling)
         message = null
         scope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { rpc(context).spoilInvite(code) } }
             busy = null
             message = result.fold(
-                { "Code spoiled: nobody can use it any more once the transaction is in a block (${it.take(10)}…)." },
-                { "The node refused: ${it.message}" },
+                { t(R.string.wallet_invite_spoiled, it.take(10)) },
+                { t(R.string.wallet_node_refused, it.message.toString()) },
             )
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Invitations", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            Text(if (status.invites == 1) "1 left" else "${status.invites} left", style = MaterialTheme.typography.bodyMedium)
+            Text(t(R.string.wallet_invite_invitations), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(tp(R.plurals.wallet_invite_left, status.invites, status.invites), style = MaterialTheme.typography.bodyMedium)
         }
         when {
             canSendInvite(status.invites, status.period) ->
-                Button(onClick = { message = null; dialog = InviteDialog.New }, enabled = busy == null) { Text("Invite someone") }
+                Button(onClick = { message = null; dialog = InviteDialog.New }, enabled = busy == null) { Text(t(R.string.wallet_invite_someone)) }
             status.invites == 0 -> Text(
-                "No invitation to send. Verified and Human identities receive invitations at each validation.",
+                t(R.string.wallet_invite_none_to_send),
                 style = MaterialTheme.typography.bodySmall,
             )
-            else -> Text("Invitations are sent outside the validation.", style = MaterialTheme.typography.bodySmall)
+            else -> Text(t(R.string.wallet_invite_outside), style = MaterialTheme.typography.bodySmall)
         }
         busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -196,7 +196,7 @@ fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChange
                 InviteRowView(row, people, canCancel = busy == null && canCancelInvite(row.state, status.period), onCancel = { askCancel(row) })
             }
         }
-        TextButton(onClick = { message = null; dialog = InviteDialog.Spoil }, enabled = busy == null) { Text("Spoil a public code") }
+        TextButton(onClick = { message = null; dialog = InviteDialog.Spoil }, enabled = busy == null) { Text(t(R.string.wallet_invite_spoil_title)) }
     }
 
     when (val current = dialog) {
@@ -204,16 +204,18 @@ fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChange
         is InviteDialog.Code -> CodeDialog(current.invite, current.saved) { dialog = null }
         is InviteDialog.Cancel -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("Cancel the invitation") },
+            title = { Text(t(R.string.wallet_invite_cancel_title)) },
             text = {
                 Text(
-                    "${inviteName(current.row, people)} loses the invitation" +
-                        (if (current.row.state == "Candidate") " and will not take part in the validation" else "") +
-                        ". Your invitation is not given back. Fee: ${idna(current.fee.toPlainString())}.",
+                    t(
+                        if (current.row.state == "Candidate") R.string.wallet_invite_cancel_text_candidate else R.string.wallet_invite_cancel_text,
+                        inviteName(current.row, people),
+                        idna(current.fee.toPlainString()),
+                    ),
                 )
             },
-            confirmButton = { TextButton(onClick = { cancel(current.row) }) { Text("Cancel it") } },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Keep it") } },
+            confirmButton = { TextButton(onClick = { cancel(current.row) }) { Text(t(R.string.wallet_invite_cancel_it)) } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(t(R.string.wallet_invite_keep_it)) } },
         )
         InviteDialog.Spoil -> SpoilDialog(onDismiss = { dialog = null }, onSpoil = ::spoil)
         null -> {}
@@ -222,7 +224,7 @@ fun InvitationsSection(status: NodeStatus, people: Map<String, Person>, onChange
 
 /** The name of an invitation: its private label, a contact's name, or "Invitation". */
 private fun inviteName(row: InviteRow, people: Map<String, Person>): String =
-    row.sent?.name?.takeIf { it.isNotEmpty() } ?: people[row.address]?.name?.takeIf { it.isNotEmpty() } ?: "Invitation"
+    row.sent?.name?.takeIf { it.isNotEmpty() } ?: people[row.address]?.name?.takeIf { it.isNotEmpty() } ?: t(R.string.wallet_invite_invitation)
 
 @Composable
 private fun InviteRowView(row: InviteRow, people: Map<String, Person>, canCancel: Boolean, onCancel: () -> Unit) {
@@ -233,19 +235,19 @@ private fun InviteRowView(row: InviteRow, people: Map<String, Person>, canCancel
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(inviteName(row, people), fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            if (canCancel) TextButton(onClick = onCancel) { Text("Cancel") }
+            if (canCancel) TextButton(onClick = onCancel) { Text(t(R.string.common_cancel)) }
         }
         if (code != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Code ${code.take(4)}…${code.takeLast(4)}", fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                TextButton(onClick = { clipboard.setText(AnnotatedString(code)); copied = true }) { Text(if (copied) "Copied" else "Copy") }
+                Text(t(R.string.wallet_invite_code_short, code.take(4), code.takeLast(4)), fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                TextButton(onClick = { clipboard.setText(AnnotatedString(code)); copied = true }) { Text(t(if (copied) R.string.wallet_copied else R.string.wallet_copy)) }
                 TextButton(onClick = { showQr = true }) { Text("QR") }
             }
         } else {
             Text(shortAddress(row.address), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
         }
         Text(
-            (if (row.sent == null) "Sent from another app · " else "") + inviteStatus(row),
+            if (row.sent == null) t(R.string.wallet_invite_from_other_app, inviteStatus(row)) else inviteStatus(row),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -253,9 +255,9 @@ private fun InviteRowView(row: InviteRow, people: Map<String, Person>, canCancel
     if (showQr && code != null) {
         AlertDialog(
             onDismissRequest = { showQr = false },
-            title = { Text("Invitation code") },
+            title = { Text(t(R.string.wallet_invite_code)) },
             text = { CodeView(code) },
-            confirmButton = { TextButton(onClick = { showQr = false }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { showQr = false }) { Text(t(R.string.common_close)) } },
         )
     }
 }

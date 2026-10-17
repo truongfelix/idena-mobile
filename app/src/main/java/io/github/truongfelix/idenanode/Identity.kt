@@ -52,29 +52,43 @@ fun currentTask(
     publishedFlips: Int,
     answersSent: Boolean,
 ): String = when (period) {
-    "FlipLottery" -> "Shuffling flips…"
+    "FlipLottery" -> t(R.string.wallet_identity_task_shuffling)
     "ShortSession", "LongSession" -> when {
-        state == "Undefined" || state == "Invite" -> "No validation: the invitation was not activated"
+        state == "Undefined" || state == "Invite" -> t(R.string.wallet_identity_task_not_activated)
         state in validatedStates || state in setOf("Candidate", "Suspended", "Zombie") ->
-            if (answersSent) "Wait for the validation end" else "Validate"
-        else -> "No validation for this identity"
+            t(if (answersSent) R.string.wallet_identity_task_wait_end else R.string.wallet_identity_task_validate)
+        else -> t(R.string.wallet_identity_task_no_validation)
     }
-    "AfterLongSession" -> "Wait for the validation end"
+    "AfterLongSession" -> t(R.string.wallet_identity_task_wait_end)
     else -> when {
-        state == "Invite" -> "Accept the invitation"
-        state == "Undefined" -> "Activate an invitation code"
+        state == "Invite" -> t(R.string.wallet_identity_task_accept)
+        state == "Undefined" -> t(R.string.wallet_identity_task_activate)
         state in validatedStates -> {
             val requiredLeft = requiredFlips - publishedFlips
             val optional = availableFlips - maxOf(requiredFlips, publishedFlips)
             when {
-                requiredLeft > 0 -> "Create $requiredLeft required flip" + if (requiredLeft > 1) "s" else ""
-                optional > 0 -> "Wait for the validation or create $optional optional flip" + if (optional > 1) "s" else ""
-                else -> "Wait for the validation"
+                requiredLeft > 0 -> tp(R.plurals.wallet_identity_task_required_flips, requiredLeft, requiredLeft)
+                optional > 0 -> tp(R.plurals.wallet_identity_task_optional_flips, optional, optional)
+                else -> t(R.string.wallet_identity_task_wait)
             }
         }
-        state in setOf("Candidate", "Suspended", "Zombie") -> "Wait for the validation"
-        else -> "No task: this identity cannot take part"
+        state in setOf("Candidate", "Suspended", "Zombie") -> t(R.string.wallet_identity_task_wait)
+        else -> t(R.string.wallet_identity_task_none)
     }
+}
+
+/** An identity state as the screens show it; the node's word ([state]) stays for the logic. */
+fun identityStateText(state: String): String = when (state) {
+    "Undefined" -> t(R.string.wallet_identity_state_undefined)
+    "Invite" -> t(R.string.wallet_identity_state_invite)
+    "Candidate" -> t(R.string.wallet_identity_state_candidate)
+    "Newbie" -> t(R.string.wallet_identity_state_newbie)
+    "Verified" -> t(R.string.wallet_identity_state_verified)
+    "Human" -> t(R.string.wallet_identity_state_human)
+    "Suspended" -> t(R.string.wallet_identity_state_suspended)
+    "Zombie" -> t(R.string.wallet_identity_state_zombie)
+    "Killed" -> t(R.string.wallet_identity_state_killed)
+    else -> state
 }
 
 /**

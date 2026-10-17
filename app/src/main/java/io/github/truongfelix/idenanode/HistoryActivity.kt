@@ -2,8 +2,8 @@ package io.github.truongfelix.idenanode
 
 import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,7 +60,7 @@ import java.time.format.FormatStyle
  * The History screen, opened from the Profile card: the ceremonies (with each recorded validation report), the
  * transactions and the mining rewards of the account, all from the app's own node.
  */
-class HistoryActivity : ComponentActivity() {
+class HistoryActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -73,7 +73,11 @@ class HistoryActivity : ComponentActivity() {
     }
 }
 
-private enum class HistoryTab(val title: String) { Ceremonies("Ceremonies"), Transactions("Transactions"), Mining("Mining") }
+private enum class HistoryTab(@StringRes val title: Int) {
+    Ceremonies(R.string.wallet_history_tab_ceremonies),
+    Transactions(R.string.wallet_history_tab_transactions),
+    Mining(R.string.wallet_history_tab_mining),
+}
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
@@ -113,23 +117,23 @@ fun HistoryScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) { Text(t(R.string.common_close)) }
             Spacer(Modifier.weight(1f))
-            Text("History", style = MaterialTheme.typography.titleMedium)
+            Text(t(R.string.wallet_history_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.width(64.dp))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HistoryTab.entries.forEach {
-                FilterChip(selected = tab == it, onClick = { tab = it }, label = { Text(it.title) })
+                FilterChip(selected = tab == it, onClick = { tab = it }, label = { Text(t(it.title)) })
             }
         }
         val current = state
         when {
             current == null -> CircularProgressIndicator()
             current.isFailure -> {
-                Text("The node did not answer: ${current.exceptionOrNull()?.message}")
-                Button(onClick = { reads++ }) { Text("Try again") }
+                Text(t(R.string.wallet_node_no_answer, current.exceptionOrNull()?.message.toString()))
+                Button(onClick = { reads++ }) { Text(t(R.string.common_try_again)) }
             }
             else -> when (tab) {
                 HistoryTab.Ceremonies -> CeremoniesList(history!!, Modifier.weight(1f))
@@ -150,18 +154,17 @@ private fun CeremoniesList(history: IdentityHistory, modifier: Modifier) {
     var open by remember { mutableStateOf<Int?>(null) }
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         if (!history.ceremoniesComplete) {
-            item { Note("Your node is still finding its past ceremonies in its stored blocks; the list fills in by itself.") }
+            item { Note(t(R.string.wallet_history_finding)) }
         }
         if (history.ceremonies.isEmpty()) {
-            item { Text("No validation of this account in the ceremonies your node knows.", style = MaterialTheme.typography.bodyMedium) }
+            item { Text(t(R.string.wallet_history_no_validation), style = MaterialTheme.typography.bodyMedium) }
         }
         items(history.ceremonies, key = { it.epoch }) { row ->
             CeremonyCard(row, expanded = open == row.epoch, onClick = { open = if (open == row.epoch) null else row.epoch })
         }
         item {
             Note(
-                "Your node keeps the result of every ceremony since its first block, and the score, flips and rewards " +
-                    "of the ceremonies it applied itself (from this version on). Tap a ceremony with a report to see it.",
+                t(R.string.wallet_history_ceremonies_note),
             )
         }
     }
@@ -171,11 +174,11 @@ private fun CeremoniesList(history: IdentityHistory, modifier: Modifier) {
 private fun outcomeText(row: CeremonyRow): Pair<String, Color> {
     val palette = statusPalette()
     return when (row.outcome) {
-        CeremonyOutcome.Validated -> (row.state?.let { identityStatus(it) } ?: "Validated") to palette(row.state ?: "Verified")
-        CeremonyOutcome.NotValidated -> (row.state?.let { identityStatus(it) } ?: "Not validated") to MaterialTheme.colorScheme.error
-        CeremonyOutcome.NoIdentity -> "No identity" to MaterialTheme.colorScheme.onSurfaceVariant
-        CeremonyOutcome.Failed -> "Ceremony failed" to MaterialTheme.colorScheme.error
-        CeremonyOutcome.Unknown -> "Result unknown" to MaterialTheme.colorScheme.onSurfaceVariant
+        CeremonyOutcome.Validated -> (row.state?.let { identityStatus(it) } ?: t(R.string.wallet_history_validated)) to palette(row.state ?: "Verified")
+        CeremonyOutcome.NotValidated -> (row.state?.let { identityStatus(it) } ?: t(R.string.wallet_history_not_validated)) to MaterialTheme.colorScheme.error
+        CeremonyOutcome.NoIdentity -> t(R.string.wallet_history_no_identity) to MaterialTheme.colorScheme.onSurfaceVariant
+        CeremonyOutcome.Failed -> t(R.string.wallet_history_failed) to MaterialTheme.colorScheme.error
+        CeremonyOutcome.Unknown -> t(R.string.wallet_history_unknown) to MaterialTheme.colorScheme.onSurfaceVariant
     }
 }
 
@@ -185,7 +188,7 @@ private fun CeremonyCard(row: CeremonyRow, expanded: Boolean, onClick: () -> Uni
     Card(Modifier.fillMaxWidth().then(if (report != null) Modifier.clickable(onClick = onClick) else Modifier)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Epoch ${row.epoch}", fontWeight = FontWeight.Medium)
+                Text(t(R.string.wallet_history_epoch, row.epoch), fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
                 Text(row.time?.let { dayFormat.format(Instant.ofEpochSecond(it)) } ?: "", style = MaterialTheme.typography.bodySmall)
             }
@@ -197,23 +200,26 @@ private fun CeremonyCard(row: CeremonyRow, expanded: Boolean, onClick: () -> Uni
             }
             Text(change + text, color = color, style = MaterialTheme.typography.bodyMedium)
             val details = buildList {
-                row.score?.let { add("Score ${points(it.first)} of ${it.second}") }
-                if (row.flips > 0) add("Flips ${row.flips}")
+                row.score?.let { add(t(R.string.wallet_history_score, points(it.first), it.second)) }
+                if (row.flips > 0) add(t(R.string.wallet_history_flips, row.flips))
                 when {
-                    row.shortAnswersSent && row.longAnswersSent -> add("Short and long answers sent")
-                    row.shortAnswersSent -> add("Short answers sent")
-                    row.longAnswersSent -> add("Long answers sent")
+                    row.shortAnswersSent && row.longAnswersSent -> add(t(R.string.wallet_history_both_answers))
+                    row.shortAnswersSent -> add(t(R.string.wallet_history_short_answers))
+                    row.longAnswersSent -> add(t(R.string.wallet_history_long_answers))
                 }
             }
             if (details.isNotEmpty()) Note(details.joinToString(" · "))
             if (report != null) {
                 val missed = report.missedRewards
                 Text(
-                    "Rewards ${idna(report.earned.toPlainString())}" +
-                        if (missed.signum() > 0) ", ${amount(missed)} missed" else "",
+                    if (missed.signum() > 0) {
+                        t(R.string.wallet_history_rewards_missed, idna(report.earned.toPlainString()), amount(missed))
+                    } else {
+                        t(R.string.wallet_history_rewards, idna(report.earned.toPlainString()))
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (expanded) ReportDetails(report) else Note("Tap for the report")
+                if (expanded) ReportDetails(report) else Note(t(R.string.wallet_history_tap_report))
             }
         }
     }
@@ -223,35 +229,35 @@ private fun CeremonyCard(row: CeremonyRow, expanded: Boolean, onClick: () -> Uni
 private fun ReportDetails(report: ValidationReport) {
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (!report.participated) {
-            Note("Not a candidate of this ceremony.")
+            Note(t(R.string.wallet_history_not_candidate))
             return@Column
         }
-        Field("Short", "${points(report.shortPoints)} of ${report.shortFlips} (${report.shortAnswers} answers)")
-        Field("Long", "${points(report.longPoints)} of ${report.longFlips} (${report.longAnswers} answers)")
-        Field("Flips made", report.madeFlips.toString())
-        if (report.missed) Text("Validation missed", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        Field(t(R.string.wallet_history_short), t(R.string.wallet_history_session_points, points(report.shortPoints), report.shortFlips, report.shortAnswers))
+        Field(t(R.string.wallet_history_long), t(R.string.wallet_history_session_points, points(report.longPoints), report.longFlips, report.longAnswers))
+        Field(t(R.string.wallet_history_flips_made), report.madeFlips.toString())
+        if (report.missed) Text(t(R.string.wallet_history_validation_missed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         if (!report.approved && !report.missed) {
-            Text("Short answers not seen in time by most participants", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            Text(t(R.string.wallet_history_not_approved), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
         if (report.penalized) {
             Text(
-                "Penalized" + if (report.penaltyReason.isNotEmpty()) ": ${report.penaltyReason}" else "",
+                if (report.penaltyReason.isNotEmpty()) t(R.string.wallet_history_penalized_reason, report.penaltyReason) else t(R.string.wallet_history_penalized),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        if (report.wrongGrades) Note("Grades not counted (reports ignored)")
-        Text("Rewards, iDNA", fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 4.dp))
+        if (report.wrongGrades) Note(t(R.string.wallet_history_wrong_grades))
+        Text(t(R.string.wallet_history_rewards_title), fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 4.dp))
         report.rewards.filter { it.earned.signum() != 0 || (it.missed?.signum() ?: 0) != 0 }.forEach { line ->
             val missed = line.missed
             val lost = if (missed != null && missed.signum() > 0) {
-                "  (${amount(missed)} missed" + if (line.reason.isNotEmpty()) ", ${missedReason(line.reason)})" else ")"
+                if (line.reason.isNotEmpty()) t(R.string.wallet_history_line_missed_reason, amount(missed), missedReason(line.reason)) else t(R.string.wallet_history_line_missed, amount(missed))
             } else {
                 ""
             }
             Field(line.kind, amount(line.earned) + lost)
         }
-        report.delegatee?.let { Note("${idna(report.delegated.toPlainString())} paid to the pool ${shortAddress(it)}") }
+        report.delegatee?.let { Note(t(R.string.wallet_history_pool_paid, idna(report.delegated.toPlainString()), shortAddress(it))) }
     }
 }
 
@@ -282,12 +288,12 @@ private fun TransactionsList(address: String, modifier: Modifier) {
     val names = rememberShownNames(txs.mapNotNull { it.counterParty(address) })
 
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-        error?.let { item { Text("The node did not answer: $it", color = MaterialTheme.colorScheme.error) } }
-        if (!loading && txs.isEmpty() && error == null) item { Text("No transactions", style = MaterialTheme.typography.bodyMedium) }
+        error?.let { item { Text(t(R.string.wallet_node_no_answer, it), color = MaterialTheme.colorScheme.error) } }
+        if (!loading && txs.isEmpty() && error == null) item { Text(t(R.string.wallet_history_no_transactions), style = MaterialTheme.typography.bodyMedium) }
         items(txs, key = { it.hash }) { tx -> TxCard(tx, address, names) }
         when {
             loading -> item { CircularProgressIndicator() }
-            token != null -> item { OutlinedButton(onClick = { load(token) }) { Text("Show more") } }
+            token != null -> item { OutlinedButton(onClick = { load(token) }) { Text(t(R.string.wallet_history_show_more)) } }
         }
     }
 }
@@ -307,12 +313,12 @@ private fun TxCard(tx: HistoryTx, address: String, names: Map<String, String>) {
                     )
                 }
             }
-            Note("${timeFormat.format(Instant.ofEpochSecond(tx.timestamp))} · epoch ${tx.epoch}")
+            Note(t(R.string.wallet_history_tx_time, timeFormat.format(Instant.ofEpochSecond(tx.timestamp)), tx.epoch))
             tx.counterParty(address)?.let {
                 names[it.lowercase()]?.let { name -> Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) }
                 Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (tx.fee.signum() > 0) Note("Fee ${idna(tx.fee.toPlainString())}")
+            if (tx.fee.signum() > 0) Note(t(R.string.wallet_history_fee, idna(tx.fee.toPlainString())))
         }
     }
 }
@@ -324,7 +330,7 @@ private fun MiningList(history: IdentityHistory, modifier: Modifier) {
         if (rows.isEmpty()) {
             item {
                 Text(
-                    "No mining reward recorded yet. Your node records them from this version on, for the blocks it adds while mining is on.",
+                    t(R.string.wallet_history_no_mining),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -334,9 +340,9 @@ private fun MiningList(history: IdentityHistory, modifier: Modifier) {
             val total = rows.fold(BigDecimal.ZERO) { sum, row -> sum + row.total }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Field("Total", idna(total.toPlainString()))
-                    Field("Proposed", "${rows.sumOf { it.proposedBlocks }} blocks")
-                    Field("Committee", "${rows.sumOf { it.committeeBlocks }} blocks")
+                    Field(t(R.string.wallet_history_total), idna(total.toPlainString()))
+                    Field(t(R.string.wallet_history_proposed), t(R.string.wallet_history_blocks, rows.sumOf { it.proposedBlocks }))
+                    Field(t(R.string.wallet_history_committee), t(R.string.wallet_history_blocks, rows.sumOf { it.committeeBlocks }))
                 }
             }
         }
@@ -344,18 +350,18 @@ private fun MiningList(history: IdentityHistory, modifier: Modifier) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row {
-                        Text("Epoch ${row.epoch}", fontWeight = FontWeight.Medium)
+                        Text(t(R.string.wallet_history_epoch, row.epoch), fontWeight = FontWeight.Medium)
                         Spacer(Modifier.weight(1f))
                         Text(idna(row.total.toPlainString()))
                     }
-                    Note("Proposed ${row.proposedBlocks} blocks: ${amount(row.proposerReward)} iDNA")
-                    Note("Committee ${row.committeeBlocks} blocks: ${amount(row.committeeReward)} iDNA")
+                    Note(t(R.string.wallet_history_proposed_line, row.proposedBlocks, amount(row.proposerReward)))
+                    Note(t(R.string.wallet_history_committee_line, row.committeeBlocks, amount(row.committeeReward)))
                     if (row.penaltyBurnt.signum() > 0) {
-                        Text("Burnt by penalty ${amount(row.penaltyBurnt)} iDNA", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Text(t(R.string.wallet_history_burnt, amount(row.penaltyBurnt)), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         }
-        if (history.epoch > 0) item { Note("The current epoch (${history.epoch}) is still counting.") }
+        if (history.epoch > 0) item { Note(t(R.string.wallet_history_current_epoch, history.epoch)) }
     }
 }

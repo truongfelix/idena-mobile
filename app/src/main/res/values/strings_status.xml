@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status bar's texts and the durations (Status.kt). -->
+<resources>
+    <string name="status_could_not_start">The node could not start</string>
+    <string name="status_sync_off">Sync off</string>
+    <string name="status_sync_off_no_key">Sync off: create or import a key first</string>
+    <string name="status_no_answer">The node does not answer</string>
+    <string name="status_wrong_clock">The phone\'s clock is wrong</string>
+    <string name="status_no_peers">No peers</string>
+    <string name="status_looking_for_peers">Looking for peers…</string>
+    <string name="status_looking_for_peers_minutes">Looking for peers · %1$d min</string>
+    <string name="status_syncing">Syncing</string>
+    <string name="status_behind">Behind: looking for peers</string>
+    <string name="status_synced_issue">Synced · %1$s</string>
+    <plurals name="status_synced_peers">
+        <item quantity="one">Synced · %1$d peer</item>
+        <item quantity="other">Synced · %1$d peers</item>
+    </plurals>
+    <string name="status_battery_saver_on">battery saver on</string>
+    <string name="time_under_a_minute">under a minute</string>
+    <string name="time_about_minutes">about %1$d min</string>
+    <string name="time_about_hours">about %1$d h %2$s min</string>
+    <string name="time_now">now</string>
+    <string name="time_in_days">in %1$d d %2$d h</string>
+    <string name="time_in_hours">in %1$d h %2$d min</string>
+    <string name="time_in_minutes">in %1$d min</string>
+</resources>

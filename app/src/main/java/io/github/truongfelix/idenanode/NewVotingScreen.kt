@@ -71,23 +71,23 @@ fun NewVotingScreen(me: String, onClose: () -> Unit, onPublished: (String) -> Un
         modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ScreenTitle("New voting", onClose)
+        ScreenTitle(t(R.string.voting_title_new), onClose)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VotingKind.entries.forEach { kind ->
                 FilterChip(selected = form.kind == kind, onClick = { if (kind != form.kind) form = form.withKind(kind, Instant.now()) }, label = { Text(kind.title) })
             }
         }
         Text(form.kind.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(form.title, { form = form.copy(title = it) }, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
-        OutlinedTextField(form.desc, { form = form.copy(desc = it) }, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
-        Text("Options", style = MaterialTheme.typography.titleSmall)
+        OutlinedTextField(form.title, { form = form.copy(title = it) }, Modifier.fillMaxWidth(), label = { Text(t(R.string.voting_form_title)) }, singleLine = true)
+        OutlinedTextField(form.desc, { form = form.copy(desc = it) }, Modifier.fillMaxWidth(), label = { Text(t(R.string.voting_form_description)) }, minLines = 3)
+        Text(t(R.string.voting_options), style = MaterialTheme.typography.titleSmall)
         form.options.forEachIndexed { i, option ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     option,
                     { text -> form = form.copy(options = form.options.toMutableList().also { it[i] = text }) },
                     Modifier.weight(1f),
-                    label = { Text("Option ${i + 1}") },
+                    label = { Text(t(R.string.voting_form_option_n, i + 1)) },
                     singleLine = true,
                 )
                 if (form.options.size > 2) {
@@ -95,9 +95,9 @@ fun NewVotingScreen(me: String, onClose: () -> Unit, onPublished: (String) -> Un
                 }
             }
         }
-        TextButton(onClick = { form = form.copy(options = form.options + "") }) { Text("+ Add option") }
+        TextButton(onClick = { form = form.copy(options = form.options + "") }) { Text(t(R.string.voting_form_add_option)) }
         StartChoice(form) { form = it }
-        Text("Secret voting", style = MaterialTheme.typography.titleSmall)
+        Text(t(R.string.voting_form_secret_voting), style = MaterialTheme.typography.titleSmall)
         DurationPills(form.votingDuration) { form = form.copy(votingDuration = it) }
         NewVotingAdvanced(form, network, onChange = { form = it }, onBadNumbers = { badNumbers = it })
 
@@ -111,23 +111,23 @@ fun NewVotingScreen(me: String, onClose: () -> Unit, onPublished: (String) -> Un
         }
         val done = published
         if (done != null) {
-            Button(onClick = { onPublished(done) }, Modifier.fillMaxWidth()) { Text("Open the voting") }
+            Button(onClick = { onPublished(done) }, Modifier.fillMaxWidth()) { Text(t(R.string.voting_open_the_voting)) }
         } else {
             Button(
                 onClick = {
-                    problems = form.problems() + if (badNumbers.isEmpty()) emptyList() else listOf("Fix the numbers in red.")
+                    problems = form.problems() + if (badNumbers.isEmpty()) emptyList() else listOf(t(R.string.voting_problem_numbers))
                     message = null
                     if (problems.isNotEmpty()) return@Button
-                    busy = "Checking the voting with the node…"
+                    busy = t(R.string.voting_checking_voting)
                     scope.launch {
                         val made = withContext(Dispatchers.IO) { runCatching { planPublish(context, me, form) } }
                         busy = null
-                        made.onSuccess { plan = it }.onFailure { message = "The voting cannot be published: ${it.message}" }
+                        made.onSuccess { plan = it }.onFailure { message = t(R.string.voting_cannot_be_published, it.message.toString()) }
                     }
                 },
                 enabled = busy == null,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Publish…") }
+            ) { Text(t(R.string.voting_publish_ellipsis)) }
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -135,7 +135,7 @@ fun NewVotingScreen(me: String, onClose: () -> Unit, onPublished: (String) -> Un
     plan?.let { ready ->
         AlertDialog(
             onDismissRequest = { plan = null },
-            title = { Text("Publish the voting") },
+            title = { Text(t(R.string.voting_publish_title)) },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(publishConfirmText(form, ready) { dateText(it) }) } },
             confirmButton = {
                 TextButton(onClick = {
@@ -147,9 +147,9 @@ fun NewVotingScreen(me: String, onClose: () -> Unit, onPublished: (String) -> Un
                         message = outcome.message
                         if (outcome.contract != null && outcome.message == null) onPublished(outcome.contract)
                     }
-                }) { Text("Publish") }
+                }) { Text(t(R.string.voting_publish_button)) }
             },
-            dismissButton = { TextButton(onClick = { plan = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { plan = null }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -162,7 +162,7 @@ private fun dateText(time: Instant): String = "${dateFormat.format(time)} (${tim
 /** Plans the publish once the node is synced: a node behind the chain estimates against an old state. */
 private fun planPublish(context: Context, me: String, form: NewVotingForm): PublishPlan {
     val rpc = rpc(context)
-    if (!rpc.synced()) throw IOException("the node is still syncing; publish once it is synced")
+    if (!rpc.synced()) throw IOException(t(R.string.voting_syncing_publish_later))
     return VotingOwnerNode(rpc).planPublish(me, form, Instant.now())
 }
 
@@ -184,14 +184,14 @@ internal suspend fun publishAndLaunch(
 ): PublishOutcome =
     withContext(Dispatchers.IO) {
         val node = VotingOwnerNode(rpc)
-        status("Publishing…")
-        val hash = runCatching { node.publish(me, plan) }.getOrElse { return@withContext PublishOutcome(null, "Not published: ${it.message}") }
-        val block = waitForBlock(NodeTxLookup(rpc), hash) ?: return@withContext PublishOutcome(null, "Not published: $NOT_SENT")
-        block.error?.let { return@withContext PublishOutcome(null, "The contract refused it: $it.") }
+        status(t(R.string.voting_publishing))
+        val hash = runCatching { node.publish(me, plan) }.getOrElse { return@withContext PublishOutcome(null, t(R.string.voting_not_published, it.message.toString())) }
+        val block = waitForBlock(NodeTxLookup(rpc), hash) ?: return@withContext PublishOutcome(null, t(R.string.voting_not_published, NOT_SENT))
+        block.error?.let { return@withContext PublishOutcome(null, t(R.string.voting_contract_refused_it, it)) }
         val contract = runCatching { node.deployed(hash) }.getOrNull() ?: plan.contract
         onDeployed(contract)
         if (!launchesAtOnce(form)) return@withContext PublishOutcome(contract, null)
-        status("Launching…")
+        status(t(R.string.voting_launching))
         val launched = runCatching {
             val voting = OracleVotingNode(rpc).voting(contract, me)
             // The form's rewards fund too: the contract keeps it only with an owner fee.
@@ -200,23 +200,23 @@ internal suspend fun publishAndLaunch(
             waitForBlock(NodeTxLookup(rpc), node.send(VotingAction.Launch, me, voting, amount, cost))
         }
         val error = launched.fold(
-            onSuccess = { block -> if (block == null) NOT_SENT else block.error?.let { "the contract refused it: $it" } },
-            onFailure = { it.message ?: "the node refused it" },
+            onSuccess = { block -> if (block == null) NOT_SENT else block.error?.let { t(R.string.voting_contract_refused_it_lower, it) } },
+            onFailure = { it.message ?: t(R.string.voting_node_refused_it_lower) },
         )
-        PublishOutcome(contract, error?.let { "Published, not launched (${it.trimEnd('.')}). Launch it from its page." })
+        PublishOutcome(contract, error?.let { t(R.string.voting_published_not_launched, it.trimEnd('.'), t(R.string.voting_launch_from_its_page)) })
     }
 
 /** Start now, or at a picked date and time. */
 @Composable
 private fun StartChoice(form: NewVotingForm, onChange: (NewVotingForm) -> Unit) {
     val context = LocalContext.current
-    Text("Start", style = MaterialTheme.typography.titleSmall)
+    Text(t(R.string.voting_form_start), style = MaterialTheme.typography.titleSmall)
     Row(verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected = form.startNow, onClick = { onChange(form.copy(startNow = true)) })
-        Text("Now")
+        Text(t(R.string.voting_form_now))
         RadioButton(selected = !form.startNow, onClick = { onChange(form.copy(startNow = false)) })
         TextButton(onClick = { pickDateTime(context, form.startTime ?: Instant.now()) { onChange(form.copy(startNow = false, startTime = it)) } }) {
-            Text(form.startTime?.takeIf { !form.startNow }?.let { dateFormat.format(it) } ?: "Pick a date")
+            Text(form.startTime?.takeIf { !form.startNow }?.let { dateFormat.format(it) } ?: t(R.string.voting_form_pick_date))
         }
     }
 }

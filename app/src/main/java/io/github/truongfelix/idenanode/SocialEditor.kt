@@ -74,11 +74,11 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { model.sending.draft = null }) { Text("Cancel") }
+            TextButton(onClick = { model.sending.draft = null }) { Text(t(R.string.common_cancel)) }
             Spacer(Modifier.weight(1f))
             Text(draft.title, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
-            Button(onClick = model.sending::prepareDraft, enabled = canPost && (text.isNotBlank() || image != null) && imageNote == null) { Text("Post") }
+            Button(onClick = model.sending::prepareDraft, enabled = canPost && (text.isNotBlank() || image != null) && imageNote == null) { Text(t(R.string.social_post_button)) }
         }
         draft.answering?.let {
             Card(Modifier.fillMaxWidth()) {
@@ -92,7 +92,7 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             value = text,
             onValueChange = { model.sending.draftText = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
-            placeholder = { Text(if (draft.answering == null) "What's new?" else "Your answer") },
+            placeholder = { Text(if (draft.answering == null) t(R.string.social_editor_whats_new) else t(R.string.social_editor_your_answer)) },
             minLines = 4,
             maxLines = 10,
         )
@@ -100,14 +100,14 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             TopicField(model.sending.draftTopic, model.feed) { model.sending.draftTopic = it }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Pill(if (image == null) "🖼 Image" else "🖼 Other image", enabled = !picker.preparing, onClick = picker::pick)
-            FilterChip(selected = model.sending.textOnIpfs, onClick = { model.sending.textOnIpfs = !model.sending.textOnIpfs }, label = { Text("Text on IPFS") })
+            Pill(if (image == null) t(R.string.social_editor_image) else t(R.string.social_editor_other_image), enabled = !picker.preparing, onClick = picker::pick)
+            FilterChip(selected = model.sending.textOnIpfs, onClick = { model.sending.textOnIpfs = !model.sending.textOnIpfs }, label = { Text(t(R.string.social_text_on_ipfs)) })
         }
         model.sending.sendStatus?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
         imageNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         if (image != null) {
             DraftImageChoice(model, image, feePerGas)
-            Pill("✕ Remove the image", enabled = true) { model.sending.draftImage = null }
+            Pill(t(R.string.social_remove_image_button), enabled = true) { model.sending.draftImage = null }
         }
         if (model.sending.textOnIpfs) TextOnIpfsNote()
     }
@@ -126,10 +126,9 @@ fun DraftImageChoice(model: SocialModel, image: ImageDraft, feePerGas: BigDecima
             )
         }
     }
-    val cost = feePerGas?.let { "about ${fee(storeToIpfsFeeEstimate(it, image.bytes.size))} iDNA" } ?: "a fee that grows with its size"
+    val cost = feePerGas?.let { t(R.string.social_image_cost, fee(storeToIpfsFeeEstimate(it, image.bytes.size))) } ?: t(R.string.social_image_cost_unknown)
     Text(
-        "The image is stored on IPFS (a storeToIpfs transaction): $cost, on top of the post's fee. " +
-            "It is sent as WebP, without the photo's details (place, camera).",
+        t(R.string.social_image_note, cost),
         style = MaterialTheme.typography.bodySmall,
     )
 }
@@ -138,8 +137,7 @@ fun DraftImageChoice(model: SocialModel, image: ImageDraft, feePerGas: BigDecima
 @Composable
 fun TextOnIpfsNote() {
     Text(
-        "The text is stored on IPFS (a storeToIpfs transaction, cheaper than the post for long texts) and the " +
-            "post holds its address. It stays readable while IPFS nodes keep it.",
+        t(R.string.social_text_on_ipfs_note),
         style = MaterialTheme.typography.bodySmall,
     )
 }
@@ -164,7 +162,8 @@ class ImagePicker(private val launch: () -> Unit) {
     }
 }
 
-private const val PREPARING_IMAGE = "Preparing the image…"
+private val PREPARING_IMAGE: String
+    get() = t(R.string.social_preparing_image)
 
 @Composable
 fun rememberImagePicker(model: SocialModel): ImagePicker {
@@ -180,7 +179,7 @@ fun rememberImagePicker(model: SocialModel): ImagePicker {
                     model.sending.draftImage = ImageDraft(sizes, if (DEFAULT_IMAGE_SIZE in sizes) DEFAULT_IMAGE_SIZE else sizes.keys.max())
                     picker.note = null
                 }
-                .onFailure { picker.note = "This image cannot be used: ${it.message}" }
+                .onFailure { picker.note = t(R.string.social_image_unusable, "${it.message}") }
             picker.loadFee(context)
         }
     }
@@ -197,7 +196,7 @@ private fun DraftImage(bytes: ByteArray) {
     bitmap?.let {
         Image(
             bitmap = it,
-            contentDescription = "The image of the post",
+            contentDescription = t(R.string.social_draft_image_description),
             modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Fit,
         )

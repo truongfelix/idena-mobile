@@ -67,21 +67,21 @@ fun FollowingView(
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         item(key = "header") {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Following", style = MaterialTheme.typography.headlineSmall)
+                Text(t(R.string.socialb_following_title), style = MaterialTheme.typography.headlineSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = tab == FollowingTab.People,
                         onClick = { tab = FollowingTab.People },
-                        label = { Text("People ${followedPeople(model.people).size}") },
+                        label = { Text(t(R.string.socialb_people_count, followedPeople(model.people).size)) },
                     )
                     FilterChip(
                         selected = tab == FollowingTab.Topics,
                         onClick = { tab = FollowingTab.Topics },
-                        label = { Text("Topics ${model.followedTopics.size}") },
+                        label = { Text(t(R.string.socialb_topics_count, model.followedTopics.size)) },
                     )
                 }
                 Text(
-                    "Private: kept on this phone, never published.",
+                    t(R.string.socialb_following_private),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -89,27 +89,27 @@ fun FollowingView(
         }
         when (tab) {
             FollowingTab.People -> {
-                if (people.isEmpty()) item(key = "no-people") { Empty("You follow nobody yet: open a profile and tap Follow.") }
+                if (people.isEmpty()) item(key = "no-people") { Empty(t(R.string.socialb_follow_nobody)) }
                 items(people, key = { "p:${it.address}" }) { person ->
                     PersonRow(person, trailing = {
-                        IconButton(onClick = { onName(person) }) { Icon(Icons.Filled.Edit, contentDescription = "Rename") }
+                        IconButton(onClick = { onName(person) }) { Icon(Icons.Filled.Edit, contentDescription = t(R.string.socialb_rename_short)) }
                         FilterChip(
                             selected = person.following,
                             onClick = { model.setPerson(person.copy(following = !person.following)) },
-                            label = { Text(if (person.following) "Following" else "Follow") },
+                            label = { Text(if (person.following) t(R.string.socialb_following) else t(R.string.socialb_follow)) },
                         )
                     }) { model.openProfile(person.address) }
                 }
             }
             FollowingTab.Topics -> {
-                if (topicNames.isEmpty()) item(key = "no-topics") { Empty("You follow no topic yet: type r/ in the search, open a topic and tap Follow.") }
+                if (topicNames.isEmpty()) item(key = "no-topics") { Empty(t(R.string.socialb_follow_no_topic)) }
                 items(topicNames, key = { "t:$it" }) { name ->
                     val following = name in model.followedTopics
                     TopicRow(name, topics[name]) {
                         FilterChip(
                             selected = following,
                             onClick = { model.setTopicFollowed(name, !following) },
-                            label = { Text(if (following) "Following" else "Follow") },
+                            label = { Text(if (following) t(R.string.socialb_following) else t(R.string.socialb_follow)) },
                         )
                     }
                 }
@@ -129,8 +129,8 @@ private fun TopicRow(name: String, summary: TopicSummary?, trailing: @Composable
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(topicChannel(name), style = MaterialTheme.typography.titleSmall, maxLines = 1)
                 Text(
-                    summary?.let { "${it.posts} ${if (it.posts == 1) "post" else "posts"}  ·  last activity ${ago(it.lastTime)}" }
-                        ?: "No post in the posts read so far",
+                    summary?.let { tp(R.plurals.socialb_topic_summary, it.posts, it.posts, ago(it.lastTime)) }
+                        ?: t(R.string.socialb_topic_no_post),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -160,15 +160,20 @@ fun ListsBackup(model: SocialModel) {
         scope.launch {
             note = withContext(Dispatchers.IO) {
                 runCatching {
-                    val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("the file cannot be written")
+                    val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException(t(R.string.socialb_file_not_written))
                     out.use { it.write(socialListsToJson(lists).toString(2).toByteArray(Charsets.UTF_8)) }
                 }.fold(
                     {
-                        "Exported ${count(lists.people.size, "person", "people")}, ${count(lists.topics.size, "topic", "topics")}, " +
-                            "${count(lists.words.size, "hidden word", "hidden words")}, ${count(lists.hiddenPosts.size, "hidden post", "hidden posts")} " +
-                            "and ${count(lists.blockedTopics.size, "blocked topic", "blocked topics")}."
+                        t(
+                            R.string.socialb_exported,
+                            tp(R.plurals.socialb_n_people, lists.people.size, lists.people.size),
+                            tp(R.plurals.socialb_n_topics, lists.topics.size, lists.topics.size),
+                            tp(R.plurals.socialb_n_hidden_words, lists.words.size, lists.words.size),
+                            tp(R.plurals.socialb_n_hidden_posts, lists.hiddenPosts.size, lists.hiddenPosts.size),
+                            tp(R.plurals.socialb_n_blocked_topics, lists.blockedTopics.size, lists.blockedTopics.size),
+                        )
                     },
-                    { "Export failed: ${it.message}" },
+                    { t(R.string.socialb_export_failed, "${it.message}") },
                 )
             }
         }
@@ -178,7 +183,7 @@ fun ListsBackup(model: SocialModel) {
         scope.launch {
             val read = withContext(Dispatchers.IO) {
                 runCatching {
-                    val input = context.contentResolver.openInputStream(uri) ?: throw IOException("the file cannot be read")
+                    val input = context.contentResolver.openInputStream(uri) ?: throw IOException(t(R.string.socialb_file_not_read))
                     val bytes = input.use { stream ->
                         // At most one byte more than allowed (InputStream.readNBytes needs Android 13).
                         val out = ByteArrayOutputStream()
@@ -190,33 +195,36 @@ fun ListsBackup(model: SocialModel) {
                         }
                         out.toByteArray()
                     }
-                    if (bytes.size > MAX_LISTS_FILE) throw IOException("the file is too large")
+                    if (bytes.size > MAX_LISTS_FILE) throw IOException(t(R.string.socialb_file_too_large))
                     val json = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull()
-                    json?.let(::socialListsFromJson) ?: throw IOException("this is not an exported list")
+                    json?.let(::socialListsFromJson) ?: throw IOException(t(R.string.socialb_not_a_list))
                 }
             }
             note = read.fold(
                 { imported ->
                     val result = model.importLists(imported)
-                    "Imported: ${count(result.people.added, "person", "people")} added, ${result.people.changed} changed, " +
-                        "${count(result.topicsAdded, "topic", "topics")}, ${count(result.wordsAdded, "hidden word", "hidden words")} " +
-                        "and ${count(result.othersAdded, "hidden post or blocked topic", "hidden posts and blocked topics")} added."
+                    t(
+                        R.string.socialb_imported,
+                        tp(R.plurals.socialb_n_people_added, result.people.added, result.people.added),
+                        result.people.changed,
+                        tp(R.plurals.socialb_n_topics, result.topicsAdded, result.topicsAdded),
+                        tp(R.plurals.socialb_n_hidden_words, result.wordsAdded, result.wordsAdded),
+                        tp(R.plurals.socialb_n_hidden_posts_or_topics, result.othersAdded, result.othersAdded),
+                    )
                 },
-                { "Import failed: ${it.message}" },
+                { t(R.string.socialb_import_failed, "${it.message}") },
             )
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Your names, follows, blocks and hidden things", style = MaterialTheme.typography.titleSmall)
+        Text(t(R.string.socialb_lists_title), style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Export", enabled = true) { exporter.launch("idena-social-lists.json") }
-            Pill("Import", enabled = true) { importer.launch(arrayOf("application/json", "application/octet-stream", "text/*")) }
+            Pill(t(R.string.socialb_export), enabled = true) { exporter.launch("idena-social-lists.json") }
+            Pill(t(R.string.socialb_import), enabled = true) { importer.launch(arrayOf("application/json", "application/octet-stream", "text/*")) }
         }
         note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
         Text(
-            "One file with the names you gave, the people and the topics you follow, the accounts you muted, the accounts and topics you blocked, " +
-                "the hidden words and posts: to keep them or move them to another " +
-                "phone. Whoever gets the file sees them. An import adds to these lists; nothing is removed.",
+            t(R.string.socialb_lists_note),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -36,15 +36,15 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Social settings", style = MaterialTheme.typography.titleLarge)
-        SettingsLink("People I follow", followedPeople(model.people).size) { model.open(SocialPage.Following(topics = false)) }
-        SettingsLink("Topics I follow", model.followedTopics.size) { model.open(SocialPage.Following(topics = true)) }
+        Text(t(R.string.social_settings_title), style = MaterialTheme.typography.titleLarge)
+        SettingsLink(t(R.string.social_people_i_follow), followedPeople(model.people).size) { model.open(SocialPage.Following(topics = false)) }
+        SettingsLink(t(R.string.social_topics_i_follow), model.followedTopics.size) { model.open(SocialPage.Following(topics = true)) }
         HorizontalDivider()
-        SettingsLink("Muted accounts", model.muted.size) { model.open(SocialPage.Muted) }
-        SettingsLink("Blocked accounts", model.blocked.size) { model.open(SocialPage.Blocked) }
-        SettingsLink("Hidden words", model.hidden.words.size) { model.open(SocialPage.HiddenWords) }
-        SettingsLink("Hidden posts", model.hidden.posts.size) { model.open(SocialPage.HiddenPosts) }
-        SettingsLink("Blocked topics", model.hidden.topics.size) { model.open(SocialPage.BlockedTopics) }
+        SettingsLink(t(R.string.social_settings_muted), model.muted.size) { model.open(SocialPage.Muted) }
+        SettingsLink(t(R.string.social_settings_blocked), model.blocked.size) { model.open(SocialPage.Blocked) }
+        SettingsLink(t(R.string.social_settings_hidden_words), model.hidden.words.size) { model.open(SocialPage.HiddenWords) }
+        SettingsLink(t(R.string.social_settings_hidden_posts), model.hidden.posts.size) { model.open(SocialPage.HiddenPosts) }
+        SettingsLink(t(R.string.social_settings_blocked_topics), model.hidden.topics.size) { model.open(SocialPage.BlockedTopics) }
         HorizontalDivider()
         PicturesSetting(model.picturesMode, model::changePicturesMode)
         HorizontalDivider()
@@ -61,14 +61,14 @@ fun OwnProfileMenu(onEdit: (() -> Unit)?, onName: () -> Unit, onSettings: () -> 
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }, Modifier.size(40.dp)) {
-            Icon(Icons.Filled.Settings, contentDescription = "Profile and settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Filled.Settings, contentDescription = t(R.string.social_profile_and_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             onEdit?.let {
-                DropdownMenuItem(text = { Text("Edit your public profile") }, onClick = { open = false; it() })
+                DropdownMenuItem(text = { Text(t(R.string.social_edit_public_profile)) }, onClick = { open = false; it() })
             }
-            DropdownMenuItem(text = { Text("Name on this phone") }, onClick = { open = false; onName() })
-            DropdownMenuItem(text = { Text("Social settings") }, onClick = { open = false; onSettings() })
+            DropdownMenuItem(text = { Text(t(R.string.social_name_on_phone)) }, onClick = { open = false; onName() })
+            DropdownMenuItem(text = { Text(t(R.string.social_settings_title)) }, onClick = { open = false; onSettings() })
         }
     }
 }

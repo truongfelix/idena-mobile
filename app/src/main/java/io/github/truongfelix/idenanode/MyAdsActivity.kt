@@ -2,7 +2,6 @@ package io.github.truongfelix.idenanode
 
 import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -51,7 +50,7 @@ import java.io.File
  * My ads, opened from the Profile card: the ads this identity makes, each with its stage and its one next step
  * (MyAds.kt): a draft goes to review, an approved ad is shown, a shown ad gets more burns. + New opens the form.
  */
-class MyAdsActivity : ComponentActivity() {
+class MyAdsActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -68,9 +67,6 @@ internal fun adStore(context: Context) = AdDraftStore(File(context.filesDir, "ad
 
 internal fun myAdsNode(context: Context) =
     MyAdsNode(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))) { cid -> IpfsStore.cached(context, cid) ?: IpfsStore.fetch(context, cid) }
-
-private const val EMPTY_TEXT =
-    "No ad yet. + New makes one: it stays on this phone until you send it to review, where oracles approve it or not."
 
 @Composable
 fun MyAdsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
@@ -114,20 +110,20 @@ fun MyAdsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
     BackHandler(onBack = onClose)
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ScreenTitle("My ads", onClose) { TextButton(onClick = { message = null; editing = "" }) { Text("+ New") } }
+        ScreenTitle(t(R.string.ads_my_ads), onClose) { TextButton(onClick = { message = null; editing = "" }) { Text(t(R.string.ads_new_button)) } }
         message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         val current = read
         when {
             current == null -> CircularProgressIndicator()
             current.isFailure -> {
-                Text("The node did not answer: ${current.exceptionOrNull()?.message}")
-                Button(onClick = { reloads++ }) { Text("Try again") }
+                Text(t(R.string.ads_node_no_answer, current.exceptionOrNull()?.message.toString()))
+                Button(onClick = { reloads++ }) { Text(t(R.string.common_try_again)) }
             }
             else -> {
                 val ads = current.getOrThrow().second
-                Text("Balance ${idna(ads.balance.toPlainString())}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(t(R.string.ads_balance, idna(ads.balance.toPlainString())), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ads.profileError?.let {
-                    Text("Your profile could not be read ($it): the ads it lists are missing here.", color = MaterialTheme.colorScheme.error)
+                    Text(t(R.string.ads_profile_unreadable, it), color = MaterialTheme.colorScheme.error)
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(ads.ads, key = { it.draft?.id ?: it.cid }) { ad ->
@@ -143,7 +139,7 @@ fun MyAdsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             }
                         }
                     }
-                    if (ads.ads.isEmpty()) item { Text(EMPTY_TEXT, style = MaterialTheme.typography.bodyMedium) }
+                    if (ads.ads.isEmpty()) item { Text(t(R.string.ads_empty), style = MaterialTheme.typography.bodyMedium) }
                 }
             }
         }
@@ -154,7 +150,7 @@ fun MyAdsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     val close = { acting = null }
     when (action) {
         AdAction.Preview -> AdPreviewDialog(ad, close)
-        AdAction.Delete -> DeleteDialog(ad, onClose = close) { reload("Deleted “${ad.title}” from this phone.") }
+        AdAction.Delete -> DeleteDialog(ad, onClose = close) { reload(t(R.string.ads_deleted, ad.title)) }
         AdAction.SendToReview -> ReviewDialog(ad, address, onClose = close, onDone = reload)
         AdAction.StartReview -> StartReviewDialog(ad, address, onClose = close, onDone = reload)
         AdAction.Show -> ShowAdDialog(ad, address, onClose = close, onDone = reload)
@@ -183,7 +179,7 @@ private fun AdCard(ad: MyAd, onAction: (AdAction) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AdImage(ad.thumb, maxSide = 160, Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(ad.title.ifBlank { "Untitled ad" }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(ad.title.ifBlank { t(R.string.ads_untitled) }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (ad.desc.isNotBlank()) {
                         Text(ad.desc, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
@@ -219,14 +215,14 @@ private fun DeleteDialog(ad: MyAd, onClose: () -> Unit, onDeleted: () -> Unit) {
     val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Delete the ad") },
-        text = { Text("Delete “${ad.title.ifBlank { "Untitled ad" }}” from this phone? Nothing is sent.") },
+        title = { Text(t(R.string.ads_delete_title)) },
+        text = { Text(t(R.string.ads_delete_confirm, ad.title.ifBlank { t(R.string.ads_untitled) })) },
         confirmButton = {
             TextButton(onClick = {
                 ad.draft?.let { adStore(context).delete(it.id) }
                 onDeleted()
-            }) { Text("Delete") }
+            }) { Text(t(R.string.common_delete)) }
         },
-        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onClose) { Text(t(R.string.common_cancel)) } },
     )
 }

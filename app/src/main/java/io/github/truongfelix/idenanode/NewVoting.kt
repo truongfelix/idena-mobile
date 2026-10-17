@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -26,26 +27,31 @@ const val MIN_COUNTING_BLOCKS = 100L
 fun durationText(blocks: Long): String {
     val hours = blocks / BLOCKS_PER_HOUR
     return when {
-        blocks % BLOCKS_PER_HOUR != 0L || hours == 0L -> "${blocks * 20 / 60} min"
-        hours % 168 == 0L -> (hours / 168).let { "$it week${if (it == 1L) "" else "s"}" }
-        hours % 24 == 0L -> (hours / 24).let { "$it day${if (it == 1L) "" else "s"}" }
-        else -> "$hours h"
+        blocks % BLOCKS_PER_HOUR != 0L || hours == 0L -> t(R.string.voting_duration_minutes, blocks * 20 / 60)
+        hours % 168 == 0L -> (hours / 168).let { tp(R.plurals.voting_duration_weeks, it.toInt(), it) }
+        hours % 24 == 0L -> (hours / 24).let { tp(R.plurals.voting_duration_days, it.toInt(), it) }
+        else -> t(R.string.voting_duration_hours, hours)
     }
 }
 
 /** The kinds the form starts from, as the desktop's presets; each sets the settings ([withKind]). */
-enum class VotingKind(val title: String, val note: String) {
-    Fact("Fact", "Fact certification: only the oracles who vote with the majority are paid. Starts in a week."),
-    Poll("Poll", "Poll: oracles can vote for any option, and every oracle is paid whatever the outcome. Starts now, free to vote."),
-    Decision("Decision", "Decision: 51% of the votes decide. Free to vote; pick its start date."),
-    Custom("Custom", "Custom: every setting is yours, under Advanced settings."),
+enum class VotingKind(@StringRes val titleId: Int, @StringRes val noteId: Int) {
+    Fact(R.string.voting_kind_fact, R.string.voting_kind_fact_note),
+    Poll(R.string.voting_kind_poll, R.string.voting_kind_poll_note),
+    Decision(R.string.voting_kind_decision, R.string.voting_kind_decision_note),
+    Custom(R.string.voting_kind_custom, R.string.voting_kind_custom_note);
+
+    val title: String get() = t(titleId)
+    val note: String get() = t(noteId)
 }
 
 /** The majority thresholds the form offers, as the desktop's. */
-enum class Majority(val percent: Int, val title: String) {
-    Simple(51, "Simple majority (51%)"),
-    Super(66, "Super majority (66%)"),
-    None(100, "None (polls)"),
+enum class Majority(val percent: Int, @StringRes val titleId: Int) {
+    Simple(51, R.string.voting_majority_simple),
+    Super(66, R.string.voting_majority_super),
+    None(100, R.string.voting_majority_none);
+
+    val title: String get() = t(titleId)
 }
 
 /**
@@ -102,15 +108,15 @@ private val LINK = Regex("(?i)(https?://|www\\.)\\S")
 
 /** What keeps the form from being published, in the order of the form; empty when it can be. */
 fun NewVotingForm.problems(): List<String> = buildList {
-    if (title.isBlank()) add("Write a title.")
-    if (desc.isBlank()) add("Write a description.")
-    if (writtenOptions.size < 2) add("Write at least 2 options.")
-    if (writtenOptions.any { LINK.containsMatchIn(it.text) }) add("Options cannot hold links: put them in the description.")
-    if (!startNow && startTime == null) add("Pick the start date, or start now.")
-    if (committeeSize < 1) add("The committee needs at least 1 oracle.")
-    if (quorum !in 1..100) add("The quorum is a percentage from 1 to 100.")
-    if (ownerFee !in 0..100) add("The owner fee is a percentage from 0 to 100.")
-    if (refundAddress.isNotEmpty() && !ADDRESS.matches(refundAddress)) add("The refund address is not an address.")
+    if (title.isBlank()) add(t(R.string.voting_problem_title))
+    if (desc.isBlank()) add(t(R.string.voting_problem_desc))
+    if (writtenOptions.size < 2) add(t(R.string.voting_problem_options))
+    if (writtenOptions.any { LINK.containsMatchIn(it.text) }) add(t(R.string.voting_problem_links))
+    if (!startNow && startTime == null) add(t(R.string.voting_problem_start))
+    if (committeeSize < 1) add(t(R.string.voting_problem_committee))
+    if (quorum !in 1..100) add(t(R.string.voting_problem_quorum))
+    if (ownerFee !in 0..100) add(t(R.string.voting_problem_owner_fee))
+    if (refundAddress.isNotEmpty() && !ADDRESS.matches(refundAddress)) add(t(R.string.voting_problem_refund_address))
 }
 
 /** The contract's fact: hex of JSON {title, desc, options: [{id, value}]} and an ad review's adCid, as the desktop writes it. */
@@ -170,7 +176,7 @@ data class TxCost(val fee: BigDecimal, val maxFee: BigDecimal)
 
 /** The cost in an estimate's receipt (contract_estimate*), or its error. */
 fun receiptCost(receipt: JSONObject): Result<TxCost> {
-    if (!receipt.optBoolean("success")) return Result.failure(IllegalStateException(receipt.optString("error").ifEmpty { "refused" }))
+    if (!receipt.optBoolean("success")) return Result.failure(IllegalStateException(receipt.optString("error").ifEmpty { t(R.string.voting_refused) }))
     val fee = BigDecimal(receipt.optString("txFee", "0")) + BigDecimal(receipt.optString("gasCost", "0"))
     return Result.success(TxCost(fee, (fee * BigDecimal(2)).setScale(6, RoundingMode.UP)))
 }
@@ -181,14 +187,16 @@ data class PublishPlan(val args: JSONArray, val stake: BigDecimal, val cost: TxC
 /** What the confirmation says before publishing [form] as [plan]. [date] writes a time. */
 fun publishConfirmText(form: NewVotingForm, plan: PublishPlan, date: (Instant) -> String): String = buildString {
     val launch = idna(plan.launchAmount.toPlainString())
-    append("Publish “${form.title.trim()}”? It stakes ${idna(plan.stake.toPlainString())}: half of it comes back to you when the voting is terminated, the other half is burned.")
-    if (launchesAtOnce(form)) {
-        append("\n\nThen a second transaction launches it, with its own fee: $launch to the voting (the owner deposit and the rewards fund).")
-    } else {
-        val start = form.startTime?.let { ", from ${date(it)}" }.orEmpty()
-        append("\n\nIt waits, not started, until it is launched from its page$start: launching sends $launch (the owner deposit and the rewards fund).")
+    append(t(R.string.voting_publish_confirm, form.title.trim(), idna(plan.stake.toPlainString())))
+    append("\n\n")
+    val start = form.startTime
+    when {
+        launchesAtOnce(form) -> append(t(R.string.voting_publish_launches_at_once, launch))
+        start != null -> append(t(R.string.voting_publish_waits_from, date(start), launch))
+        else -> append(t(R.string.voting_publish_waits, launch))
     }
-    append("\n\nSecret voting ${durationText(form.votingDuration)}, then counting ${durationText(maxOf(form.countingDuration, MIN_COUNTING_BLOCKS))}.")
+    append("\n\n")
+    append(t(R.string.voting_publish_durations, durationText(form.votingDuration), durationText(maxOf(form.countingDuration, MIN_COUNTING_BLOCKS))))
     append("\n\n").append(feeLine(plan.cost))
 }
 

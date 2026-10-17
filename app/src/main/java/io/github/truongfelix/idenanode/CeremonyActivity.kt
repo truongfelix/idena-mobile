@@ -3,7 +3,6 @@ package io.github.truongfelix.idenanode
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +47,7 @@ private const val LONG_SESSION_MS_PER_FLIP = 60_000L
  * The practice validation: the ceremony screens with the sample flips of the Idena web app, then the
  * results. Nothing is sent. The screen stays on while it is open.
  */
-class CeremonyActivity : ComponentActivity() {
+class CeremonyActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -85,10 +84,10 @@ private fun PracticeScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     if (leaving) {
         AlertDialog(
             onDismissRequest = { leaving = false },
-            title = { Text("Leave the practice?") },
-            text = { Text("The answers of this practice are lost.") },
-            confirmButton = { TextButton(onClick = onClose) { Text("Leave") } },
-            dismissButton = { TextButton(onClick = { leaving = false }) { Text("Stay") } },
+            title = { Text(t(R.string.ceremony_leave_title)) },
+            text = { Text(t(R.string.ceremony_leave_text)) },
+            confirmButton = { TextButton(onClick = onClose) { Text(t(R.string.ceremony_leave)) } },
+            dismissButton = { TextButton(onClick = { leaving = false }) { Text(t(R.string.ceremony_stay)) } },
         )
     }
 
@@ -100,7 +99,7 @@ private fun PracticeScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
             when (step) {
                 Step.Intro -> Intro(loaded) { step = Step.ShortSession }
                 Step.ShortSession -> PracticeSession(
-                    title = "Short session",
+                    title = t(R.string.validation_short_session),
                     flips = loaded.short.map { it.flip },
                     durationMs = SHORT_SESSION_MS,
                     withKeywords = false,
@@ -109,12 +108,12 @@ private fun PracticeScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                     step = Step.BetweenSessions
                 }
                 Step.BetweenSessions -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Short session done", style = MaterialTheme.typography.headlineSmall)
-                    Text("In the validation, the long session starts right after the short one.")
-                    Button(onClick = { step = Step.LongSession }) { Text("Start the long session") }
+                    Text(t(R.string.ceremony_short_done), style = MaterialTheme.typography.headlineSmall)
+                    Text(t(R.string.ceremony_long_follows))
+                    Button(onClick = { step = Step.LongSession }) { Text(t(R.string.ceremony_start_long)) }
                 }
                 Step.LongSession -> PracticeSession(
-                    title = "Long session",
+                    title = t(R.string.validation_long_session),
                     flips = loaded.long.map { it.flip },
                     durationMs = loaded.long.size * LONG_SESSION_MS_PER_FLIP,
                     withKeywords = true,
@@ -143,20 +142,11 @@ private fun Intro(practice: Practice, onStart: () -> Unit) {
         Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Practice validation", style = MaterialTheme.typography.headlineSmall)
-        Text("The validation screens with the sample flips of the Idena web app. Nothing is sent.")
-        Text(
-            "Short session: ${practice.short.size} flips in 2 minutes. For each flip, tap the story " +
-                "that makes sense.",
-        )
-        Text(
-            "Long session: ${practice.long.size} flips in ${practice.long.size} minutes. Solve them, then " +
-                "check the keywords of each flip (the stories cannot change after that): approve it, or report it (up to ${practice.long.size / 3} " +
-                "flips) when a keyword is not in the story, numbers or letters show the order, it needs " +
-                "reading text, or it lists objects instead of telling a story. Then mark one approved flip " +
-                "as the best. Submit comes once every flip is answered.",
-        )
-        Button(onClick = onStart) { Text("Start the short session") }
+        Text(t(R.string.ceremony_practice_title), style = MaterialTheme.typography.headlineSmall)
+        Text(t(R.string.ceremony_practice_intro))
+        Text(t(R.string.ceremony_practice_short, practice.short.size))
+        Text(t(R.string.ceremony_practice_long, practice.long.size, practice.long.size / 3))
+        Button(onClick = onStart) { Text(t(R.string.ceremony_start_short)) }
     }
 }
 
@@ -185,35 +175,35 @@ private fun Results(practice: Practice, short: Answers, long: Answers, onAgain: 
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Practice results", style = MaterialTheme.typography.headlineSmall)
-        ResultLine("Short session", "$shortRight of ${practice.short.size} stories right")
-        ResultLine("Long session", "$longRight of ${solvable.size} stories right")
-        ResultLine("Reports", "$reported of ${toReport.size} flips to report (${long.reportsAllowed} reports allowed)")
-        Text("Long session, flip by flip", style = MaterialTheme.typography.titleMedium)
+        Text(t(R.string.ceremony_results_title), style = MaterialTheme.typography.headlineSmall)
+        ResultLine(t(R.string.validation_short_session), t(R.string.ceremony_stories_right, shortRight, practice.short.size))
+        ResultLine(t(R.string.validation_long_session), t(R.string.ceremony_stories_right, longRight, solvable.size))
+        ResultLine(t(R.string.ceremony_reports), t(R.string.ceremony_reports_result, reported, toReport.size, long.reportsAllowed))
+        Text(t(R.string.ceremony_flip_by_flip), style = MaterialTheme.typography.titleMedium)
         practice.long.forEachIndexed { i, practiceFlip ->
             val hash = practiceFlip.flip.hash
             val relevance = long.relevance(hash)
             val story = when {
                 practiceFlip.reportReason != 0 -> null
-                long.choice(hash) == practiceFlip.answer -> "story right"
-                long.choice(hash) == Choice.None -> "story not solved"
-                else -> "story wrong"
+                long.choice(hash) == practiceFlip.answer -> t(R.string.ceremony_story_right)
+                long.choice(hash) == Choice.None -> t(R.string.ceremony_story_not_solved)
+                else -> t(R.string.ceremony_story_wrong)
             }
             val check = when {
                 practiceFlip.reportReason != 0 && relevance == Relevance.Reported ->
-                    "reported ✓ (${reportReasonText(practiceFlip.reportReason)})"
-                practiceFlip.reportReason != 0 -> "to report: ${reportReasonText(practiceFlip.reportReason)}"
-                relevance == Relevance.Reported -> "a good flip: approve it"
-                relevance == Relevance.None -> "keywords not checked"
-                else -> "approved ✓"
+                    t(R.string.ceremony_reported_ok, reportReasonText(practiceFlip.reportReason))
+                practiceFlip.reportReason != 0 -> t(R.string.ceremony_to_report, reportReasonText(practiceFlip.reportReason))
+                relevance == Relevance.Reported -> t(R.string.ceremony_good_flip_approve)
+                relevance == Relevance.None -> t(R.string.ceremony_keywords_not_checked)
+                else -> t(R.string.ceremony_approved_ok)
             }
             val words = practiceFlip.flip.keywords.joinToString(", ") { it.name }
             val best = if (long.best == hash) " ★" else ""
-            Text("${i + 1}. $words: ${listOfNotNull(story, check).joinToString(", ")}$best")
+            Text(t(R.string.ceremony_flip_line, i + 1, words, listOfNotNull(story, check).joinToString(", "), best))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onAgain) { Text("Practice again") }
-            OutlinedButton(onClick = onClose) { Text("Close") }
+            Button(onClick = onAgain) { Text(t(R.string.ceremony_practice_again)) }
+            OutlinedButton(onClick = onClose) { Text(t(R.string.common_close)) }
         }
     }
 }

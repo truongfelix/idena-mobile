@@ -46,12 +46,12 @@ fun ReviewDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (String?) ->
     var check by remember { mutableStateOf<ReviewCheck?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val title = ad.title.ifBlank { "Untitled ad" }
+    val title = ad.title.ifBlank { t(R.string.ads_untitled) }
     val ready = check
     AlertDialog(
         onDismissRequest = { if (busy == null) onClose() },
         properties = DialogProperties(dismissOnClickOutside = false),
-        title = { Text("Send to review") },
+        title = { Text(t(R.string.ads_send_review_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when {
@@ -61,13 +61,13 @@ fun ReviewDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (String?) ->
                         OutlinedTextField(
                             value = feeText,
                             onValueChange = { feeText = it.trim(); error = null },
-                            label = { Text("Review fee, iDNA") },
+                            label = { Text(t(R.string.ads_review_fee_field)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
-                            "Paid to the oracles who vote on the ad: the higher the fee, the sooner they review it.",
+                            t(R.string.ads_review_fee_help),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -83,26 +83,26 @@ fun ReviewDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (String?) ->
                 ready == null -> TextButton(onClick = {
                     val fee = feeText.toBigDecimalOrNull()
                     if (fee == null || fee.signum() < 0) {
-                        error = "The fee is an amount of iDNA."
+                        error = t(R.string.ads_fee_not_amount)
                         return@TextButton
                     }
-                    busy = "Checking the review with the node…"
+                    busy = t(R.string.ads_checking_review)
                     scope.launch {
                         val checked = withContext(Dispatchers.IO) { runCatching { checkReview(context, me, draft, fee) } }
                         busy = null
-                        checked.onSuccess { check = it }.onFailure { error = "The review cannot be sent: ${it.message}" }
+                        checked.onSuccess { check = it }.onFailure { error = t(R.string.ads_review_cannot_send, it.message.toString()) }
                     }
-                }) { Text("Check") }
+                }) { Text(t(R.string.ads_check)) }
                 ready.plan != null && ready.costs != null && ready.costs.total <= ready.balance -> TextButton(onClick = {
                     scope.launch {
                         val message = sendReview(adStore(context), myAdsNode(context), rpc(context), me, draft, ready.plan) { busy = it }
                         busy = null
                         onDone(message)
                     }
-                }) { Text("Send") }
+                }) { Text(t(R.string.common_send)) }
             }
         },
-        dismissButton = { if (busy == null) TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = { if (busy == null) TextButton(onClick = onClose) { Text(t(R.string.common_cancel)) } },
     )
 }
 
@@ -134,23 +134,29 @@ internal suspend fun sendReview(
     plan: ReviewPlan,
     status: (String) -> Unit,
 ): String {
-    status("Storing the ad on IPFS…")
+    status(t(R.string.ads_storing_on_ipfs))
     val stored = withContext(Dispatchers.IO) {
         runCatching {
             node.storeAd(plan)
             store.save(draft.copy(cid = plan.cid))
         }
     }
-    stored.exceptionOrNull()?.let { return "Not sent to review: ${it.message}" }
+    stored.exceptionOrNull()?.let { return t(R.string.ads_not_sent_to_review, it.message.toString()) }
+    // publishAndLaunch says "Publishing…", then "Launching…" when it launches.
+    var step = 0
     val outcome = publishAndLaunch(
         rpc, me, plan.form, plan.publish,
         onDeployed = { contract -> runCatching { store.save(draft.copy(cid = plan.cid, contract = contract)) } },
-    ) { status(if (it == "Publishing…") "Publishing the review voting…" else "Launching the review…") }
+    ) { status(if (step++ == 0) t(R.string.ads_publishing_review_voting) else t(R.string.ads_launching_review)) }
     return when {
-        outcome.contract == null -> outcome.message ?: "Not sent to review."
-        outcome.message != null -> outcome.message.replace("Launch it from its page.", "Start the review from My ads.")
-        else -> "“${draft.title}” is in review: the oracles vote for ${durationText(plan.form.votingDuration)}, " +
-            "then the votes are counted for ${durationText(maxOf(plan.form.countingDuration, MIN_COUNTING_BLOCKS))}."
+        outcome.contract == null -> outcome.message ?: t(R.string.ads_not_sent_to_review_plain)
+        outcome.message != null -> outcome.message.replace(t(R.string.voting_launch_from_its_page), t(R.string.ads_start_from_my_ads))
+        else -> t(
+            R.string.ads_in_review_sent,
+            draft.title,
+            durationText(plan.form.votingDuration),
+            durationText(maxOf(plan.form.countingDuration, MIN_COUNTING_BLOCKS)),
+        )
     }
 }
 
@@ -170,24 +176,28 @@ fun StartReviewDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (String
     AlertDialog(
         onDismissRequest = { if (busy == null) onClose() },
         properties = DialogProperties(dismissOnClickOutside = false),
-        title = { Text("Start the review") },
+        title = { Text(t(R.string.ads_start_review_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (ready == null) {
-                    Text("The review voting of “${ad.title}” exists but did not start. Starting it sends the deposit and the review fee.")
+                    Text(t(R.string.ads_start_review_intro, ad.title))
                     OutlinedTextField(
                         value = feeText,
                         onValueChange = { feeText = it.trim(); error = null },
-                        label = { Text("Review fee, iDNA") },
+                        label = { Text(t(R.string.ads_review_fee_field)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
                     Text(
-                        "Start the review of “${ad.title}”? It sends ${idna(ready.amount.toPlainString())} to the voting: the deposit " +
-                            "(${idna(ready.deposit.toPlainString())}, back when the voting ends) and the review fee for the oracles.\n\n" +
+                        t(
+                            R.string.ads_start_review_confirm,
+                            ad.title,
+                            idna(ready.amount.toPlainString()),
+                            idna(ready.deposit.toPlainString()),
                             feeLine(ready.cost),
+                        ),
                     )
                 }
                 busy?.let { Text(it); CircularProgressIndicator() }
@@ -198,16 +208,16 @@ fun StartReviewDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (String
             when {
                 busy != null -> {}
                 ready == null -> TextButton(onClick = {
-                    val fee = feeText.toBigDecimalOrNull()?.takeIf { it.signum() >= 0 } ?: run { error = "The fee is an amount of iDNA."; return@TextButton }
-                    busy = "Checking with the node…"
+                    val fee = feeText.toBigDecimalOrNull()?.takeIf { it.signum() >= 0 } ?: run { error = t(R.string.ads_fee_not_amount); return@TextButton }
+                    busy = t(R.string.ads_checking_with_node)
                     scope.launch {
                         val checked = withContext(Dispatchers.IO) { runCatching { checkLaunch(context, me, ad.contract, fee) } }
                         busy = null
-                        checked.onSuccess { check = it }.onFailure { error = "It cannot start: ${it.message}" }
+                        checked.onSuccess { check = it }.onFailure { error = t(R.string.ads_cannot_start, it.message.toString()) }
                     }
-                }) { Text("Check") }
+                }) { Text(t(R.string.ads_check)) }
                 else -> TextButton(onClick = {
-                    busy = "Starting the review…"
+                    busy = t(R.string.ads_starting_review)
                     scope.launch {
                         val sent = withContext(Dispatchers.IO) {
                             runCatching {
@@ -221,26 +231,26 @@ fun StartReviewDialog(ad: MyAd, me: String, onClose: () -> Unit, onDone: (String
                             sent.fold(
                                 onSuccess = { block ->
                                     when {
-                                        block == null -> "Not started: $NOT_SENT"
-                                        block.error != null -> "The contract refused it: ${block.error}."
-                                        else -> "The review of “${ad.title}” started."
+                                        block == null -> t(R.string.ads_not_started, NOT_SENT)
+                                        block.error != null -> t(R.string.ads_contract_refused, block.error.toString())
+                                        else -> t(R.string.ads_review_started, ad.title)
                                     }
                                 },
-                                onFailure = { "Not started: ${it.message}" },
+                                onFailure = { t(R.string.ads_not_started, it.message.toString()) },
                             ),
                         )
                     }
-                }) { Text("Start") }
+                }) { Text(t(R.string.ads_start)) }
             }
         },
-        dismissButton = { if (busy == null) TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = { if (busy == null) TextButton(onClick = onClose) { Text(t(R.string.common_cancel)) } },
     )
 }
 
 /** Plans the launch of the review [contract] with the deposit and [fee]. */
 private fun checkLaunch(context: Context, me: String, contract: String, fee: BigDecimal): LaunchCheck {
     val rpc = rpc(context)
-    if (!rpc.synced()) throw IOException("the node is still syncing; try once it is synced")
+    if (!rpc.synced()) throw IOException(t(R.string.ads_still_syncing))
     val voting = votingNode(context).voting(contract, me)
     val deposit = voting.ownerDeposit ?: BigDecimal.ZERO
     val amount = maxOf(deposit + fee - voting.balance, launchAmount(voting))

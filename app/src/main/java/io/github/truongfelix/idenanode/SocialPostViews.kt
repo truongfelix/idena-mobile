@@ -240,10 +240,10 @@ fun ActionBar(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", act && !liked, onClick = onLike)
         Pill(answer, answerEnabled, onClick = onAnswer)
-        Pill(if (post.tipTotal.signum() > 0) "🪙 ${tipText(post.tipTotal)}" else "🪙 Tip", act && post.call.author != myAddress, onClick = onTip)
+        Pill(if (post.tipTotal.signum() > 0) "🪙 ${tipText(post.tipTotal)}" else t(R.string.social_tip_pill), act && post.call.author != myAddress, onClick = onTip)
         Spacer(Modifier.weight(1f))
         // Who liked and tipped, in place of the line "Liked by · tipped by" under the pills.
-        if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = "Who liked and tipped", onClick = onWho)
+        if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = t(R.string.social_who_description), onClick = onWho)
     }
 }
 
@@ -258,19 +258,18 @@ fun WhoDialog(post: SocialPost, states: Map<String, AuthorIdentity>, onProfile: 
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Likes and tips") },
+        title = { Text(t(R.string.social_who_title)) },
         text = {
             LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (post.likeCalls.isNotEmpty()) {
-                    item { Text(if (post.likes == 1) "$LIKE 1 like" else "$LIKE ${post.likes} likes", style = MaterialTheme.typography.titleSmall) }
+                    item { Text(tp(R.plurals.social_who_likes, post.likes, LIKE, post.likes), style = MaterialTheme.typography.titleSmall) }
                     items(post.likeCalls.sortedByDescending { it.height }, key = { it.hash }) { like ->
                         Text(buildAnnotatedString { who(like.author); append("  ·  ${ago(like.time)}") }, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 if (post.tips.isNotEmpty()) {
                     item {
-                        val count = if (post.tips.size == 1) "1 tip" else "${post.tips.size} tips"
-                        Text("🪙 ${tipText(post.tipTotal)} iDNA in $count", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
+                        Text(tp(R.plurals.social_who_tips, post.tips.size, tipText(post.tipTotal), post.tips.size), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
                     }
                     items(post.tips.sortedByDescending { it.height }, key = { it.hash }) { tip ->
                         Text(
@@ -281,6 +280,6 @@ fun WhoDialog(post: SocialPost, states: Map<String, AuthorIdentity>, onProfile: 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }

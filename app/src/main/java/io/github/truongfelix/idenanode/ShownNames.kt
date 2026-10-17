@@ -26,7 +26,7 @@ fun namesFor(addresses: Collection<String>, people: Map<String, Person>, profile
 fun namedAddress(address: String, names: Map<String, String>, me: String?): String {
     val short = shortAddress(address)
     val shown = names[address.lowercase()]?.let { "$it · $short" } ?: short
-    return if (address.equals(me, ignoreCase = true)) "$shown (you)" else shown
+    return if (address.equals(me, ignoreCase = true)) t(R.string.socialb_title_you, shown) else shown
 }
 
 /**

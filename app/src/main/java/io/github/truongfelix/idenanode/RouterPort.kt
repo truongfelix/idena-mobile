@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import org.json.JSONObject
 import java.net.URI
 import java.time.Duration
@@ -193,13 +194,15 @@ fun portMapping(answer: SoapAnswer): PortMapping? {
 }
 
 /** How long the user opens the port for. */
-enum class PortDuration(val label: String, val hours: Long?) {
-    H6("6 hours", 6),
-    D1("1 day", 24),
-    D3("3 days", 72),
-    D7("7 days", 168),
-    UntilValidation("Until the validation + 2 h", null),
+enum class PortDuration(@StringRes private val labelId: Int, val hours: Long?) {
+    H6(R.string.router_duration_6_hours, 6),
+    D1(R.string.router_duration_1_day, 24),
+    D3(R.string.router_duration_3_days, 72),
+    D7(R.string.router_duration_7_days, 168),
+    UntilValidation(R.string.router_duration_until_validation, null),
     ;
+
+    val label: String get() = t(labelId)
 
     /**
      * The opening's end for a choice made at [now], or null when it cannot be chosen (the next validation unknown

@@ -1,6 +1,7 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Context
+import androidx.annotation.StringRes
 import org.json.JSONObject
 import java.io.File
 import java.io.RandomAccessFile
@@ -13,10 +14,13 @@ import java.io.RandomAccessFile
  */
 
 /** The step of a start, as the status bar, the Node card and the notification name it. */
-enum class StartPhase(val label: String) {
-    Starting("Starting the node…"),
-    Opening("Opening the database…"),
-    Compacting("Compacting the database"),
+enum class StartPhase(@StringRes private val labelId: Int) {
+    Starting(R.string.node_phase_starting),
+    Opening(R.string.node_phase_opening),
+    Compacting(R.string.node_phase_compacting),
+    ;
+
+    val label: String get() = t(labelId)
 }
 
 /** The message of the node's first RPC while it opens its chain database. */
@@ -51,7 +55,7 @@ fun compacting(logTail: String): Boolean {
 
 /** The bar's words for a start at [phase], with the minutes since the start for a compaction. */
 fun startLabel(phase: StartPhase, runningForMs: Long?): String =
-    if (phase == StartPhase.Compacting && runningForMs != null) "${phase.label} · ${runningForMs / 60_000} min" else phase.label
+    if (phase == StartPhase.Compacting && runningForMs != null) t(R.string.node_phase_minutes, phase.label, runningForMs / 60_000) else phase.label
 
 /** The node's log, output.log in its folder (idena-go node.StartMobileNodeWithKey). */
 fun nodeLogFile(context: Context): File = File(NodeSettings.nodeDir(context), "output.log")

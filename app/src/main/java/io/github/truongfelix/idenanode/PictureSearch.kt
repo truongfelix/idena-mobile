@@ -73,17 +73,17 @@ fun wikimediaThumbnails(json: String): List<String> {
  */
 fun pictureSearchStatus(pending: Set<PictureSource>, failed: Map<PictureSource, String>, found: Int): String? {
     val lines = mutableListOf<String>()
-    if (pending.isNotEmpty()) lines += "Searching ${PictureSource.entries.filter { it in pending }.joinToString(", ") { it.label }}…"
-    else if (found == 0) lines += "No pictures found."
-    PictureSource.entries.forEach { source -> failed[source]?.let { lines += "${source.label}: $it" } }
+    if (pending.isNotEmpty()) lines += t(R.string.flip_search_searching, PictureSource.entries.filter { it in pending }.joinToString(", ") { it.label })
+    else if (found == 0) lines += t(R.string.flip_search_none_found)
+    PictureSource.entries.forEach { source -> failed[source]?.let { lines += t(R.string.flip_search_source_failed, source.label, it) } }
     return lines.joinToString("\n").ifEmpty { null }
 }
 
 /** What a failed request means for the user. */
 fun pictureSearchError(error: Throwable): String = when (error) {
-    is SocketTimeoutException -> "no answer in time."
-    is UnknownHostException -> "not reachable (is the phone online?)."
-    else -> error.message ?: "no answer."
+    is SocketTimeoutException -> t(R.string.flip_search_timeout)
+    is UnknownHostException -> t(R.string.flip_search_unreachable)
+    else -> error.message ?: t(R.string.flip_search_no_answer)
 }
 
 /** The requests of the picture search (see the top of this file). */
@@ -107,7 +107,7 @@ object PictureSearch {
             PictureSource.DuckDuckGo -> {
                 val landing = duckLandingUrl(q)
                 val page = String(get(landing, DUCK_HOSTS, MAX_PAGE, BROWSER_AGENT), Charsets.UTF_8)
-                val token = duckToken(page) ?: throw IOException("gave no search token.")
+                val token = duckToken(page) ?: throw IOException(t(R.string.flip_search_no_token))
                 duckThumbnails(String(get(duckResultsUrl(q, token), DUCK_HOSTS, MAX_RESULTS, BROWSER_AGENT, referer = landing), Charsets.UTF_8))
             }
             // A query Openverse has not seen takes it 12 to 16 s.
@@ -139,8 +139,8 @@ object PictureSearch {
         try {
             val code = connection.responseCode
             // DuckDuckGo refuses an address for a while after a few quick searches.
-            if (code == 403 || code == 429) throw IOException("refuses searches from this connection for now; try again in a few minutes.")
-            if (code !in 200..299) throw IOException("answered $code.")
+            if (code == 403 || code == 429) throw IOException(t(R.string.flip_search_refused))
+            if (code !in 200..299) throw IOException(t(R.string.flip_search_answered, code))
             return connection.inputStream.use { input ->
                 val out = ByteArrayOutputStream()
                 val buffer = ByteArray(16 * 1024)
@@ -148,7 +148,7 @@ object PictureSearch {
                     val n = input.read(buffer)
                     if (n < 0) break
                     out.write(buffer, 0, n)
-                    if (out.size() > max) throw IOException("its answer is too large.")
+                    if (out.size() > max) throw IOException(t(R.string.flip_search_too_large))
                 }
                 out.toByteArray()
             }

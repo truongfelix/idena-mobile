@@ -112,7 +112,7 @@ private fun BannerRow(item: BannerItem, onOpen: () -> Unit) {
             is BannerItem.Ad -> {
                 AdImage(item.ad.content.thumb, maxSide = 160, Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
                 BannerText(item.ad.content.title, item.ad.content.desc, Modifier.weight(1f))
-                Label("Ad")
+                Label(t(R.string.ads_label_ad))
             }
             BannerItem.DevNote -> {
                 Box(
@@ -121,7 +121,7 @@ private fun BannerRow(item: BannerItem, onOpen: () -> Unit) {
                 ) { Icon(Icons.Outlined.Build, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
                 BannerText(DEV_NOTE_TITLE, DEV_NOTE_LINE, Modifier.weight(1f))
                 // The ads' place: anyone can publish an ad here.
-                Label("Ads")
+                Label(t(R.string.ads_label_ads))
             }
         }
     }
@@ -189,32 +189,32 @@ private fun AdDialog(ad: ChainAd, onDismiss: () -> Unit) {
                 if (ad.content.desc.isNotEmpty()) Text(ad.content.desc)
                 link?.let { Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
                 Text(
-                    "An Idena ad: ${ad.author.take(8)}…${ad.author.takeLast(4)} burnt ${idna(ad.burnt)} over the last day " +
-                        "to show it, and the oracles approved it.",
+                    t(R.string.ads_paid_by, ad.author.take(8), ad.author.takeLast(4), idna(ad.burnt)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            if (link != null) TextButton(onClick = { openInBrowser(context, link); onDismiss() }) { Text("Open the link") }
+            if (link != null) TextButton(onClick = { openInBrowser(context, link); onDismiss() }) { Text(t(R.string.ads_open_link)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 
-const val DEV_NOTE_TITLE = "A note from the dev"
-const val DEV_NOTE_LINE = "Community work, same chain as the original. Tap to read."
+val DEV_NOTE_TITLE: String get() = t(R.string.ads_dev_note_title)
+val DEV_NOTE_LINE: String get() = t(R.string.ads_dev_note_line)
 
 /** The package this app belongs to: its GitHub repositories (their names say what each one is). */
 private val PACKAGE = listOf("truongfelix/idena-go", "truongfelix/idena-desktop", "truongfelix/idena-mobile")
 
 /** The original code and the contributors, direct and indirect, with what the package owes them. */
-private val CREDITS = listOf(
-    "idena-network" to "the original Idena code, no longer maintained",
-    "ubiubi18" to "the forks I started from, and code reviews",
-    "N3CR0M4NC3R-dev/idena.social" to "idena.social, the Social tab",
-)
+private val CREDITS: List<Pair<String, String>>
+    get() = listOf(
+        "idena-network" to t(R.string.ads_credit_idena_network),
+        "ubiubi18" to t(R.string.ads_credit_ubiubi18),
+        "N3CR0M4NC3R-dev/idena.social" to t(R.string.ads_credit_social),
+    )
 
 /**
  * The developer's note: a community package, not the original team's; its repositories, the credits, the
@@ -228,32 +228,27 @@ private fun DevNoteDialog(onDismiss: () -> Unit) {
         title = { Text(DEV_NOTE_TITLE) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Community work, not by the original Idena team. Same chain as the original.", fontWeight = FontWeight.Bold)
+                Text(t(R.string.ads_dev_note_community), fontWeight = FontWeight.Bold)
                 Column { PACKAGE.forEach { GitHubLink(it) } }
-                Text("Thanks to:", style = MaterialTheme.typography.bodyMedium)
+                Text(t(R.string.ads_dev_note_thanks), style = MaterialTheme.typography.bodyMedium)
                 CREDITS.forEach { (path, what) -> GitHubLink(path, what) }
                 HorizontalDivider()
+                Text(t(R.string.ads_dev_note_belief))
                 Text(
-                    "What I believe: today an identity that fails to solve flips loses mining rewards, but an identity " +
-                        "whose flips get reported loses nothing. That is unfair, and it weakens the network.",
-                )
-                Text(
-                    "The proposal: cut an identity's mining rewards in proportion to its share of reported flips over " +
-                        "the last 10 epochs. Also, an identity with 2 or more flips reported in a validation can't mine " +
-                        "during the next epoch. If you agree, say so on Telegram, Discord or idena.social.",
+                    t(R.string.ads_dev_note_proposal),
                     fontWeight = FontWeight.Bold,
                 )
                 COMMUNITY.forEach { (name, url) -> Link(name, url) }
                 HorizontalDivider()
-                Text("Want to help? Feel free to fork the code, review it and propose changes on GitHub.")
+                Text(t(R.string.ads_dev_note_help))
                 Text(
-                    "Robot avatars: RoboHash (MIT), robots by Zikri Kader (CC-BY 4.0), drawn on this phone.",
+                    t(R.string.ads_dev_note_avatars),
                     style = MaterialTheme.typography.bodySmall,
                     color = muted,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 

@@ -131,7 +131,7 @@ fun ProfileList(
                 }
             }
         }
-        if (items.isEmpty()) item { Text("Nothing here yet.", style = MaterialTheme.typography.bodyMedium) }
+        if (items.isEmpty()) item { Text(t(R.string.socialb_nothing_here), style = MaterialTheme.typography.bodyMedium) }
         if (tab == ProfileTab.Posts) {
             items(items, key = { it.node.id }) { item ->
                 PostCard(
@@ -196,7 +196,7 @@ private fun ProfileHeader(
             CopyAddressButton(address)
             // The account's own edits and settings are in ⚙ (B-79, user 2026-10-17).
             mine?.let { OwnProfileMenu(onEdit = onEditProfile, onName = { onName(person) }, onSettings = it.onSettings) }
-            if (!isMe && person.blocked) OutlinedButton(onClick = { onBlock(person.copy(blocked = false)) }) { Text("Unblock") }
+            if (!isMe && person.blocked) OutlinedButton(onClick = { onBlock(person.copy(blocked = false)) }) { Text(t(R.string.socialb_unblock)) }
             else if (!isMe) BlockMenu(person, onBlock, onName = { onName(person) })
         }
         // Another's: Message, Trust and Follow on a row of their own (B-89), the width a phone has.
@@ -213,19 +213,19 @@ private fun ProfileHeader(
                     ) {
                         Icon(Icons.Filled.Email, contentDescription = null, Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                        Text("Message")
+                        Text(t(R.string.socialb_message_button))
                     }
                 }
                 trustChip()
                 val follow = { onFollow(person.copy(following = !person.following)) }
-                if (person.following) OutlinedButton(onClick = follow) { Text("Following") } else Button(onClick = follow) { Text("Follow") }
+                if (person.following) OutlinedButton(onClick = follow) { Text(t(R.string.socialb_following)) } else Button(onClick = follow) { Text(t(R.string.socialb_follow)) }
             }
         }
         // The name on the whole width, on two lines if it needs them.
         Row(verticalAlignment = Alignment.CenterVertically) {
             val title = person.name.ifEmpty { contract?.shownName ?: shortAddress(address) }
             Text(
-                if (isMe) "$title (you)" else title,
+                if (isMe) t(R.string.socialb_title_you, title) else title,
                 Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 2,
@@ -241,30 +241,30 @@ private fun ProfileHeader(
                 {
                     buildAnnotatedString {
                         withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) {
-                            append("${it.status} · age ${it.age} · stake ${blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))} iDNA")
+                            append(t(R.string.socialb_identity_line, it.status, it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
                         }
                     }
                 },
-                { AnnotatedString("Identity: the node did not answer (${it.message}).") },
-            ) ?: AnnotatedString("Identity: asking the node…"),
+                { AnnotatedString(t(R.string.socialb_identity_no_answer, "${it.message}")) },
+            ) ?: AnnotatedString(t(R.string.socialb_identity_asking)),
             style = MaterialTheme.typography.bodyMedium,
         )
         // In this order (B-91, user 2026-10-17): Trust, members and invitees, likes, tips, then what one follows.
         people()
         val counts = MaterialTheme.typography.bodyMedium
-        Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
-        Text("🪙 ${tipText(profile.tipsReceived)} received · ${tipText(profile.tipsGiven)} given iDNA", style = counts)
+        Text(t(R.string.socialb_likes_line, LIKE, blockNumber.format(profile.likesReceived), blockNumber.format(profile.likes.size)), style = counts)
+        Text(t(R.string.socialb_tips_line, tipText(profile.tipsReceived), tipText(profile.tipsGiven)), style = counts)
         mine?.let {
             Row {
                 Text("⭐ ", style = counts)
-                Text("${blockNumber.format(it.people)} following", Modifier.clickable { it.onFollowing(false) }, style = counts, fontWeight = FontWeight.Medium)
+                Text(t(R.string.socialb_n_following, blockNumber.format(it.people)), Modifier.clickable { it.onFollowing(false) }, style = counts, fontWeight = FontWeight.Medium)
                 Text(" · ", style = counts)
-                Text("${count(it.topics, "topic", "topics")}", Modifier.clickable { it.onFollowing(true) }, style = counts, fontWeight = FontWeight.Medium)
+                Text(tp(R.plurals.socialb_n_topics, it.topics, it.topics), Modifier.clickable { it.onFollowing(true) }, style = counts, fontWeight = FontWeight.Medium)
             }
         }
         if (!historyDone) {
             Text(
-                "From the blocks scanned so far: older posts appear as the history scan goes on.",
+                t(R.string.socialb_history_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = muted,
             )
@@ -294,8 +294,10 @@ private fun ProfileItemCard(
                     item.parent?.let { parent ->
                         Text(
                             buildAnnotatedString {
-                                append(if (tab == ProfileTab.Replies) "Reply to " else "Comment on ")
+                                val line = if (tab == ProfileTab.Replies) t(R.string.socialb_reply_to, ADDRESS_MARK) else t(R.string.socialb_comment_on, ADDRESS_MARK)
+                                append(line.substringBefore(ADDRESS_MARK))
                                 appendAddress(parent.author, styles, onProfile)
+                                append(line.substringAfter(ADDRESS_MARK, ""))
                             },
                             style = muted,
                         )
@@ -309,9 +311,10 @@ private fun ProfileItemCard(
                     val like = item.like ?: return@Column
                     Text(
                         buildAnnotatedString {
-                            append("$LIKE Liked ")
+                            val line = t(R.string.socialb_liked_line, LIKE, ADDRESS_MARK, ago(like.time))
+                            append(line.substringBefore(ADDRESS_MARK))
                             appendAddress(call.author, styles, onProfile)
-                            append("  ·  ${ago(like.time)}")
+                            append(line.substringAfter(ADDRESS_MARK, ""))
                         },
                         style = muted,
                     )
@@ -321,9 +324,10 @@ private fun ProfileItemCard(
                     val tip = item.tip ?: return@Column
                     Text(
                         buildAnnotatedString {
-                            append("🪙 Tipped ${tip.validAmount?.let(::tipText)} iDNA to ")
+                            val line = t(R.string.socialb_tipped_line, "${tip.validAmount?.let(::tipText)}", ADDRESS_MARK, ago(tip.time))
+                            append(line.substringBefore(ADDRESS_MARK))
                             appendAddress(call.author, styles, onProfile)
-                            append("  ·  ${ago(tip.time)}")
+                            append(line.substringAfter(ADDRESS_MARK, ""))
                         },
                         style = muted,
                     )

@@ -37,16 +37,16 @@ fun notificationText(status: NodeStatus?, startPhase: StartPhase?, runningForMs:
         return when {
             startPhase != null -> startLabel(startPhase, runningForMs)
             runningForMs == null || runningForMs < PEER_GRACE_MS -> StartPhase.Starting.label
-            else -> "The node does not answer"
+            else -> t(R.string.status_no_answer)
         }
     }
     val format = NumberFormat.getIntegerInstance()
     val block = when {
         status.syncing && status.message.isNotEmpty() -> status.message
-        status.syncing && status.highestBlock > 0 -> "Syncing ${format.format(status.currentBlock)} / ${format.format(status.highestBlock)}"
-        else -> "Block ${format.format(status.currentBlock)}"
+        status.syncing && status.highestBlock > 0 -> t(R.string.node_notification_syncing, format.format(status.currentBlock), format.format(status.highestBlock))
+        else -> t(R.string.node_notification_block, format.format(status.currentBlock))
     }
-    return "$block · ${status.peers} peers"
+    return tp(R.plurals.node_notification_peers, status.peers, block, status.peers)
 }
 
 /**
@@ -93,7 +93,7 @@ class NodeService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startInForeground(notification("Starting the node…"))
+        startInForeground(notification(StartPhase.Starting.label))
         if (!started) {
             started = true
             acquireLocks()
@@ -136,9 +136,9 @@ class NodeService : Service() {
     /** Starts the node with its key ([NodeKeys]); the error, empty once the node runs. */
     private fun startNode(dir: File, config: String): String {
         val key = try {
-            NodeKeys.files(this).read() ?: return "There is no node key."
+            NodeKeys.files(this).read() ?: return t(R.string.node_no_key)
         } catch (e: Exception) {
-            return "The node key was not read: ${e.message ?: e}"
+            return t(R.string.node_key_not_read, "${e.message ?: e}")
         }
         return try {
             Mobile.start(dir.absolutePath, config, key)
@@ -186,6 +186,7 @@ class NodeService : Service() {
         }
 
         private fun read() {
+            Txt.refresh(this@NodeService)
             val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(this@NodeService))
             val status = runCatching { rpc.status() }.getOrNull()
             val startPhase = if (status == null) readStartPhase(this@NodeService, rpc) else null
@@ -198,7 +199,7 @@ class NodeService : Service() {
                 freezeHandled = true
                 thread(name = "node-freeze") { handleFreeze(silentFor) }
             }
-            val text = if (restarting) "Restarting the node: it had stopped answering" else notificationText(status, startPhase, NodeSettings.runningForMs(this@NodeService))
+            val text = if (restarting) t(R.string.node_restarting_frozen) else notificationText(status, startPhase, NodeSettings.runningForMs(this@NodeService))
             handler.post {
                 getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
             }
@@ -270,8 +271,8 @@ class NodeService : Service() {
         // The channel of 0.1.74 and earlier counted the node's notification on the app's icon; a channel's badge
         // cannot be changed once made.
         manager.deleteNotificationChannel(OLD_CHANNEL_ID)
-        val channel = NotificationChannel(CHANNEL_ID, "Node", NotificationManager.IMPORTANCE_LOW)
-        channel.description = "Shows the node while it syncs"
+        val channel = NotificationChannel(CHANNEL_ID, t(R.string.node_channel_name), NotificationManager.IMPORTANCE_LOW)
+        channel.description = t(R.string.node_channel_description)
         // The icon counts the Social news only.
         channel.setShowBadge(false)
         manager.createNotificationChannel(channel)
@@ -289,10 +290,10 @@ class NodeService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_idena)
-            .setContentTitle("Idena node")
+            .setContentTitle(t(R.string.node_notification_title))
             .setContentText(text)
             .setContentIntent(open)
-            .addAction(0, "Stop", stop)
+            .addAction(0, t(R.string.node_notification_stop), stop)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()

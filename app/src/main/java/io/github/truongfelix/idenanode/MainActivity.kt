@@ -15,8 +15,8 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -74,7 +74,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppActivity() {
     // The taps on the Social notification ([SocialBadge]): each opens the Social tab's Notifications.
     private var showActivity by mutableIntStateOf(0)
 
@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** The main tabs, which stay at the top of the screen. */
-private enum class MainTab(val title: String) { Node("Node"), Social("Social") }
+private enum class MainTab(@StringRes val title: Int) { Node(R.string.node_tab_node), Social(R.string.node_tab_social) }
 
 @Composable
 private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
@@ -133,7 +133,7 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
     BackHandler(enabled = tab == MainTab.Social) { tab = MainTab.Node }
     LaunchedEffect(social) {
         for (notice in social.notices) {
-            val result = notices.showSnackbar(notice, actionLabel = "View", withDismissAction = true, duration = SnackbarDuration.Long)
+            val result = notices.showSnackbar(notice, actionLabel = t(R.string.node_notice_view), withDismissAction = true, duration = SnackbarDuration.Long)
             if (result == SnackbarResult.ActionPerformed) {
                 tab = MainTab.Social
                 social.showActivity()
@@ -172,7 +172,7 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
                                     Text("$it", style = MaterialTheme.typography.labelLarge)
                                 }
                             }
-                            IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
+                            IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
                         }
                         // The paid action of the Social tab while it runs (sending, waiting for its block).
                         // Everything sent and waiting for its block, one line (B-81).
@@ -224,7 +224,7 @@ private fun TabSwitch(tab: MainTab, unread: Int, onSelect: (MainTab) -> Unit) {
             ) {
                 val label = @Composable {
                     Text(
-                        it.title,
+                        t(it.title),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
@@ -357,7 +357,7 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
             state,
             newKey = { Mobile.newKey(it) },
             exportKey = { password ->
-                val key = NodeKeys.files(context).read() ?: throw IOException("There is no node key.")
+                val key = NodeKeys.files(context).read() ?: throw IOException(t(R.string.node_no_key))
                 try {
                     Mobile.exportKey(key, password)
                 } finally {
@@ -368,7 +368,7 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
                 scope.launch {
                     val error = importKey(backup, password)
                     if (error.isNotEmpty()) {
-                        done(false, "The account was not created: $error")
+                        done(false, t(R.string.node_account_not_created, error))
                     } else {
                         setSync(true)
                         done(true, NEW_ACCOUNT_MESSAGE)

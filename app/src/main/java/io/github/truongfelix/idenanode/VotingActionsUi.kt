@@ -38,7 +38,7 @@ import java.time.Instant
 
 /** What the page says when the node refused an action ([actionErrorText]), or could not be reached. */
 private fun refusalText(e: Throwable, voting: OracleVoting): String = when (e) {
-    is ConnectException, is SocketTimeoutException -> "The node did not answer: ${e.message}"
+    is ConnectException, is SocketTimeoutException -> t(R.string.voting_node_no_answer, e.message.toString())
     else -> actionErrorText(e.message, voting, ::dateText)
 }
 
@@ -69,7 +69,7 @@ fun VotingActionPills(voting: OracleVoting, me: String, onDone: () -> Unit) {
 
     fun plan(action: VotingAction, amount: BigDecimal) {
         message = null
-        busy = "Checking with the node…"
+        busy = t(R.string.voting_checking_with_node)
         scope.launch {
             val made = withContext(Dispatchers.IO) {
                 runCatching {
@@ -79,24 +79,24 @@ fun VotingActionPills(voting: OracleVoting, me: String, onDone: () -> Unit) {
             }
             busy = null
             made.onSuccess { cost ->
-                if (cost == null) message = "The node is still syncing: try once it is synced." else planned = PlannedAction(action, amount, cost)
+                if (cost == null) message = t(R.string.voting_syncing_try_later) else planned = PlannedAction(action, amount, cost)
             }.onFailure { message = refusalText(it, voting) }
         }
     }
 
     fun send(ready: PlannedAction) {
         val label = actionLabel(ready.action, voting, checks)
-        busy = "$label…"
+        busy = t(R.string.voting_action_busy, label)
         scope.launch {
             message = withContext(Dispatchers.IO) {
                 val rpc = rpc(context)
                 val hash = runCatching { VotingOwnerNode(rpc).send(ready.action, me, voting, ready.amount, ready.cost) }
-                    .getOrElse { return@withContext "$label: not sent. ${refusalText(it, voting)}" }
+                    .getOrElse { return@withContext t(R.string.voting_action_not_sent_reason, label, refusalText(it, voting)) }
                 val block = waitForBlock(NodeTxLookup(rpc), hash)
                 when {
-                    block == null -> "$label: not sent, $NOT_SENT"
-                    block.error != null -> "$label: ${actionErrorText(block.error, voting, ::dateText)}"
-                    else -> "$label: done."
+                    block == null -> t(R.string.voting_action_not_sent, label, NOT_SENT)
+                    block.error != null -> t(R.string.voting_action_result, label, actionErrorText(block.error, voting, ::dateText))
+                    else -> t(R.string.voting_action_done, label)
                 }
             }
             busy = null
@@ -147,7 +147,7 @@ fun VotingActionPills(voting: OracleVoting, me: String, onDone: () -> Unit) {
                     send(ready)
                 }) { Text(actionLabel(ready.action, voting, checks)) }
             },
-            dismissButton = { TextButton(onClick = { planned = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { planned = null }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -159,21 +159,21 @@ private fun AddFundsDialog(onDismiss: () -> Unit, onNext: (BigDecimal) -> Unit) 
     val amount = text.trim().toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add funds") },
+        title = { Text(t(R.string.voting_action_add_funds)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("The amount joins the voting's funds, paid out by its rules.", style = MaterialTheme.typography.bodySmall)
+                Text(t(R.string.voting_add_funds_note), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("Amount (iDNA)") },
+                    label = { Text(t(R.string.voting_amount_idna)) },
                     singleLine = true,
                     isError = text.isNotEmpty() && amount == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { amount?.let(onNext) }, enabled = amount != null) { Text("Next") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { amount?.let(onNext) }, enabled = amount != null) { Text(t(R.string.common_next)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }

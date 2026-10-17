@@ -60,41 +60,41 @@ private fun ShowDialog(ad: MyAd, me: String, burnOnly: Boolean, onClose: () -> U
         // Read once the audience stays the same for a moment.
         delay(500)
         competitionLine = withContext(Dispatchers.IO) {
-            runCatching { competitionText(myAdsNode(context).competition(ad.cid, target)) }.getOrElse { "Other ads: not read (${it.message})." }
+            runCatching { competitionText(myAdsNode(context).competition(ad.cid, target)) }.getOrElse { t(R.string.ads_other_ads_not_read, it.message.toString()) }
         }
     }
     val ready = plan
     AlertDialog(
         onDismissRequest = { if (busy == null) onClose() },
         properties = DialogProperties(dismissOnClickOutside = false),
-        title = { Text(if (burnOnly) "Burn more" else "Show my ad") },
+        title = { Text(if (burnOnly) t(R.string.ads_burn_more) else t(R.string.ads_show_my_ad)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (ready != null) {
                     Text(showConfirmText(ad.title, target, ready.amount, ready.profile != null, ready.fees))
                 } else {
                     if (burnOnly) {
-                        Text("“${ad.title}” is shown to ${audiencePhrase(target)}.")
+                        Text(t(R.string.ads_shown_to, ad.title, audiencePhrase(target)))
                     } else {
-                        Text("Who sees it", style = MaterialTheme.typography.titleSmall)
+                        Text(t(R.string.ads_who_sees_it), style = MaterialTheme.typography.titleSmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Choice("Language", target.language, listOf("" to "Any") + AD_LANGUAGES.map { it to languageName(it) }) { target = target.copy(language = it) }
-                            Choice("OS", target.os, listOf("" to "Any") + AD_OSES) { target = target.copy(os = it) }
+                            Choice(t(R.string.ads_language), target.language, listOf("" to t(R.string.ads_any_language)) + AD_LANGUAGES.map { it to languageName(it) }) { target = target.copy(language = it) }
+                            Choice(t(R.string.ads_os), target.os, listOf("" to t(R.string.ads_any_os)) + AD_OSES) { target = target.copy(os = it) }
                         }
-                        NumberField("Min age, epochs", ageText) { ageText = it; target = target.copy(age = it.toIntOrNull() ?: 0) }
-                        NumberField("Min stake, iDNA", stakeText) { stakeText = it; target = target.copy(stake = it.toIntOrNull() ?: 0) }
+                        NumberField(t(R.string.ads_min_age), ageText) { ageText = it; target = target.copy(age = it.toIntOrNull() ?: 0) }
+                        NumberField(t(R.string.ads_min_stake), stakeText) { stakeText = it; target = target.copy(stake = it.toIntOrNull() ?: 0) }
                     }
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it.trim(); error = null },
-                        label = { Text("Burn, iDNA") },
+                        label = { Text(t(R.string.ads_burn_field)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Text(competitionLine ?: "Reading the other ads…", style = MaterialTheme.typography.bodySmall)
+                    Text(competitionLine ?: t(R.string.ads_reading_other_ads), style = MaterialTheme.typography.bodySmall)
                     Text(
-                        "Shown 24 h to the identities it targets, ranked by the iDNA burnt (a set language counts ×22, an OS ×5).",
+                        t(R.string.ads_ranking_help),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -109,18 +109,18 @@ private fun ShowDialog(ad: MyAd, me: String, burnOnly: Boolean, onClose: () -> U
                     val amount = amountText.toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
                     val numbers = (ageText.isEmpty() || ageText.toIntOrNull() != null) && (stakeText.isEmpty() || stakeText.toIntOrNull() != null)
                     if (amount == null || !numbers) {
-                        error = if (amount == null) "Write the iDNA to burn." else "The age and the stake are whole numbers."
+                        error = if (amount == null) t(R.string.ads_write_burn) else t(R.string.ads_whole_numbers)
                         return@TextButton
                     }
-                    busy = "Checking with the node…"
+                    busy = t(R.string.ads_checking_with_node)
                     scope.launch {
                         val checked = withContext(Dispatchers.IO) { runCatching { planShow(context, me, ad, burnOnly, target, amount) } }
                         busy = null
-                        checked.onSuccess { plan = it }.onFailure { error = "It cannot be sent: ${it.message}" }
+                        checked.onSuccess { plan = it }.onFailure { error = t(R.string.ads_cannot_be_sent, it.message.toString()) }
                     }
-                }) { Text(if (burnOnly) "Check" else "Show it…") }
+                }) { Text(if (burnOnly) t(R.string.ads_check) else t(R.string.ads_show_it_ellipsis)) }
                 else -> TextButton(onClick = {
-                    busy = if (ready.profile != null) "Updating your profile and burning…" else "Burning…"
+                    busy = if (ready.profile != null) t(R.string.ads_burning_with_profile) else t(R.string.ads_burning)
                     scope.launch {
                         val sent = withContext(Dispatchers.IO) {
                             runCatching {
@@ -133,18 +133,18 @@ private fun ShowDialog(ad: MyAd, me: String, burnOnly: Boolean, onClose: () -> U
                             sent.fold(
                                 onSuccess = { block ->
                                     when {
-                                        block == null -> "Not burnt: $NOT_SENT"
-                                        else -> "“${ad.title}” is shown for 24 h: ${idna(ready.amount.toPlainString())} burnt."
+                                        block == null -> t(R.string.ads_not_burnt, NOT_SENT)
+                                        else -> t(R.string.ads_shown_for_day, ad.title, idna(ready.amount.toPlainString()))
                                     }
                                 },
-                                onFailure = { "Not sent: ${it.message}" },
+                                onFailure = { t(R.string.ads_not_sent, it.message.toString()) },
                             ),
                         )
                     }
-                }) { Text(if (burnOnly) "Burn" else "Show it") }
+                }) { Text(if (burnOnly) t(R.string.ads_burn) else t(R.string.ads_show_it)) }
             }
         },
-        dismissButton = { if (busy == null) TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = { if (busy == null) TextButton(onClick = onClose) { Text(t(R.string.common_cancel)) } },
     )
 }
 

@@ -78,7 +78,7 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
         scope.launch {
             val fee = withContext(Dispatchers.IO) { runCatching { rpc(context).estimateTx(tx.type, status.address, tx.to, tx.amount) } }
             busy = false
-            fee.onSuccess { confirm = tx.copy(fee = it) }.onFailure { message = "The node refused: ${it.message}" }
+            fee.onSuccess { confirm = tx.copy(fee = it) }.onFailure { message = t(R.string.wallet_node_refused, it.message.toString()) }
         }
     }
 
@@ -88,54 +88,54 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
             val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).sendTx(tx.type, status.address, tx.to, tx.amount) } }
                 .getOrElse {
                     busy = false
-                    message = "The node refused: ${it.message}"
+                    message = t(R.string.wallet_node_refused, it.message.toString())
                     return@launch
                 }
             busy = false
             pendingTx = hash
             val mined = waitUntilMined(context, hash)
             pendingTx = null
-            message = if (mined) "${tx.title}: done." else "${tx.title}: not sent, $NOT_SENT"
+            message = if (mined) t(R.string.wallet_tx_done, tx.title) else t(R.string.wallet_tx_not_sent, tx.title, NOT_SENT)
             onChanged()
         }
     }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Wallet", style = MaterialTheme.typography.titleMedium)
-            Field("Balance", idna(status.balance))
-            Field("Stake", idna(status.stake))
+            Text(t(R.string.wallet_title), style = MaterialTheme.typography.titleMedium)
+            Field(t(R.string.wallet_balance), idna(status.balance))
+            Field(t(R.string.wallet_stake), idna(status.stake))
             // The stake's details, from the Account card before 0.1.35.
             val stake = status.stake.toDoubleOrNull() ?: 0.0
             val locked = status.lockedStake.toDoubleOrNull() ?: 0.0
-            if (locked > 0) Field("Locked", idna(status.lockedStake))
+            if (locked > 0) Field(t(R.string.wallet_locked), idna(status.lockedStake))
             val miss = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Miss)
             val fail = stakeProtection(status.identityState, status.age, stake, locked, Outcome.Fail)
             if (miss != null && fail != null) {
-                Field("Protection", "${percent(miss)} if missed, ${percent(fail)} if failed")
+                Field(t(R.string.wallet_protection), t(R.string.wallet_protection_value, percent(miss), percent(fail)))
             }
             network?.let { apy(stake, it) }?.let {
-                Field("APY", "${percent(it.yearly)} (staking + mining)")
+                Field(t(R.string.wallet_apy), t(R.string.wallet_apy_value, percent(it.yearly)))
                 Text(
-                    "If the identity validates and mines itself; flip and invitation rewards are not counted.",
+                    t(R.string.wallet_apy_note),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
             val padding = PaddingValues(horizontal = 14.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { dialog = WalletDialog.Send }, enabled = canTransact, contentPadding = padding) { Text("Send") }
-                OutlinedButton(onClick = { dialog = WalletDialog.Receive }, contentPadding = padding) { Text("Receive") }
+                OutlinedButton(onClick = { dialog = WalletDialog.Send }, enabled = canTransact, contentPadding = padding) { Text(t(R.string.common_send)) }
+                OutlinedButton(onClick = { dialog = WalletDialog.Receive }, contentPadding = padding) { Text(t(R.string.wallet_receive)) }
                 OutlinedButton(
                     onClick = { dialog = WalletDialog.Stake },
                     enabled = canTransact && canReceiveStake(status.identityState),
                     contentPadding = padding,
-                ) { Text("Add stake") }
+                ) { Text(t(R.string.wallet_add_stake)) }
             }
-            pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
+            pendingTx?.let { Text(t(R.string.wallet_tx_waiting, it.take(10)), style = MaterialTheme.typography.bodySmall) }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             when {
-                status.period != "None" -> Text("Sending and staking wait until the validation is over.", style = MaterialTheme.typography.bodySmall)
-                status.syncing -> Text("Sending and staking wait until the node is synced.", style = MaterialTheme.typography.bodySmall)
+                status.period != "None" -> Text(t(R.string.wallet_wait_validation), style = MaterialTheme.typography.bodySmall)
+                status.syncing -> Text(t(R.string.wallet_wait_sync), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -145,14 +145,14 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
         WalletDialog.Send -> SendDialog(status, people, names, onDismiss = { dialog = null }) { to, name, amount ->
             dialog = null
             val shown = name?.let { "@$it ($to)" } ?: recipientText(to, names)
-            prepare(PendingTx(SEND_TX, to, amount, "Send", "Send ${idna(amount.toPlainString())} to $shown."))
+            prepare(PendingTx(SEND_TX, to, amount, t(R.string.common_send), t(R.string.wallet_send_summary, idna(amount.toPlainString()), shown)))
         }
         WalletDialog.Stake -> StakeDialog(status, onDismiss = { dialog = null }) { amount ->
             dialog = null
             prepare(
                 PendingTx(
-                    REPLENISH_STAKE_TX, status.address, amount, "Add stake",
-                    "Move ${idna(amount.toPlainString())} from your balance to your identity's stake. It cannot be withdrawn.",
+                    REPLENISH_STAKE_TX, status.address, amount, t(R.string.wallet_add_stake),
+                    t(R.string.wallet_stake_summary, idna(amount.toPlainString())),
                 ),
             )
         }
@@ -165,9 +165,9 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
         AlertDialog(
             onDismissRequest = { confirm = null },
             title = { Text(tx.title) },
-            text = { Text("${tx.summary}\n\nFee: about $fee iDNA (at most $maxFee iDNA).") },
-            confirmButton = { TextButton(onClick = { confirm = null; send(tx) }) { Text("Send") } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+            text = { Text(t(R.string.wallet_confirm_fee, tx.summary, fee, maxFee)) },
+            confirmButton = { TextButton(onClick = { confirm = null; send(tx) }) { Text(t(R.string.common_send)) } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -180,24 +180,24 @@ private fun ReceiveDialog(address: String, onDismiss: () -> Unit) {
     val qr = remember(address) { qrCode(address) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Receive iDNA") },
+        title = { Text(t(R.string.wallet_receive_title)) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Dark modules on white whatever the theme, so that any scanner reads it.
-                Image(bitmap = qr, contentDescription = "QR code of the address", modifier = Modifier.size(220.dp), filterQuality = FilterQuality.None)
+                Image(bitmap = qr, contentDescription = t(R.string.wallet_address_qr), modifier = Modifier.size(220.dp), filterQuality = FilterQuality.None)
                 SelectionContainer {
                     Text(address, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
                 }
-                Text("Send only iDNA on the Idena network to this address.", style = MaterialTheme.typography.bodySmall)
+                Text(t(R.string.wallet_receive_note), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 clipboard.setText(AnnotatedString(address))
                 copied = true
-            }) { Text(if (copied) "Copied" else "Copy") }
+            }) { Text(t(if (copied) R.string.wallet_copied else R.string.wallet_copy)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 
@@ -238,24 +238,24 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, names: M
     val tooMuch = amount != null && amount > balance
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Send iDNA") },
+        title = { Text(t(R.string.wallet_send_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Balance: ${idna(status.balance)}", style = MaterialTheme.typography.bodyMedium)
+                Text(t(R.string.wallet_balance_line, idna(status.balance)), style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(
                     value = to,
                     onValueChange = { to = it.trim() },
-                    label = { Text("To (0x… or @name)") },
+                    label = { Text(t(R.string.wallet_send_to)) },
                     singleLine = true,
                     isError = recipient == Recipient.Invalid || (name != null && resolved != null && !toValid),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 )
                 name?.let { RecipientLine(it, resolved) }
                 if (recipient is Recipient.Address) names[recipient.address]?.let {
-                    Text("To: $it", style = MaterialTheme.typography.bodyMedium)
+                    Text(t(R.string.wallet_send_to_name, it), style = MaterialTheme.typography.bodyMedium)
                 }
                 if (named.isNotEmpty()) {
-                    TextButton(onClick = { picking = !picking }) { Text(if (picking) "Hide the contacts" else "Choose from Contacts") }
+                    TextButton(onClick = { picking = !picking }) { Text(t(if (picking) R.string.wallet_hide_contacts else R.string.wallet_choose_contacts)) }
                     if (picking) {
                         named.forEach { (address, name) ->
                             TextButton(onClick = { to = address; picking = false }) {
@@ -265,24 +265,24 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, names: M
                     }
                 }
                 if (address != null && address.equals(status.address, ignoreCase = true)) {
-                    Text("This is your own address.", style = MaterialTheme.typography.bodySmall)
+                    Text(t(R.string.wallet_own_address), style = MaterialTheme.typography.bodySmall)
                 }
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Amount (iDNA)") },
+                    label = { Text(t(R.string.wallet_amount)) },
                     singleLine = true,
                     isError = amountText.isNotEmpty() && (amount == null || tooMuch),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                if (tooMuch) Text("More than your balance.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                Text("A transfer cannot be undone: check the address.", style = MaterialTheme.typography.bodySmall)
+                if (tooMuch) Text(t(R.string.wallet_too_much), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(t(R.string.wallet_send_final), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (address != null && amount != null) onNext(address, name, amount) }, enabled = toValid && amount != null && !tooMuch) { Text("Next") }
+            TextButton(onClick = { if (address != null && amount != null) onNext(address, name, amount) }, enabled = toValid && amount != null && !tooMuch) { Text(t(R.string.common_next)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }
 
@@ -297,10 +297,10 @@ private fun RecipientLine(name: String, resolved: Result<ResolvedName>?) {
     val error = MaterialTheme.colorScheme.error
     val found = resolved?.getOrNull()
     val problem = when {
-        resolved == null -> "Looking up @$name…"
-        resolved.isFailure -> "The node did not answer for @$name."
-        found?.holder == null -> "Nobody holds @$name."
-        found.profile?.inStanding != true -> "The holder of @$name is neither validated nor vouched for: the name is hidden and may change hands. Send to an address."
+        resolved == null -> t(R.string.wallet_name_looking, name)
+        resolved.isFailure -> t(R.string.wallet_name_no_answer, name)
+        found?.holder == null -> t(R.string.wallet_name_nobody, name)
+        found.profile?.inStanding != true -> t(R.string.wallet_name_not_standing, name)
         else -> null
     }
     if (problem != null || found?.holder == null) {
@@ -337,41 +337,40 @@ private fun StakeDialog(status: NodeStatus, onDismiss: () -> Unit, onNext: (BigD
     val preview = StakePreview.of(status.identityState, status.age, stake, locked, amount ?: BigDecimal.ZERO, threshold)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add stake") },
+        title = { Text(t(R.string.wallet_add_stake)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Balance: ${idna(status.balance)}", style = MaterialTheme.typography.bodyMedium)
+                Text(t(R.string.wallet_balance_line, idna(status.balance)), style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Amount to stake (iDNA)") },
+                    label = { Text(t(R.string.wallet_stake_amount)) },
                     singleLine = true,
                     isError = amountText.isNotEmpty() && (amount == null || tooMuch),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                if (tooMuch) Text("More than your balance.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                Text("Stake: ${idna(status.stake)} → ${idna(preview.newStake.toPlainString())}", style = MaterialTheme.typography.bodyMedium)
+                if (tooMuch) Text(t(R.string.wallet_too_much), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(t(R.string.wallet_stake_change, idna(status.stake), idna(preview.newStake.toPlainString())), style = MaterialTheme.typography.bodyMedium)
                 StakeProtection(status, preview)
                 threshold?.let {
                     Text(
-                        "A validated identity needs at least ${idna(it.toPlainString())} of stake to count as an approved " +
-                            "validator (block committees) and to send its evidence map; below it the node calls it discriminated.",
+                        t(R.string.wallet_stake_threshold, idna(it.toPlainString())),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     if (preview.belowThreshold) {
-                        Text("Your stake would still be below it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        Text(t(R.string.wallet_stake_below), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
                 }
                 Text(
-                    "Stake cannot be withdrawn: it only returns to the balance (without locked stake) if the identity is terminated.",
+                    t(R.string.wallet_stake_no_withdraw),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { amount?.let(onNext) }, enabled = amount != null && !tooMuch) { Text("Next") }
+            TextButton(onClick = { amount?.let(onNext) }, enabled = amount != null && !tooMuch) { Text(t(R.string.common_next)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }
 
@@ -384,14 +383,13 @@ private fun StakeProtection(status: NodeStatus, preview: StakePreview) {
     when {
         missed == null || failed == null -> {}
         missed == 0.0 && failed == 0.0 -> Text(
-            "As a ${status.identityState}, if the identity misses or fails the next validation it is killed and all " +
-                "its stake is burnt, including what you add now.",
+            t(R.string.wallet_stake_all_burnt, identityStateText(status.identityState)),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )
         else -> {
-            Text("If the identity misses the next validation, it keeps ${percent(missed)} (${kept(missed)}).", style = MaterialTheme.typography.bodyMedium)
-            Text("If it fails it, it keeps ${percent(failed)} (${kept(failed)}).", style = MaterialTheme.typography.bodyMedium)
+            Text(t(R.string.wallet_stake_kept_missed, percent(missed), kept(missed)), style = MaterialTheme.typography.bodyMedium)
+            Text(t(R.string.wallet_stake_kept_failed, percent(failed), kept(failed)), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

@@ -46,7 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /** The draft of a reply to [post] itself, the reply bar's target until a reply or comment is picked. */
-fun replyDraft(post: SocialPost) = Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call)
+fun replyDraft(post: SocialPost) = Draft(t(R.string.social_what_reply), t(R.string.social_what_reply), PostTarget.onPost(post.id), post.call)
 
 /**
  * The reply bar under a thread, as the comments of the usual social apps: the thread stays on screen and scrolls
@@ -77,20 +77,20 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                 if (!onPost) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Replying to ${displayName(draft!!.answering?.author.orEmpty(), model.names)}",
+                            t(R.string.social_replying_to, displayName(draft!!.answering?.author.orEmpty(), model.names)),
                             Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
                             color = muted,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        SmallIconButton(Icons.Filled.Close, "Reply to the post instead", muted) { sending.draft = replyDraft(post) }
+                        SmallIconButton(Icons.Filled.Close, t(R.string.social_reply_to_post_instead), muted) { sending.draft = replyDraft(post) }
                     }
                 }
                 val extras = listOfNotNull(
-                    sending.draftImage?.let { "🖼 Image ${it.chosen} px" },
-                    "Text on IPFS".takeIf { sending.textOnIpfs },
-                    "Long text: on IPFS?".takeIf { !sending.textOnIpfs && sending.draftText.length >= LONG_REPLY },
+                    sending.draftImage?.let { t(R.string.social_reply_image, it.chosen) },
+                    t(R.string.social_text_on_ipfs).takeIf { sending.textOnIpfs },
+                    t(R.string.social_long_text_question).takeIf { !sending.textOnIpfs && sending.draftText.length >= LONG_REPLY },
                 )
                 if (draft != null && extras.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -100,7 +100,7 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        if (sending.draftImage != null) SmallIconButton(Icons.Filled.Close, "Remove the image", muted) { sending.draftImage = null }
+                        if (sending.draftImage != null) SmallIconButton(Icons.Filled.Close, t(R.string.social_remove_image), muted) { sending.draftImage = null }
                     }
                 }
                 picker.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
@@ -112,7 +112,7 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                             .weight(1f)
                             .focusRequester(focus)
                             .onFocusChanged { if (it.isFocused && sending.draft == null) sending.draft = replyDraft(post) },
-                        placeholder = { Text("Reply to ${displayName(post.call.author, model.names)}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        placeholder = { Text(t(R.string.social_reply_to, displayName(post.call.author, model.names)), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         maxLines = 5,
                         shape = RoundedCornerShape(24.dp),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -128,7 +128,7 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                         onClick = sending::prepareDraft,
                         enabled = canPost && draft != null && !picker.preparing && (sending.draftText.isNotBlank() || sending.draftImage != null),
                         modifier = Modifier.size(52.dp),
-                    ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Post the reply") }
+                    ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.social_post_reply)) }
                 }
             }
         }
@@ -153,14 +153,14 @@ private fun ReplyOptionsSheet(model: SocialModel, picker: ImagePicker, onDismiss
         ) {
             if (image != null) DraftImageChoice(model, image, picker.feePerGas)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Long text on IPFS", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                Text(t(R.string.social_long_text_on_ipfs), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                 Switch(checked = sending.textOnIpfs, onCheckedChange = { sending.textOnIpfs = it })
             }
             if (sending.textOnIpfs) TextOnIpfsNote()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (image != null) TextButton(onClick = { sending.draftImage = null }) { Text("✕ Remove the image") }
+                if (image != null) TextButton(onClick = { sending.draftImage = null }) { Text(t(R.string.social_remove_image_button)) }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = onDismiss) { Text("Done") }
+                Button(onClick = onDismiss) { Text(t(R.string.social_done)) }
             }
         }
     }

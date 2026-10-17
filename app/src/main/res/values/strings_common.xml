@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Words used on many screens. -->
+<resources>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_close">Close</string>
+    <string name="common_try_again">Try again</string>
+    <string name="common_send">Send</string>
+    <string name="common_next">Next</string>
+    <string name="common_ok">OK</string>
+    <string name="common_remove">Remove</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_back">Back</string>
+    <string name="common_more">More</string>
+    <string name="common_details">Details</string>
+</resources>

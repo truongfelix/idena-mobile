@@ -59,6 +59,10 @@ data class FlipQuota(val state: String, val required: Int, val available: Int, v
     val missingOutcome: String
         get() = if (state == "Verified" || state == "Human") "Suspended" else "Killed"
 
+    /** [missingOutcome] as the screens say it. */
+    val missingOutcomeLabel: String
+        get() = if (missingOutcome == "Suspended") t(R.string.flip_outcome_suspended) else t(R.string.flip_outcome_killed)
+
     companion object {
         private val NO_FLIP_STATES = setOf("", "Undefined", "Invite", "Killed")
     }
@@ -130,8 +134,8 @@ fun flipSubmitArgs(flip: FlipHex, pairId: Int): JSONArray =
 
 /** What the node's refusal of a flip means for the user (desktop publishFlip). */
 fun flipRefusal(message: String): String = when {
-    "candidate" in message.lowercase() -> "This identity state cannot submit flips."
-    "ceremony" in message.lowercase() || "late" in message.lowercase() -> "Flips cannot be sent once the flip lottery has started."
+    "candidate" in message.lowercase() -> t(R.string.flip_refusal_state)
+    "ceremony" in message.lowercase() || "late" in message.lowercase() -> t(R.string.flip_refusal_lottery)
     else -> message
 }
 

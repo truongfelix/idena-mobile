@@ -50,37 +50,37 @@ fun AcceptInvitationSection(status: NodeStatus, onChanged: () -> Unit) {
             val hash = withContext(Dispatchers.IO) {
                 runCatching { rpc(context).acceptInvitation() }
             }.getOrElse {
-                message = "The node refused: ${it.message}"
+                message = t(R.string.wallet_node_refused, it.message.toString())
                 return@launch
             }
             pendingTx = hash
             val mined = waitUntilMined(context, hash)
             pendingTx = null
-            message = if (mined) "Invitation accepted: the identity is a candidate for the next validation."
-            else "The invitation is not accepted: $NOT_SENT"
+            message = if (mined) t(R.string.wallet_invite_accepted)
+            else t(R.string.wallet_invite_not_accepted, NOT_SENT)
             onChanged()
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Invitation", style = MaterialTheme.typography.titleSmall)
-        Text("You are invited to Idena. Accept the invitation to take part in the next validation as a candidate.")
-        pendingTx?.let { Text("Transaction sent, waiting for a block (${it.take(10)}…)", style = MaterialTheme.typography.bodySmall) }
+        Text(t(R.string.wallet_invite_invitation), style = MaterialTheme.typography.titleSmall)
+        Text(t(R.string.wallet_invite_you_are_invited))
+        pendingTx?.let { Text(t(R.string.wallet_tx_waiting, it.take(10)), style = MaterialTheme.typography.bodySmall) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         when {
             !canAcceptInvitation(status.period, status.identityState) ->
-                Text("The invitation can be accepted once the validation is over.", style = MaterialTheme.typography.bodySmall)
-            pendingTx == null -> Button(onClick = { confirming = true }) { Text("Accept the invitation") }
+                Text(t(R.string.wallet_invite_accept_later), style = MaterialTheme.typography.bodySmall)
+            pendingTx == null -> Button(onClick = { confirming = true }) { Text(t(R.string.wallet_invite_accept)) }
         }
     }
 
     if (confirming) {
         AlertDialog(
             onDismissRequest = { confirming = false },
-            title = { Text("Accept the invitation") },
-            text = { Text("The node sends the activation transaction of your address. Your identity becomes a candidate: take part in the next validation to become a Newbie.") },
-            confirmButton = { TextButton(onClick = { confirming = false; accept() }) { Text("Send") } },
-            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+            title = { Text(t(R.string.wallet_invite_accept)) },
+            text = { Text(t(R.string.wallet_invite_accept_text)) },
+            confirmButton = { TextButton(onClick = { confirming = false; accept() }) { Text(t(R.string.common_send)) } },
+            dismissButton = { TextButton(onClick = { confirming = false }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -100,49 +100,49 @@ fun ActivateCodeSection(status: NodeStatus, onChanged: () -> Unit) {
 
     fun activate(code: String) {
         message = null
-        busy = "Activating…"
+        busy = t(R.string.wallet_invite_activating)
         scope.launch {
             val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).activateInvite(code) } }.getOrElse {
                 busy = null
-                message = "The node refused the code: ${it.message}"
+                message = t(R.string.wallet_invite_code_refused, it.message.toString())
                 return@launch
             }
-            busy = "Activated: waiting for a block…"
+            busy = t(R.string.wallet_invite_activated_waiting)
             if (!waitUntilMined(context, hash)) {
                 busy = null
-                message = "The code is not activated: $NOT_SENT"
+                message = t(R.string.wallet_invite_code_not_activated, NOT_SENT)
                 return@launch
             }
             busy = null
             text = ""
-            message = "Invitation activated: the identity is a candidate for the next validation."
+            message = t(R.string.wallet_invite_activated)
             onChanged()
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Invitation code", style = MaterialTheme.typography.titleSmall)
+        Text(t(R.string.wallet_invite_code), style = MaterialTheme.typography.titleSmall)
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            label = { Text("Paste the code here") },
+            label = { Text(t(R.string.wallet_invite_paste_code)) },
             isError = text.isNotBlank() && code == null,
             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             modifier = Modifier.fillMaxWidth(),
         )
         if (text.isNotBlank() && code == null) {
-            Text("A code is 64 letters and digits (0-9, a-f).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            Text(t(R.string.wallet_invite_code_format), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = { code?.let(::activate) }, enabled = code != null && busy == null && canActivateCode(status.identityState, status.period)) {
-                Text("Activate")
+                Text(t(R.string.wallet_invite_activate))
             }
             Spacer(Modifier.size(12.dp))
-            Text("No fee", style = MaterialTheme.typography.bodySmall)
+            Text(t(R.string.wallet_invite_no_fee), style = MaterialTheme.typography.bodySmall)
         }
-        if (status.period != "None") Text("Codes are activated outside the validation.", style = MaterialTheme.typography.bodySmall)
+        if (status.period != "None") Text(t(R.string.wallet_invite_codes_outside), style = MaterialTheme.typography.bodySmall)
         busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        Text("Or give your address to someone who invites you.", style = MaterialTheme.typography.bodySmall)
+        Text(t(R.string.wallet_invite_give_address), style = MaterialTheme.typography.bodySmall)
     }
 }

@@ -28,13 +28,13 @@ import java.math.RoundingMode
 
 /** The folded line under Advanced settings: what the settings are now. */
 fun advancedSummary(form: NewVotingForm): String = listOf(
-    "counting ${durationText(form.countingDuration)}",
-    "committee ${form.committeeSize}",
-    "quorum ${form.quorum}%",
-    "majority ${form.winnerThreshold}%",
-    if (form.paymentArg.signum() == 0) "free to vote" else "${idna(form.paymentArg.toPlainString())} per vote",
-    "owner fee ${form.ownerFee}%",
-    "rewards fund ${idna(form.rewardsFund.toPlainString())}",
+    t(R.string.voting_summary_counting, durationText(form.countingDuration)),
+    t(R.string.voting_summary_committee, form.committeeSize),
+    t(R.string.voting_summary_quorum, form.quorum),
+    t(R.string.voting_summary_majority, form.winnerThreshold),
+    if (form.paymentArg.signum() == 0) t(R.string.voting_summary_free) else t(R.string.voting_per_vote, idna(form.paymentArg.toPlainString())),
+    t(R.string.voting_summary_owner_fee, form.ownerFee),
+    t(R.string.voting_summary_rewards_fund, idna(form.rewardsFund.toPlainString())),
 ).joinToString(" · ")
 
 /**
@@ -81,7 +81,7 @@ fun NewVotingAdvanced(form: NewVotingForm, network: Long?, onChange: (NewVotingF
             { edit(label, it) },
             Modifier.fillMaxWidth(),
             enabled = enabled,
-            label = { Text(label) },
+            label = { Text(fieldLabel(label)) },
             singleLine = true,
             isError = label in bad,
             supportingText = help?.let { { Text(it) } },
@@ -89,18 +89,18 @@ fun NewVotingAdvanced(form: NewVotingForm, network: Long?, onChange: (NewVotingF
         )
     }
 
-    TextButton(onClick = { open = !open }) { Text((if (open) "▾" else "▸") + " Advanced settings") }
+    TextButton(onClick = { open = !open }) { Text(t(if (open) R.string.voting_advanced_open else R.string.voting_advanced_closed)) }
     if (!open) {
         Text(advancedSummary(form), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Counting", style = MaterialTheme.typography.titleSmall)
+        Text(t(R.string.voting_field_counting), style = MaterialTheme.typography.titleSmall)
         DurationPills(form.countingDuration) { onChange(form.copy(countingDuration = it)) }
         Number(COMMITTEE)
         val needed = maxOf(1L, (form.committeeSize * form.quorum + 99) / 100)
-        Number(QUORUM, help = "$needed vote${if (needed == 1L) "" else "s"} needed")
-        Text("Majority", style = MaterialTheme.typography.titleSmall)
+        Number(QUORUM, help = tp(R.plurals.voting_votes_needed, needed.toInt(), needed))
+        Text(t(R.string.voting_majority), style = MaterialTheme.typography.titleSmall)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Majority.entries.forEach {
                 FilterChip(selected = form.winnerThreshold == it.percent, onClick = { onChange(form.copy(winnerThreshold = it.percent)) }, label = { Text(it.title) })
@@ -108,26 +108,25 @@ fun NewVotingAdvanced(form: NewVotingForm, network: Long?, onChange: (NewVotingF
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = form.freeVoting, onCheckedChange = { onChange(form.copy(freeVoting = it)) })
-            Text("No payment per vote")
+            Text(t(R.string.voting_no_payment_per_vote))
         }
-        Number(PAYMENT, enabled = !form.freeVoting, help = "Each vote sends it to the voting; 0: free to vote")
-        Number(OWNER_FEE, help = "Your share of what is added to the voting beyond the deposit, the rewards fund and the votes' payments")
+        Number(PAYMENT, enabled = !form.freeVoting, help = t(R.string.voting_help_payment))
+        Number(OWNER_FEE, help = t(R.string.voting_help_owner_fee))
         val perOracle = form.rewardsFund.divide(BigDecimal(maxOf(1L, form.committeeSize)), 4, RoundingMode.DOWN)
-        Number(FUND, help = "About ${idna(perOracle.toPlainString())} per oracle")
+        Number(FUND, help = t(R.string.voting_help_fund, idna(perOracle.toPlainString())))
         val deposit = network?.let { idna(ownerDeposit(it, form.committeeSize).toPlainString()) } ?: "…"
-        Field("Owner deposit", deposit)
+        Field(t(R.string.voting_owner_deposit), deposit)
         Text(
-            "Sent at launch with the rewards fund: 5000 iDNA shared by the network, times the committee. It comes back " +
-                "at the end, with the owner fee.",
+            t(R.string.voting_owner_deposit_note),
             style = MaterialTheme.typography.bodySmall,
         )
         OutlinedTextField(
             form.refundAddress,
             { onChange(form.copy(refundAddress = it.trim())) },
             Modifier.fillMaxWidth(),
-            label = { Text("Refund address") },
+            label = { Text(t(R.string.voting_refund_address)) },
             singleLine = true,
-            supportingText = { Text("Where the deposit and the owner fee go back. Empty: to you.") },
+            supportingText = { Text(t(R.string.voting_refund_address_help)) },
         )
     }
 }
@@ -137,6 +136,16 @@ private const val QUORUM = "Quorum (%)"
 private const val PAYMENT = "Payment per vote (iDNA)"
 private const val OWNER_FEE = "Owner fee (%)"
 private const val FUND = "Rewards fund (iDNA)"
+
+/** What a number field shows as its label: [COMMITTEE]… are the fields' keys. */
+private fun fieldLabel(key: String): String = when (key) {
+    COMMITTEE -> t(R.string.voting_field_committee_oracles)
+    QUORUM -> t(R.string.voting_field_quorum)
+    PAYMENT -> t(R.string.voting_field_payment_per_vote)
+    OWNER_FEE -> t(R.string.voting_field_owner_fee)
+    FUND -> t(R.string.voting_field_rewards_fund)
+    else -> key
+}
 
 /** A number field's value: a whole number for the counts and percentages, an amount of iDNA for the others; null when it does not read. */
 private fun parse(label: String, text: String): Any? = when (label) {

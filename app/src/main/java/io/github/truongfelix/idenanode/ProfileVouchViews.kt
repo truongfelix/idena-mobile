@@ -56,23 +56,23 @@ fun VouchPanel(address: String, profile: ContractProfile?, me: String?, mine: Co
     val loaded = state
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // The contract ends the vouch at the member's next call; End frees the slot now.
-        if (iVouch && profile.shownVoucher == null) Text("They have an identity now: End frees your slot.", style = small, color = muted)
+        if (iVouch && profile.shownVoucher == null) Text(t(R.string.profile_they_have_identity), style = small, color = muted)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (iVouch) {
-                ActionButton("End the vouch", "End the vouch", "You no longer vouch for them", ProfileCalls.endVouch(address), canAct, onCall)
+                ActionButton(t(R.string.profile_end_vouch_what), t(R.string.profile_end_vouch_what), t(R.string.profile_end_vouch_detail), ProfileCalls.endVouch(address), canAct, onCall)
             }
             if (canOffer && loaded != null && loaded.offer == null) {
                 ActionButton(
-                    "Vouch for them", "Vouch for them",
-                    "They become a member once they accept; you vouch for at most ${vouchCap(mine?.state)} members at a time",
+                    t(R.string.profile_vouch_for_them), t(R.string.profile_vouch_for_them),
+                    t(R.string.profile_vouch_detail, vouchCap(mine?.state)),
                     ProfileCalls.vouch(address), canAct, onCall,
                 )
             }
             if (canOffer && loaded?.offer != null) {
-                ActionButton("Withdraw the offer", "Withdraw the offer", "Your offer to vouch for them ends", ProfileCalls.cancelOffer(address), canAct, onCall)
+                ActionButton(t(R.string.profile_withdraw_what), t(R.string.profile_withdraw_what), t(R.string.profile_withdraw_detail), ProfileCalls.cancelOffer(address), canAct, onCall)
             }
         }
-        if (canOffer && loaded?.offer != null) Text("Your offer waits for them to accept it.", style = small, color = muted)
+        if (canOffer && loaded?.offer != null) Text(t(R.string.profile_offer_waits), style = small, color = muted)
         if (hiddenName != null && loaded?.epoch != null) {
             ChallengeRow(hiddenName, challengeStep(loaded.challenge, loaded.epoch, address), mayClaim = mine?.inStanding == true, canAct, onCall)
         }
@@ -86,21 +86,20 @@ private fun ChallengeRow(name: String, step: ChallengeStep, mayClaim: Boolean, c
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val count = GRACE_EPOCHS + 1
     Text(
-        "Its holder is neither validated nor vouched for. Challenging the name in $count epochs in a row gives it to you; " +
-            "the holder keeps it by validating again meanwhile.",
+        t(R.string.profile_challenge_note, count),
         style = small,
         color = muted,
     )
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        val detail = if (step.frees) "The third call: it gives you @$name" else "Call ${step.step} of $count on @$name"
-        ActionButton("Challenge @$name", "Challenge @$name", detail, ProfileCalls.challengeName(name), canAct, onCall, enabled = step.canCall && mayClaim)
+        val detail = if (step.frees) t(R.string.profile_challenge_third, name) else t(R.string.profile_challenge_call, step.step, count, name)
+        ActionButton(t(R.string.profile_challenge, name), t(R.string.profile_challenge, name), detail, ProfileCalls.challengeName(name), canAct, onCall, enabled = step.canCall && mayClaim)
         Text(
-            if (step.canCall) "Next: call ${step.step} of $count" else "Called in this epoch: call ${step.step} of $count from the next one",
+            if (step.canCall) t(R.string.profile_challenge_next, step.step, count) else t(R.string.profile_challenge_called, step.step, count),
             style = small,
             color = muted,
         )
     }
-    if (!mayClaim) Text("Only a validated or vouched account can take a name.", style = small, color = muted)
+    if (!mayClaim) Text(t(R.string.profile_only_validated_take_name), style = small, color = muted)
 }
 
 /** What the account's own profile reads for its vouching: the offers to it. */
@@ -127,18 +126,17 @@ fun MyVouching(me: String, profile: ContractProfile?, canAct: Boolean, reload: I
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         profile?.voucher?.let { voucher ->
-            val note = if (isActingMember(profile)) "" else " (not active now)"
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Vouched for by ${displayName(voucher, names)}$note", style = body)
-                ActionButton("End", "End the vouch", "You are no longer a vouched member", ProfileCalls.endVouch(), canAct, onCall)
+                Text(if (isActingMember(profile)) t(R.string.profile_vouched_for_by, displayName(voucher, names)) else t(R.string.profile_vouched_for_by_inactive, displayName(voucher, names)), style = body)
+                ActionButton(t(R.string.profile_end), t(R.string.profile_end_vouch_what), t(R.string.profile_end_own_vouch_detail), ProfileCalls.endVouch(), canAct, onCall)
             }
         }
         if (isActingMember(profile)) {
-            Text("As a vouched member, a name, a profile or a Trust costs about one more fee, burned.", style = small, color = muted)
+            Text(t(R.string.profile_member_fee_note), style = small, color = muted)
         }
         vouches?.offers?.forEach { offer ->
             val name = displayName(offer.address, names)
-            Text("$name offers to vouch for you.", style = body)
+            Text(t(R.string.socialb_offer_vouch, name), style = body)
             OfferAnswerButtons(offer.address, name, canAct, onCall)
         }
     }
@@ -152,7 +150,7 @@ fun MyVouching(me: String, profile: ContractProfile?, canAct: Boolean, reload: I
 fun ActionButton(label: String, what: String, detail: String?, call: SocialCall, canAct: Boolean, onCall: ProfileAction, enabled: Boolean = true) {
     val waiting = LocalProfileAccess.current?.waiting?.invoke(call) == true
     OutlinedButton(onClick = { onCall(what, detail, call) }, enabled = canAct && enabled && !waiting) {
-        Text(if (waiting) "$label · waiting for a block" else label)
+        Text(if (waiting) t(R.string.profile_action_waiting, label) else label)
     }
 }
 
@@ -161,9 +159,9 @@ fun ActionButton(label: String, what: String, detail: String?, call: SocialCall,
 fun OfferAnswerButtons(voucher: String, name: String, canAct: Boolean, onCall: ProfileAction) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ActionButton(
-            "Accept", "Accept the vouch", "You may then hold a name, write a profile and give Trust while $name is validated",
+            t(R.string.socialb_accept), t(R.string.profile_accept_vouch), t(R.string.profile_accept_vouch_detail, name),
             ProfileCalls.acceptVouch(voucher), canAct, onCall,
         )
-        ActionButton("Decline", "Decline the offer", "The offer of $name ends", ProfileCalls.declineOffer(voucher), canAct, onCall)
+        ActionButton(t(R.string.profile_decline), t(R.string.profile_decline_offer), t(R.string.profile_decline_detail, name), ProfileCalls.declineOffer(voucher), canAct, onCall)
     }
 }

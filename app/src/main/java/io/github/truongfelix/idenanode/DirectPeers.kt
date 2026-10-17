@@ -14,18 +14,12 @@ import java.math.BigInteger
 data class DirectPeer(val id: String, val name: String)
 
 const val MAX_DIRECT_PEERS = 3
-const val DIRECT_PEERS_TITLE = "Direct peers"
+val DIRECT_PEERS_TITLE: String get() = t(R.string.node_direct_peers_title)
 private const val CODE_PREFIX = "idena-peer:"
 private const val MAX_NAME_LENGTH = 40
 
-val DIRECT_PEERS_INFO =
-    "Nodes this node keeps as peers on top of its peer level, up to $MAX_DIRECT_PEERS: a friend's desktop, your " +
-        "own computer. The node accepts them even when its slots are full, never drops them to make room, and " +
-        "connects again when the connection drops.\n\n" +
-        "Share your node's code with the other person, and add theirs here. Both sides should add each other: the " +
-        "side that adds the other always accepts it. On mobile data no node can reach this phone, so the other node " +
-        "must be reachable (its router port open) for the two to connect.\n\n" +
-        "The node takes the list at its start."
+val DIRECT_PEERS_INFO: String
+    get() = t(R.string.node_direct_peers_info, MAX_DIRECT_PEERS)
 
 /** The code that names a node: [id] and, when not blank, [name]. */
 fun peerCode(id: String, name: String): String =
@@ -49,9 +43,9 @@ fun cleanPeerName(name: String): String =
 
 /** Why [candidate] cannot join [list] next to [ownId], or null when it can. */
 fun directPeerProblem(candidate: DirectPeer, list: List<DirectPeer>, ownId: String?): String? = when {
-    candidate.id == ownId -> "This is your own node's code."
-    list.any { it.id == candidate.id } -> "This node is already in the list."
-    list.size >= MAX_DIRECT_PEERS -> "The list holds at most $MAX_DIRECT_PEERS nodes."
+    candidate.id == ownId -> t(R.string.node_peer_own_code)
+    list.any { it.id == candidate.id } -> t(R.string.node_peer_already_listed)
+    list.size >= MAX_DIRECT_PEERS -> t(R.string.node_peer_list_full, MAX_DIRECT_PEERS)
     else -> null
 }
 

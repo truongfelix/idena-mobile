@@ -70,19 +70,19 @@ fun NameDialog(person: Person, onDismiss: () -> Unit, onSave: (String) -> Unit) 
     var name by remember(person.address) { mutableStateOf(person.name) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (person.name.isEmpty()) "Name ${shortAddress(person.address)}" else "Rename ${person.name}") },
+        title = { Text(if (person.name.isEmpty()) t(R.string.socialb_name_address, shortAddress(person.address)) else t(R.string.socialb_rename, person.name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Shown instead of the address in the Social tab. It stays on this phone: nobody else sees it.")
+                Text(t(R.string.socialb_name_note))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.takeWhole(Person.MAX_NAME) },
-                    label = { Text("Name") },
+                    label = { Text(t(R.string.socialb_name)) },
                     singleLine = true,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(cleanName(name)) }) { Text(if (cleanName(name).isEmpty() && person.name.isNotEmpty()) "Remove the name" else "Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onSave(cleanName(name)) }) { Text(if (cleanName(name).isEmpty() && person.name.isNotEmpty()) t(R.string.socialb_remove_name) else t(R.string.socialb_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }

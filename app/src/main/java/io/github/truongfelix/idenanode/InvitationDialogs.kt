@@ -37,10 +37,10 @@ import androidx.compose.ui.unit.dp
 fun CodeView(code: String) {
     val qr = remember(code) { qrCode(code) }
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(bitmap = qr, contentDescription = "QR code of the invitation code", modifier = Modifier.size(220.dp), filterQuality = FilterQuality.None)
+        Image(bitmap = qr, contentDescription = t(R.string.wallet_invite_code_qr), modifier = Modifier.size(220.dp), filterQuality = FilterQuality.None)
         SelectionContainer { Text(code, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
         Text(
-            "Give it privately: anyone with the code can use the invitation. It works until the next validation.",
+            t(R.string.wallet_invite_give_privately),
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -53,13 +53,13 @@ fun CodeDialog(invite: SentInvite, saved: Boolean, onDismiss: () -> Unit) {
     var copied by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Invitation sent") },
+        title = { Text(t(R.string.wallet_invite_sent)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CodeView(invite.code.orEmpty())
                 if (!saved) {
                     Text(
-                        "The app could not keep this code: copy it now, it is shown only once.",
+                        t(R.string.wallet_invite_not_kept),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -68,10 +68,10 @@ fun CodeDialog(invite: SentInvite, saved: Boolean, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = { clipboard.setText(AnnotatedString(invite.code.orEmpty())); copied = true }) {
-                Text(if (copied) "Copied" else "Copy the code")
+                Text(t(if (copied) R.string.wallet_copied else R.string.wallet_invite_copy_code))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 
@@ -86,28 +86,28 @@ fun NewInviteDialog(status: NodeStatus, people: Map<String, Person>, onDismiss: 
     val toValid = isAddress(to) && !to.equals(status.address, ignoreCase = true)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Invite someone") },
+        title = { Text(t(R.string.wallet_invite_someone)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(Person.MAX_NAME) },
-                    label = { Text("Name (only on this phone)") },
+                    label = { Text(t(R.string.wallet_invite_name)) },
                     singleLine = true,
                 )
-                Choice("A code to give privately", selected = !toAddress) { toAddress = false }
-                Choice("An address", selected = toAddress) { toAddress = true }
+                Choice(t(R.string.wallet_invite_to_code), selected = !toAddress) { toAddress = false }
+                Choice(t(R.string.wallet_invite_to_address), selected = toAddress) { toAddress = true }
                 if (toAddress) {
                     OutlinedTextField(
                         value = to,
                         onValueChange = { to = it.trim() },
-                        label = { Text("Address (0x…)") },
+                        label = { Text(t(R.string.wallet_invite_address)) },
                         singleLine = true,
                         isError = to.isNotEmpty() && !toValid,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     )
                     if (named.isNotEmpty()) {
-                        TextButton(onClick = { picking = !picking }) { Text(if (picking) "Hide the contacts" else "Choose from Contacts") }
+                        TextButton(onClick = { picking = !picking }) { Text(t(if (picking) R.string.wallet_hide_contacts else R.string.wallet_choose_contacts)) }
                         if (picking) {
                             named.forEach { person ->
                                 TextButton(onClick = {
@@ -118,15 +118,15 @@ fun NewInviteDialog(status: NodeStatus, people: Map<String, Person>, onDismiss: 
                             }
                         }
                     }
-                    Text("The address must have no identity yet; they accept the invitation in their Idena app.", style = MaterialTheme.typography.bodySmall)
+                    Text(t(R.string.wallet_invite_address_note), style = MaterialTheme.typography.bodySmall)
                 }
-                Text("No fee. It uses one of your invitations.", style = MaterialTheme.typography.bodySmall)
+                Text(t(R.string.wallet_invite_no_fee_uses), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSend(name, if (toAddress) to.lowercase() else null) }, enabled = !toAddress || toValid) { Text("Send") }
+            TextButton(onClick = { onSend(name, if (toAddress) to.lowercase() else null) }, enabled = !toAddress || toValid) { Text(t(R.string.common_send)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }
 
@@ -146,24 +146,23 @@ fun SpoilDialog(onDismiss: () -> Unit, onSpoil: (String) -> Unit) {
     val code = parseInvitationCode(text)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Spoil a public code") },
+        title = { Text(t(R.string.wallet_invite_spoil_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "An invitation code shared publicly is taken by bots. Spoiling it activates it to a random " +
-                        "address: it is wasted, and people learn to share codes privately. No fee.",
+                    t(R.string.wallet_invite_spoil_text),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("Invitation code") },
+                    label = { Text(t(R.string.wallet_invite_code)) },
                     isError = text.isNotBlank() && code == null,
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { code?.let(onSpoil) }, enabled = code != null) { Text("Spoil") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { code?.let(onSpoil) }, enabled = code != null) { Text(t(R.string.wallet_invite_spoil)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }

@@ -65,11 +65,11 @@ fun AdEditorScreen(draftId: String?, onClose: () -> Unit, modifier: Modifier = M
     }
     val pictures = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        note = "Preparing the picture…"
+        note = t(R.string.ads_preparing_picture)
         scope.launch {
             withContext(Dispatchers.Default) { runCatching { adPictures(context, uri) } }
                 .onSuccess { (big, small) -> media = big; thumb = small; picturesChanged = true; note = null }
-                .onFailure { note = "Not read: ${it.message}" }
+                .onFailure { note = t(R.string.ads_not_read, it.message.toString()) }
         }
     }
     val otherThumb = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -77,7 +77,7 @@ fun AdEditorScreen(draftId: String?, onClose: () -> Unit, modifier: Modifier = M
         scope.launch {
             withContext(Dispatchers.Default) { runCatching { adThumb(context, uri) } }
                 .onSuccess { thumb = it; picturesChanged = true; note = null }
-                .onFailure { note = "Not read: ${it.message}" }
+                .onFailure { note = t(R.string.ads_not_read, it.message.toString()) }
         }
     }
     val current = draft
@@ -85,40 +85,40 @@ fun AdEditorScreen(draftId: String?, onClose: () -> Unit, modifier: Modifier = M
         modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ScreenTitle(if (draftId == null) "New ad" else "Edit ad", onClose) {
-            TextButton(onClick = { previewing = true }, enabled = current != null) { Text("Preview") }
+        ScreenTitle(if (draftId == null) t(R.string.ads_new_ad) else t(R.string.ads_edit_ad), onClose) {
+            TextButton(onClick = { previewing = true }, enabled = current != null) { Text(t(R.string.ads_preview)) }
         }
         if (current == null) {
             CircularProgressIndicator()
             return@Column
         }
-        CountedField("Title", current.title, AD_TITLE_MAX) { draft = current.copy(title = it) }
-        CountedField("Description", current.desc, AD_DESC_MAX, singleLine = false) { draft = current.copy(desc = it) }
+        CountedField(t(R.string.ads_field_title), current.title, AD_TITLE_MAX) { draft = current.copy(title = it) }
+        CountedField(t(R.string.ads_field_description), current.desc, AD_DESC_MAX, singleLine = false) { draft = current.copy(desc = it) }
         OutlinedTextField(
             value = current.url,
             onValueChange = { draft = current.copy(url = it.trim()) },
-            label = { Text("Link") },
+            label = { Text(t(R.string.ads_field_link)) },
             placeholder = { Text("https://") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
         )
-        Text("Picture", style = MaterialTheme.typography.titleSmall)
+        Text(t(R.string.ads_picture), style = MaterialTheme.typography.titleSmall)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AdImage(media, maxSide = AD_MEDIA_SIZE, Modifier.size(96.dp).clip(RoundedCornerShape(8.dp)), ContentScale.Fit)
             AdImage(thumb, maxSide = 160, Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
             Text(
-                "The app makes the thumbnail (${AD_THUMB_SIZE}×$AD_THUMB_SIZE) and the picture (${AD_MEDIA_SIZE}×$AD_MEDIA_SIZE) from it.",
+                t(R.string.ads_picture_sizes, AD_THUMB_SIZE, AD_MEDIA_SIZE),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill(if (media == null) "Choose a picture" else "Other picture", enabled = note != "Preparing the picture…") {
+            Pill(if (media == null) t(R.string.ads_choose_picture) else t(R.string.ads_other_picture), enabled = note != t(R.string.ads_preparing_picture)) {
                 pictures.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
             if (media != null) {
-                Pill("Other thumbnail", enabled = true) { otherThumb.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                Pill(t(R.string.ads_other_thumbnail), enabled = true) { otherThumb.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             }
         }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -130,13 +130,13 @@ fun AdEditorScreen(draftId: String?, onClose: () -> Unit, modifier: Modifier = M
                     val result = withContext(Dispatchers.IO) {
                         runCatching { store.save(saved, thumb.takeIf { picturesChanged }, media.takeIf { picturesChanged }) }
                     }
-                    result.onSuccess { onClose() }.onFailure { note = "Not saved: ${it.message}" }
+                    result.onSuccess { onClose() }.onFailure { note = t(R.string.ads_not_saved, it.message.toString()) }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save the draft") }
+        ) { Text(t(R.string.ads_save_draft)) }
         Text(
-            "The draft stays on this phone. Once it goes to review it can no longer be changed.",
+            t(R.string.ads_draft_stays),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

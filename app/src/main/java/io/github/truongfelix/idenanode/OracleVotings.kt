@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -29,12 +30,14 @@ object VotingState {
  * voted in or being counted, those closed ([all] false: committees only); then every voting, and the votings the
  * identity created or voted in ([mine]: the node's `address` filter).
  */
-enum class VotingTab(val title: String, val all: Boolean, val states: List<String>, val mine: Boolean = false) {
-    ToVote("To vote", false, listOf(VotingState.OPEN)),
-    Ongoing("Ongoing", false, listOf(VotingState.VOTED, VotingState.COUNTING, VotingState.CAN_BE_PROLONGED)),
-    Closed("Closed", false, listOf(VotingState.ARCHIVE, VotingState.TERMINATED)),
-    All("All", true, VotingState.ALL),
-    Mine("Mine", false, VotingState.ALL, mine = true),
+enum class VotingTab(@StringRes val titleId: Int, val all: Boolean, val states: List<String>, val mine: Boolean = false) {
+    ToVote(R.string.voting_tab_to_vote, false, listOf(VotingState.OPEN)),
+    Ongoing(R.string.voting_tab_ongoing, false, listOf(VotingState.VOTED, VotingState.COUNTING, VotingState.CAN_BE_PROLONGED)),
+    Closed(R.string.voting_tab_closed, false, listOf(VotingState.ARCHIVE, VotingState.TERMINATED)),
+    All(R.string.voting_tab_all, true, VotingState.ALL),
+    Mine(R.string.voting_tab_mine, false, VotingState.ALL, mine = true);
+
+    val title: String get() = t(titleId)
 }
 
 /** The states in which a voting takes no more funds or actions but termination. */
@@ -129,8 +132,8 @@ fun parseVotingPage(json: JSONObject?): VotingPage {
 /** "3 to vote" for the identity's open votings ([page] of [VotingTab.ToVote]), or null with none. */
 fun toVoteText(page: VotingPage): String? = when {
     page.votings.isEmpty() -> null
-    page.next != null -> "${page.votings.size}+ to vote"
-    else -> "${page.votings.size} to vote"
+    page.next != null -> t(R.string.voting_to_vote_more, page.votings.size)
+    else -> t(R.string.voting_to_vote, page.votings.size)
 }
 
 /** One voting as the node gives it (contract_oracleVoting, or an entry of a list). */
@@ -205,20 +208,20 @@ private fun amount(json: JSONObject, name: String): BigDecimal? =
 
 /** How the screen names a voting's state. */
 fun votingStateText(state: String): String = when (state) {
-    VotingState.PENDING -> "Not started"
-    VotingState.OPEN -> "Open"
-    VotingState.VOTED -> "Voted"
-    VotingState.COUNTING -> "Counting"
-    VotingState.CAN_BE_PROLONGED -> "Can be prolonged"
-    VotingState.ARCHIVE -> "Finished"
-    VotingState.TERMINATED -> "Terminated"
+    VotingState.PENDING -> t(R.string.voting_state_pending)
+    VotingState.OPEN -> t(R.string.voting_state_open)
+    VotingState.VOTED -> t(R.string.voting_state_voted)
+    VotingState.COUNTING -> t(R.string.voting_state_counting)
+    VotingState.CAN_BE_PROLONGED -> t(R.string.voting_state_can_be_prolonged)
+    VotingState.ARCHIVE -> t(R.string.voting_state_archive)
+    VotingState.TERMINATED -> t(R.string.voting_state_terminated)
     else -> state
 }
 
-fun votingTitle(voting: OracleVoting): String = voting.fact.title.ifBlank { "Untitled voting" }
+fun votingTitle(voting: OracleVoting): String = voting.fact.title.ifBlank { t(R.string.voting_untitled) }
 
 /** The text of option [id] of [voting], or "option N" when the voting has no such option. */
-fun optionText(voting: OracleVoting, id: Int): String = voting.fact.options.firstOrNull { it.id == id }?.text ?: "option $id"
+fun optionText(voting: OracleVoting, id: Int): String = voting.fact.options.firstOrNull { it.id == id }?.text ?: t(R.string.voting_option_n, id)
 
 /**
  * A voting's line in a list: its state, what comes next and when, and an open voting's reward; a closed one's
@@ -227,10 +230,10 @@ fun optionText(voting: OracleVoting, id: Int): String = voting.fact.options.firs
 fun votingSummary(voting: OracleVoting, now: Instant): String = buildList {
     add(votingStateText(voting.state))
     when (voting.state) {
-        VotingState.OPEN -> voting.votingEnd?.let { add("secret voting ends ${timeUntil(now, it)}") }
-        VotingState.VOTED -> voting.votingEnd?.let { add("votes open ${timeUntil(now, it)}") }
-        VotingState.COUNTING, VotingState.CAN_BE_PROLONGED -> voting.countingEnd?.let { add("ends ${timeUntil(now, it)}") }
-        VotingState.ARCHIVE -> voting.result?.let { add("result: ${optionText(voting, it)}") }
+        VotingState.OPEN -> voting.votingEnd?.let { add(t(R.string.voting_summary_secret_ends, timeUntil(now, it))) }
+        VotingState.VOTED -> voting.votingEnd?.let { add(t(R.string.voting_summary_votes_open, timeUntil(now, it))) }
+        VotingState.COUNTING, VotingState.CAN_BE_PROLONGED -> voting.countingEnd?.let { add(t(R.string.voting_summary_ends, timeUntil(now, it))) }
+        VotingState.ARCHIVE -> voting.result?.let { add(t(R.string.voting_summary_result, optionText(voting, it))) }
     }
-    if (voting.state == VotingState.OPEN) voting.oracleReward?.takeIf { it.signum() > 0 }?.let { add("about ${idna(it.toPlainString())} per oracle") }
+    if (voting.state == VotingState.OPEN) voting.oracleReward?.takeIf { it.signum() > 0 }?.let { add(t(R.string.voting_about_per_oracle, idna(it.toPlainString()))) }
 }.joinToString(" · ")
