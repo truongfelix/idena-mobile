@@ -41,6 +41,13 @@ object ProfileCalls {
     private fun call(method: String, argument: String?) = SocialCall(method, argument, "0", PROFILE_CONTRACT)
 }
 
+/**
+ * What makes two calls the same action, to know one waits for its block (B-81): the contract, the method and the
+ * argument without the gas the app sizes for it ("_gas", "_keepGas").
+ */
+fun actionKey(call: SocialCall): String =
+    "${call.contract.lowercase()}:${call.method}:${call.argument?.replace(Regex(",?\"_(keep)?[gG]as\":[0-9]+"), "")?.replace("{,", "{").orEmpty()}"
+
 /** The contract's default gas for a callback (WASM gas), and the least the app asks for. */
 private const val DEFAULT_CALLBACK_GAS = 10_000_000L
 private const val MIN_CALLBACK_GAS = 1_000_000L

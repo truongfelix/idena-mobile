@@ -175,6 +175,8 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
                             IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, contentDescription = "Details") }
                         }
                         // The paid action of the Social tab while it runs (sending, waiting for its block).
+                        // Everything sent and waiting for its block, one line (B-81).
+                        if (tab == MainTab.Social) InFlightLine(social.sending.inFlight)
                         social.sending.sendStatus?.takeIf { tab == MainTab.Social }?.let {
                             Text(
                                 it,

@@ -51,7 +51,16 @@ sealed interface ProfileEdit {
  * Save the profile (setProfile, the picture stored on IPFS first). [profile] is what the contract holds now.
  */
 @Composable
-fun ProfileEditDialog(address: String, profile: ContractProfile?, onSave: (ProfileEdit) -> Unit, onDismiss: () -> Unit) {
+fun ProfileEditDialog(
+    address: String,
+    profile: ContractProfile?,
+    onSave: (ProfileEdit) -> Unit,
+    onDismiss: () -> Unit,
+    waitingMethod: (String) -> Boolean = { false },
+) {
+    // A name change or a profile saved before waits for its block: not sent twice (B-81).
+    val nameWaits = waitingMethod("claimName") || waitingMethod("dropName")
+    val profileWaits = waitingMethod("setProfile")
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(profile?.name.orEmpty()) }
@@ -94,9 +103,10 @@ fun ProfileEditDialog(address: String, profile: ContractProfile?, onSave: (Profi
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onSave(ProfileEdit.Name(name)) }, enabled = nameValid && name != profile?.name) { Text("Save the name") }
-                    if (profile?.name != null) TextButton(onClick = { onSave(ProfileEdit.DropName) }) { Text("Drop the name") }
+                    Button(onClick = { onSave(ProfileEdit.Name(name)) }, enabled = nameValid && name != profile?.name && !nameWaits) { Text("Save the name") }
+                    if (profile?.name != null) TextButton(onClick = { onSave(ProfileEdit.DropName) }, enabled = !nameWaits) { Text("Drop the name") }
                 }
+                if (nameWaits) Text("Your name change waits for its block.", style = MaterialTheme.typography.bodySmall, color = muted)
                 OutlinedTextField(
                     value = bio,
                     onValueChange = { bio = it.take(MAX_BIO) },
@@ -126,7 +136,7 @@ fun ProfileEditDialog(address: String, profile: ContractProfile?, onSave: (Profi
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(ProfileEdit.Profile(bio.trim(), newPicture, if (removed) "" else oldPicture)) }, enabled = profileChanged) {
+            TextButton(onClick = { onSave(ProfileEdit.Profile(bio.trim(), newPicture, if (removed) "" else oldPicture)) }, enabled = profileChanged && !profileWaits) {
                 Text("Save the profile")
             }
         },
