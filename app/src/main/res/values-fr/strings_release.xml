@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- New versions: the Node card's line, the question asked once, the release's page and notification (ReleaseViews.kt, ReleaseCheck.kt). -->
+<resources>
+    <string name="release_title">Nouvelles versions</string>
+    <string name="release_line">Demande à GitHub une fois par jour s\'il y a une nouvelle version de l\'app</string>
+    <string name="release_ready_link">La version %1$s est disponible ›</string>
+    <string name="release_ready">Idena %1$s est disponible</string>
+    <string name="release_ready_text">Touchez pour voir les nouveautés.</string>
+    <string name="release_no_note">Cette version n\'a pas de note.</string>
+    <string name="release_download">Télécharger</string>
+    <string name="release_ask_title">Être prévenu des nouvelles versions ?</string>
+    <string name="release_ask_text">L\'app peut demander à GitHub une fois par jour si une nouvelle version de l\'app est sortie, et vous prévenir avec sa note de version. GitHub voit alors l\'adresse internet de ce téléphone et qu\'il utilise l\'app ; rien d\'autre n\'est envoyé. Télécharger ouvre la version dans votre navigateur : l\'app n\'installe jamais rien d\'elle-même. Vous pouvez changer cela dans la carte Nœud, sous Nouvelles versions.</string>
+    <string name="release_ask_yes">Me prévenir</string>
+    <string name="release_ask_no">Pas maintenant</string>
+    <string name="release_channel">Nouvelles versions</string>
+    <string name="release_channel_description">Prévient quand une nouvelle version de l\'app est sortie</string>
+</resources>

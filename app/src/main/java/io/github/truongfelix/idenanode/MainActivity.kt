@@ -81,6 +81,9 @@ class MainActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
+        if (savedInstanceState == null && intent.getBooleanExtra(ReleaseCheck.EXTRA_SHOW_RELEASE, false)) ReleaseUi.shown = true
+        // The setting before the first frame: the question never shows to someone who answered it.
+        ReleaseUi.on = ReleaseCheck.setting(this)
         setContent {
             AppTheme {
                 Scaffold { padding ->
@@ -94,6 +97,7 @@ class MainActivity : AppActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
+        if (intent.getBooleanExtra(ReleaseCheck.EXTRA_SHOW_RELEASE, false)) ReleaseUi.shown = true
     }
 }
 
@@ -204,6 +208,7 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
         }
         if (nodeInfo) NodeInfoDialog(node) { nodeInfo = false }
         if (socialInfo) SocialInfoDialog(social, node.view?.peers) { socialInfo = false }
+        ReleaseDialogs(remember { NodeSettings.hasKey(context) })
     }
 }
 

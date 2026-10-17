@@ -131,6 +131,7 @@ class NodeService : Service() {
         }
         handler.postDelayed(routerUpkeep, ROUTER_UPKEEP_FIRST_MS)
         handler.postDelayed(socialCheck, SOCIAL_CHECK_FIRST_MS)
+        handler.postDelayed(releaseCheck, RELEASE_CHECK_FIRST_MS)
     }
 
     /** Starts the node with its key ([NodeKeys]); the error, empty once the node runs. */
@@ -154,6 +155,16 @@ class NodeService : Service() {
                 runCatching { SocialBadge.check(this@NodeService) }.onFailure { Log.w(TAG, "Social check: $it") }
             }
             handler.postDelayed(this, SOCIAL_CHECK_INTERVAL_MS)
+        }
+    }
+
+    /** New versions, once turned on: GitHub asked once a day ([ReleaseCheck]). */
+    private val releaseCheck: Runnable = object : Runnable {
+        override fun run() {
+            socialExecutor.execute {
+                runCatching { ReleaseCheck.runIfDue(this@NodeService, ReleaseCheck.DAILY_MS) }.onFailure { Log.w(TAG, "Release check: $it") }
+            }
+            handler.postDelayed(this, RELEASE_CHECK_INTERVAL_MS)
         }
     }
 
@@ -229,6 +240,7 @@ class NodeService : Service() {
         handler.removeCallbacks(updateNotification)
         handler.removeCallbacks(routerUpkeep)
         handler.removeCallbacks(socialCheck)
+        handler.removeCallbacks(releaseCheck)
         releaseLocks()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -309,6 +321,8 @@ class NodeService : Service() {
         private const val ROUTER_UPKEEP_INTERVAL_MS = 5 * 60_000L
         private const val SOCIAL_CHECK_FIRST_MS = 3 * 60_000L
         private const val SOCIAL_CHECK_INTERVAL_MS = 10 * 60_000L
+        private const val RELEASE_CHECK_FIRST_MS = 5 * 60_000L
+        private const val RELEASE_CHECK_INTERVAL_MS = 60 * 60_000L
         const val ACTION_STOP = "io.github.truongfelix.idenanode.STOP"
         const val ACTION_ROUTER_SEARCH = "io.github.truongfelix.idenanode.ROUTER_SEARCH"
         const val ACTION_REPORT = "io.github.truongfelix.idenanode.REPORT"
