@@ -125,7 +125,18 @@ fun trustGiver(key: String, value: String): TrustGiver {
  * The givers who count now, and the counts shown: "Trusted by [identities] (+[vouched] vouched)". [givers] are all
  * the contract keeps, counted or not: an account's own Trust stays given (and can be taken back) while it does not count.
  */
-data class TrustCount(val counted: List<TrustGiver>, val identities: Int, val vouched: Int, val givers: List<TrustGiver> = counted) {
+data class TrustCount(
+    val counted: List<TrustGiver>,
+    val identities: Int,
+    val vouched: Int,
+    val givers: List<TrustGiver> = counted,
+    /** The givers' vouchers, by giver: who vouches for each one counted as a vouched member. */
+    val vouchers: Map<String, String> = emptyMap(),
+) {
+    /** "Trusted by 15": the identities and the vouched members together. */
+    val total: Int
+        get() = identities + vouched
+
     /** Whether [address] gave its Trust. */
     fun givenBy(address: String?) = address != null && givers.any { it.address == address.lowercase() }
 }
@@ -145,12 +156,8 @@ fun countTrust(givers: List<TrustGiver>, states: Map<String, String>, vouchers: 
             else -> null
         }
     }
-    return TrustCount(counted, counted.count { !it.vouched }, counted.count { it.vouched }, givers)
+    return TrustCount(counted, counted.count { !it.vouched }, counted.count { it.vouched }, givers, vouchers)
 }
 
-/** "Trusted by 12 (+3 vouched)", or null when nobody counts. */
-fun trustText(count: TrustCount): String? = when {
-    count.identities == 0 && count.vouched == 0 -> null
-    count.vouched == 0 -> "Trusted by ${count.identities}"
-    else -> "Trusted by ${count.identities} (+${count.vouched} vouched)"
-}
+/** "Trusted by 15": the identities and the vouched members together (the list gives the split); null when nobody counts. */
+fun trustText(count: TrustCount): String? = if (count.total == 0) null else "Trusted by ${count.total}"

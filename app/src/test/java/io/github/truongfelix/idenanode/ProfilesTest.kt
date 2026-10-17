@@ -94,7 +94,9 @@ class ProfilesTest {
         val states = mapOf(alice to "Killed", bob to "Newbie", carol to "Undefined", "0xv" to "Human")
         val count = countTrust(givers, states, mapOf(carol to "0xv"))
         assertEquals(listOf(TrustGiver(bob, 231, false), TrustGiver(carol, 232, true)), count.counted)
-        assertEquals("Trusted by 1 (+1 vouched)", trustText(count))
+        assertEquals("the sum", "Trusted by 2", trustText(count))
+        assertEquals("1 identity · 1 vouched member", trustSplit(count))
+        assertEquals(mapOf(carol to "0xv"), count.vouchers)
         assertEquals("Trusted by 1", trustText(countTrust(givers.take(2), states, emptyMap())))
         assertNull(trustText(countTrust(emptyList(), emptyMap(), emptyMap())))
         // A Suspended or Zombie identity still counts: it can come back at the next validation.
