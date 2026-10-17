@@ -108,9 +108,9 @@ fun PeopleCounts(trust: TrustCount?, circle: ProfileCircle?, onOpen: (PeopleList
     // Each count goes on the next line when the line is full (a large font), never squeezed beside the other.
     FlowRow {
         Text("🤝 ", style = style)
-        Count(t(R.string.profile_count_trusted_by, n(trust?.total)), PeopleList.TrustedBy)
+        Count(tp(R.plurals.profile_count_trusts, trust?.total ?: 0, n(trust?.total)), PeopleList.TrustedBy)
         Text(" · ", style = style)
-        Count(t(R.string.profile_count_trusts_given, n(circle?.trustsGiven?.size)), PeopleList.TrustsGiven)
+        Count(tp(R.plurals.profile_count_trusts_given, circle?.trustsGiven?.size ?: 0, n(circle?.trustsGiven?.size)), PeopleList.TrustsGiven)
     }
     FlowRow {
         Text("👥 ", style = style)

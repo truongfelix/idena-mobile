@@ -78,9 +78,9 @@ private fun PracticeScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     var longAnswers by remember { mutableStateOf<Answers?>(null) }
     var leaving by remember { mutableStateOf(false) }
 
-    BackHandler {
-        if (step == Step.Intro || step == Step.Results) onClose() else leaving = true
-    }
+    // Back and Close: at once before and after the sessions, after a question during them.
+    val close = { if (step == Step.Intro || step == Step.Results) onClose() else leaving = true }
+    BackHandler(onBack = close)
     if (leaving) {
         AlertDialog(
             onDismissRequest = { leaving = false },
@@ -91,46 +91,50 @@ private fun PracticeScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         )
     }
 
-    Box(modifier.fillMaxSize().padding(16.dp)) {
-        val loaded = practice
-        if (loaded == null) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center))
-        } else key(run, step) {
-            when (step) {
-                Step.Intro -> Intro(loaded) { step = Step.ShortSession }
-                Step.ShortSession -> PracticeSession(
-                    title = t(R.string.validation_short_session),
-                    flips = loaded.short.map { it.flip },
-                    durationMs = SHORT_SESSION_MS,
-                    withKeywords = false,
-                ) {
-                    shortAnswers = it
-                    step = Step.BetweenSessions
+    Column(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        // Close on every step (owner 2026-10-17: the practice had none but Back).
+        Row(Modifier.fillMaxWidth()) { TextButton(onClick = close) { Text(t(R.string.common_close)) } }
+        Box(Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp)) {
+            val loaded = practice
+            if (loaded == null) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center))
+            } else key(run, step) {
+                when (step) {
+                    Step.Intro -> Intro(loaded) { step = Step.ShortSession }
+                    Step.ShortSession -> PracticeSession(
+                        title = t(R.string.validation_short_session),
+                        flips = loaded.short.map { it.flip },
+                        durationMs = SHORT_SESSION_MS,
+                        withKeywords = false,
+                    ) {
+                        shortAnswers = it
+                        step = Step.BetweenSessions
+                    }
+                    Step.BetweenSessions -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(t(R.string.ceremony_short_done), style = MaterialTheme.typography.headlineSmall)
+                        Text(t(R.string.ceremony_long_follows))
+                        Button(onClick = { step = Step.LongSession }) { Text(t(R.string.ceremony_start_long)) }
+                    }
+                    Step.LongSession -> PracticeSession(
+                        title = t(R.string.validation_long_session),
+                        flips = loaded.long.map { it.flip },
+                        durationMs = loaded.long.size * LONG_SESSION_MS_PER_FLIP,
+                        withKeywords = true,
+                    ) {
+                        longAnswers = it
+                        step = Step.Results
+                    }
+                    Step.Results -> Results(
+                        loaded,
+                        shortAnswers ?: Answers(loaded.short.size),
+                        longAnswers ?: Answers(loaded.long.size),
+                        onAgain = {
+                            run++
+                            step = Step.ShortSession
+                        },
+                        onClose = onClose,
+                    )
                 }
-                Step.BetweenSessions -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(t(R.string.ceremony_short_done), style = MaterialTheme.typography.headlineSmall)
-                    Text(t(R.string.ceremony_long_follows))
-                    Button(onClick = { step = Step.LongSession }) { Text(t(R.string.ceremony_start_long)) }
-                }
-                Step.LongSession -> PracticeSession(
-                    title = t(R.string.validation_long_session),
-                    flips = loaded.long.map { it.flip },
-                    durationMs = loaded.long.size * LONG_SESSION_MS_PER_FLIP,
-                    withKeywords = true,
-                ) {
-                    longAnswers = it
-                    step = Step.Results
-                }
-                Step.Results -> Results(
-                    loaded,
-                    shortAnswers ?: Answers(loaded.short.size),
-                    longAnswers ?: Answers(loaded.long.size),
-                    onAgain = {
-                        run++
-                        step = Step.ShortSession
-                    },
-                    onClose = onClose,
-                )
             }
         }
     }

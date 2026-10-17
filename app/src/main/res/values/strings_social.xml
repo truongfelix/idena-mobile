@@ -74,10 +74,14 @@
     <string name="social_waiting_address">Waiting for the node\'s address…</string>
     <string name="social_confirm_title">%1$s %2$s</string>
     <string name="social_tip_detail">Tip %1$d iDNA to %2$s for this post</string>
-    <string name="social_tab_feed">Feed</string>
+    <string name="social_post_wait_title">Not yet</string>
+    <string name="social_post_wait_sync">Your node is not synced yet: you can post once it is. The node panel (top right) shows how far it is.</string>
+    <string name="social_post_wait_validation">A validation is running: you can post again once it ends.</string>
+    <string name="social_post_wait_sending">A transaction is being sent: you can post once it is done.</string>
+    <string name="social_tab_feed">Home</string>
     <string name="social_tab_messages">Messages</string>
     <string name="social_tab_notifications">Notifications</string>
-    <string name="social_tab_profile">Me</string>
+    <string name="social_tab_profile">You</string>
     <string name="social_draft_back">The draft is back in the editor.</string>
     <string name="social_draft_not_back">The editor holds another draft, so this one was not put back.</string>
     <string name="social_file_text">text</string>

@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -135,7 +135,8 @@ internal fun ScreenTitle(title: String, onClose: () -> Unit, action: (@Composabl
         Spacer(Modifier.weight(1f))
         Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
-        Box(Modifier.width(72.dp), contentAlignment = Alignment.CenterEnd) { action?.invoke() }
+        // At least Close's width, so the title stays near the middle; wider for "+ Nouveau" (owner 2026-10-17).
+        Box(Modifier.widthIn(min = 72.dp), contentAlignment = Alignment.CenterEnd) { action?.invoke() }
     }
 }
 

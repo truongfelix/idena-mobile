@@ -202,8 +202,16 @@
     <string name="profile_list_trusts_given">Confiances données</string>
     <string name="profile_list_members">Membres</string>
     <string name="profile_list_invitees">Invités</string>
-    <string name="profile_count_trusted_by">A la confiance de %1$s</string>
-    <string name="profile_count_trusts_given">%1$s confiances données</string>
+    <plurals name="profile_count_trusts">
+        <item quantity="one">%1$s confiance</item>
+        <item quantity="other">%1$s confiances</item>
+        <item quantity="many">%1$s confiances</item>
+    </plurals>
+    <plurals name="profile_count_trusts_given">
+        <item quantity="one">%1$s confiance donnée</item>
+        <item quantity="other">%1$s confiances données</item>
+        <item quantity="many">%1$s confiances données</item>
+    </plurals>
     <plurals name="profile_count_members">
         <item quantity="one">%1$s membre</item>
         <item quantity="other">%1$s membres</item>
@@ -239,7 +247,7 @@
     <string name="profile_vouch_cap">Vous vous portez garant de %1$d sur %2$d au plus</string>
     <string name="profile_member_has_identity">a maintenant une identité : « Terminer » libère votre place</string>
     <string name="profile_end">Terminer</string>
-    <string name="profile_end_vouch_what">Mettre fin à la garantie</string>
+    <string name="profile_end_vouch_what">Retirer ma garantie</string>
     <string name="profile_end_vouch_detail">Vous ne vous portez plus garant de cette personne</string>
     <string name="profile_heading_invited_by">Invité par</string>
     <string name="profile_node_refuses">Le nœud refuse : %1$s</string>
@@ -258,8 +266,6 @@
     <string name="profile_untrust_detail_short">Votre Confiance ne compte plus</string>
     <string name="profile_picture">Image de profil</string>
     <string name="profile_name_hidden">\@%1$s · caché : ni validé, ni garanti</string>
-    <string name="profile_you_vouch">Vous vous portez garant de cette personne</string>
-    <string name="profile_you_vouch_not_validated">Vous vous portez garant de cette personne (son garant n\'est pas validé actuellement)</string>
     <string name="profile_vouched_for_by">Garanti par %1$s</string>
     <string name="profile_vouched_for_by_not_validated">Garanti par %1$s (son garant n\'est pas validé actuellement)</string>
     <string name="profile_picture_unreadable">Android ne peut pas lire cette image</string>
@@ -278,7 +284,11 @@
     <string name="profile_new_picture">La nouvelle image</string>
     <string name="profile_choose">Choisir</string>
     <string name="profile_picture_rules">Un carré de %1$d pixels, %2$d Ko au plus, stocké sur IPFS (une transaction storeToIpfs avec ses propres frais).</string>
-    <string name="profile_save_profile">Enregistrer le profil</string>
+    <string name="profile_save_profile">Enregistrer la bio et l\'image</string>
+    <string name="profile_name_part">Votre nom</string>
+    <string name="profile_name_part_note">Enregistré à part : une transaction.</string>
+    <string name="profile_bio_part">Votre bio et votre image</string>
+    <string name="profile_bio_part_note">Enregistrées ensemble : une seule transaction pour les deux.</string>
     <string name="profile_claim_what">Nom @%1$s</string>
     <string name="profile_claim_detail">Réserve le nom @%1$s pour votre adresse</string>
     <string name="profile_drop_detail">Abandonne votre nom : il reste bloqué pendant 2 époques, pour tout le monde</string>
@@ -289,12 +299,16 @@
     <string name="profile_trust_topic_detail">Donne votre Confiance publique à %1$s : tout le monde la voit ; vous pouvez la retirer</string>
     <string name="profile_trust_person_detail">Donne votre Confiance publique à cette personne : tout le monde la voit ; vous pouvez la retirer</string>
     <string name="profile_trust_waiting">Confiance · en attente d\'un bloc</string>
-    <string name="profile_trusted">Confiance donnée</string>
+    <string name="profile_trusted">Confiance ✓</string>
     <string name="profile_trust_no_answer">Confiance : le nœud n\'a pas répondu.</string>
     <string name="profile_trust_reading">Confiance : lecture…</string>
     <string name="profile_trusted_by_nobody">La confiance de personne pour l\'instant</string>
     <string name="profile_giver_vouched">%1$s (garanti)</string>
-    <string name="profile_they_have_identity">Cette personne a maintenant une identité : « Terminer » libère votre place.</string>
+    <string name="profile_they_have_identity">Cette personne a maintenant une identité : « Retirer ma garantie » libère votre place.</string>
+    <string name="profile_vouching">Garant ✓</string>
+    <string name="profile_vouch_button">Garant</string>
+    <string name="profile_offer_sent">Offre envoyée</string>
+    <string name="profile_leave_voucher">Quitter mon garant</string>
     <string name="profile_vouch_for_them">Se porter garant</string>
     <string name="profile_vouch_detail">Cette personne devient membre une fois qu\'elle accepte ; vous vous portez garant de %1$d membres au plus à la fois</string>
     <string name="profile_offer_waits">Votre offre attend que cette personne l\'accepte.</string>

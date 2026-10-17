@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -117,19 +116,23 @@ fun ProfileList(
         trust = withContext(Dispatchers.IO) { runCatching { source.trust(address) } }
     }
     val isMe = address.equals(myAddress, ignoreCase = true)
+    val vouch = if (isMe) null else rememberVouchState(address, contract, myAddress, reload)
     val contractExtras: @Composable () -> Unit = {
         if (onProfileCall != null && myAddress != null) {
             if (isMe) MyVouching(myAddress, contract, canAct, reload, onProfileCall)
-            else VouchPanel(address, contract, myAddress, myContract, canAct, reload, onProfileCall)
+            else VouchPanel(address, contract, myAddress, myContract, vouch, canAct, onProfileCall)
         }
     }
     val items = profile.list(tab)
     // The people counts (B-89): who trusts it and whom it trusts, its members and invitees, each opening its list.
     val circle = rememberProfileCircle(address, identity?.getOrNull(), reload, isMe)
     val people: @Composable () -> Unit = { PeopleCounts(trust?.getOrNull(), circle?.getOrNull(), onPeople) }
-    val trustChip: @Composable () -> Unit = { TrustChip(address, trust?.getOrNull(), myAddress, canAct, onProfileCall) }
+    val trustButton: @Composable () -> Unit = { TrustButton(address, trust?.getOrNull(), myAddress, canAct, onProfileCall) }
+    val vouchButton: @Composable () -> Unit = {
+        if (onProfileCall != null) VouchButton(address, contract, myAddress, myContract, vouch, canAct, onProfileCall)
+    }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
-        item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustChip) }
+        item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustButton, vouchButton) }
         // Own profile: the node's task (flips to make), then, for an account without an identity, how to be vouched for.
         if (isMe) {
             myTask?.let { item { it() } }
@@ -173,10 +176,10 @@ fun ProfileList(
 class MyProfileLinks(val people: Int, val topics: Int, val onFollowing: (topics: Boolean) -> Unit, val onSettings: () -> Unit)
 
 /**
- * The identity of a profile, on the whole width as the usual social apps': the avatar with ⚙ (the identity's own
- * profile, [mine]) or Message and Follow; the name (or the short address) with ✎, the full address with copy, the
- * state, age and stake in the state's color; then what the identity's own profile follows, the likes and the tips,
- * received and given.
+ * The identity of a profile, on the whole width as the usual social apps': the avatar with the full address and copy,
+ * ⚙ (the identity's own profile, [mine]) or ⋮; the name; the state, age and stake in the state's color; the Trust, the
+ * members, the likes and the tips, received and given, and what the identity's own profile follows; then, on
+ * another's, Message, Trust, Follow and Vouch.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -196,7 +199,8 @@ private fun ProfileHeader(
     onEditProfile: (() -> Unit)?,
     contractExtras: @Composable () -> Unit,
     people: @Composable () -> Unit,
-    trustChip: @Composable () -> Unit,
+    trustButton: @Composable () -> Unit,
+    vouchButton: @Composable () -> Unit,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -212,32 +216,10 @@ private fun ProfileHeader(
             if (!isMe && person.blocked) OutlinedButton(onClick = { onBlock(person.copy(blocked = false)) }) { Text(t(R.string.socialb_unblock)) }
             else if (!isMe) BlockMenu(person, onBlock, onName = { onName(person) })
         }
-        // Another's: Message, Trust and Follow on a row of their own (B-89), the width a phone has.
-        if (!isMe && !person.blocked) {
-            // On two lines when the three do not fit (a large font, "Trust · waiting for a block").
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LocalOpenChat.current?.let { chat ->
-                    LaunchedEffect(address) { chat.lookUp(address) }
-                    // Greyed when no key is known: the conversation tells why.
-                    val tint = if (chat.canReceive(address) == false) muted.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary
-                    OutlinedButton(
-                        onClick = { chat.open(address) },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = tint),
-                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    ) {
-                        Icon(Icons.Filled.Email, contentDescription = null, Modifier.size(ButtonDefaults.IconSize))
-                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                        Text(t(R.string.socialb_message_button))
-                    }
-                }
-                trustChip()
-                val follow = { onFollow(person.copy(following = !person.following)) }
-                if (person.following) OutlinedButton(onClick = follow) { Text(t(R.string.socialb_following)) } else Button(onClick = follow) { Text(t(R.string.socialb_follow)) }
-            }
-        }
         // The name on the whole width, on two lines if it needs them.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val title = person.name.ifEmpty { contract?.shownName ?: shortAddress(address) }
+        // Another's without a name: none, the full address is beside the picture (owner 2026-10-17).
+        val title = person.name.ifEmpty { contract?.shownName ?: if (isMe) shortAddress(address) else "" }
+        if (title.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 if (isMe) t(R.string.socialb_title_you, title) else title,
                 Modifier.weight(1f, fill = false),
@@ -247,7 +229,6 @@ private fun ProfileHeader(
             )
         }
         ContractProfileLines(contract, LocalNames.current, myAddress, isMe, localName = person.name.isNotEmpty())
-        contractExtras()
         if (!isMe && person.blocked) Text(BLOCKED_TEXT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         val palette = statusPalette()
         Text(
@@ -276,6 +257,33 @@ private fun ProfileHeader(
                 Text(tp(R.plurals.socialb_n_topics, it.topics, it.topics), Modifier.clickable { it.onFollowing(true) }, style = counts, fontWeight = FontWeight.Medium)
             }
         }
+        // Another's: Message, Trust, Follow and Vouch under the counts, the same place on every profile (owner
+        // 2026-10-17); on two lines when they do not fit (a large font, "Trust · waiting for a block").
+        if (!isMe && !person.blocked) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LocalOpenChat.current?.let { chat ->
+                    LaunchedEffect(address) { chat.lookUp(address) }
+                    // Greyed when no key is known: the conversation tells why.
+                    val tint = if (chat.canReceive(address) == false) muted.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary
+                    OutlinedButton(
+                        onClick = { chat.open(address) },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = tint),
+                        contentPadding = PaddingValues(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                    ) {
+                        Icon(Icons.Filled.Email, contentDescription = null, Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(t(R.string.socialb_message_button), maxLines = 1)
+                    }
+                }
+                trustButton()
+                ProfileRowButton(
+                    if (person.following) t(R.string.socialb_following) else t(R.string.socialb_follow),
+                    done = person.following,
+                ) { onFollow(person.copy(following = !person.following)) }
+                vouchButton()
+            }
+        }
+        contractExtras()
         if (!historyDone) {
             Text(
                 t(R.string.socialb_history_note),
