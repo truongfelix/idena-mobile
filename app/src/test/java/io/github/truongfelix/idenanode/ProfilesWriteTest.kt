@@ -36,6 +36,34 @@ class ProfilesWriteTest {
     }
 
     @Test
+    fun trustVouchAndChallengeCallsAreWrittenAsTheDesktopWritesThem() {
+        val bob = "0xBBBB000000000000000000000000000000000002"
+        val low = bob.lowercase()
+        assertEquals(SocialCall("trust", "{\"target\":\"$low\"}", "0", PROFILE_CONTRACT), ProfileCalls.trust(bob))
+        assertEquals("{\"target\":\"r/idena\"}", ProfileCalls.untrust("r/idena").argument)
+        assertEquals("{\"name\":\"felixflx\"}", ProfileCalls.challengeName("felixflx").argument)
+        assertEquals(SocialCall("vouch", "{\"member\":\"$low\"}", "0", PROFILE_CONTRACT), ProfileCalls.vouch(bob))
+        assertEquals("{\"voucher\":\"$low\"}", ProfileCalls.acceptVouch(bob).argument)
+        assertEquals("{\"voucher\":\"$low\"}", ProfileCalls.declineOffer(bob).argument)
+        assertEquals("{\"member\":\"$low\"}", ProfileCalls.cancelOffer(bob).argument)
+        assertEquals("{\"member\":\"$low\"}", ProfileCalls.endVouch(bob).argument)
+        // The member ends its own vouch with an empty member.
+        assertEquals("{\"member\":\"\"}", ProfileCalls.endVouch().argument)
+    }
+
+    @Test
+    fun onlyTheCallsTheContractChargesSendAMembersExtra() {
+        val bob = "0xbbbb000000000000000000000000000000000002"
+        val paying = listOf(ProfileCalls.claimName("felixflx"), ProfileCalls.setProfile("", ""), ProfileCalls.trust(bob), ProfileCalls.challengeName("felixflx"))
+        val free = listOf(
+            ProfileCalls.dropName(), ProfileCalls.untrust(bob), ProfileCalls.vouch(bob), ProfileCalls.acceptVouch(bob),
+            ProfileCalls.declineOffer(bob), ProfileCalls.cancelOffer(bob), ProfileCalls.endVouch(),
+        )
+        assertTrue(paying.all(::memberPays))
+        assertTrue(free.none(::memberPays))
+    }
+
+    @Test
     fun theCallbackGasIsThreeTimesWhatTheDryRunUsedWithinBounds() {
         // Mainnet's claim used 291,246: three times that is below the least the app asks.
         assertEquals(1_000_000L, callbackGas(claim))

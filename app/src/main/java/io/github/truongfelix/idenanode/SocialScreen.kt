@@ -197,6 +197,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         onFollow = { model.setTopicFollowed(page.name, it) },
                         onBlock = { model.setTopicBlocked(page.name, it) },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                        trust = { TopicTrust(page.name, myAddress, canAct, model.profileWrites, model.profileAction, model::openProfile) },
                     ) { post ->
                         PostCard(
                             post = post,
@@ -276,7 +277,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                         onWho = { who = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                         contract = model.profiles[page.address.lowercase()],
+                        myContract = myAddress?.let { model.profiles[it.lowercase()] },
                         onContract = { model.profiles[it.address] = it },
+                        reload = model.profileWrites,
+                        onProfileCall = model.profileAction,
                     )
                 }
             }
@@ -441,6 +445,8 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                                 contract = model.profiles[myAddress.lowercase()],
                                 onContract = { model.profiles[it.address] = it },
                                 onEditProfile = { editingProfile = true },
+                                reload = model.profileWrites,
+                                onProfileCall = model.profileAction,
                             )
                         }
                         SocialView.Feed -> {}

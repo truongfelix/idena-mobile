@@ -51,6 +51,30 @@ class NodeProfilesSource(private val rpc: NodeRpc, private val contract: String 
         return MemberExtra(memberExtraAmount(feePerGas), lapsed = !(isVouchable(me.state) && isValidated(me.voucherState)))
     }
 
+    /** The vouches offered to [member], not accepted yet: each voucher and the epoch it offered. */
+    fun offersTo(member: String): List<VouchEntry> =
+        entries("o:${member.lowercase()}:").map { (key, value) -> VouchEntry(key.lowercase(), value.toIntOrNull() ?: 0) }
+
+    /** The members [voucher] vouches for: each member and the epoch it accepted. */
+    fun members(voucher: String): List<VouchEntry> =
+        entries("m:${voucher.lowercase()}:").map { (key, value) -> VouchEntry(key.lowercase(), value.toIntOrNull() ?: 0) }
+
+    /** The epoch [voucher] offered to vouch for [member], or null without such an offer. */
+    fun offer(member: String, voucher: String): Int? =
+        readValues(listOf("o:" to "${member.lowercase()}:${voucher.lowercase()}")).first()?.toIntOrNull()
+
+    /** The challenge of [challenger] on [name], or null. */
+    fun challenge(name: String, challenger: String): NameChallenge? =
+        parseChallenge(readValues(listOf("c:" to "$name:${challenger.lowercase()}")).first())
+
+    /** The holder of [name] (with or without its "@") and the holder's profile; a null holder when nobody holds it. */
+    fun resolve(name: String): ResolvedName {
+        val clean = name.removePrefix("@").lowercase()
+        if (!PROFILE_NAME.matches(clean)) return ResolvedName(null, null)
+        val holder = readValues(listOf("n:" to clean)).first()?.lowercase() ?: return ResolvedName(null, null)
+        return ResolvedName(holder, profiles(listOf(holder))[holder])
+    }
+
     /** The values of ([map], key) [entries] in one request: null for a key never written. */
     private fun readValues(entries: List<Pair<String, String>>): List<String?> =
         rpc.batchSettled("contract_readMap", entries.map { (map, key) -> readMapParams(contract, map, key) })

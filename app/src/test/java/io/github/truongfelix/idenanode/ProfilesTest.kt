@@ -102,6 +102,18 @@ class ProfilesTest {
     }
 
     @Test
+    fun anAccountsOwnTrustStaysGivenWhileItDoesNotCount() {
+        val givers = listOf(trustGiver(alice, "230"), trustGiver(bob, "231"))
+        // Alice lost her identity: her Trust no longer counts, and she can still take it back.
+        val count = countTrust(givers, mapOf(alice to "Killed", bob to "Human"), emptyMap())
+        assertEquals(1, count.identities)
+        assertTrue(count.givenBy(alice.uppercase().replace("0X", "0x")))
+        assertTrue(count.givenBy(bob))
+        assertFalse(count.givenBy(carol))
+        assertFalse(count.givenBy(null))
+    }
+
+    @Test
     fun aBatchKeepsEachCallsResultInItsOrder() {
         val responses = JSONArray()
             .put(JSONObject().put("id", 2).put("result", "c"))

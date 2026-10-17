@@ -198,7 +198,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
         prepareWith(what) { posting, from ->
             val files = listOfNotNull(picture?.let { ipfsFile(posting, from, "picture", it) })
             var call = makeCall(files.firstOrNull()?.let { "ipfs://${it.cid}" })
-            val extra = NodeProfilesSource(rpc(context)).memberExtra(from, posting.feePerGas().toBigInteger())
+            val extra = if (memberPays(call)) NodeProfilesSource(rpc(context)).memberExtra(from, posting.feePerGas().toBigInteger()) else null
             extra?.let { call = call.copy(amount = it.amount) }
             var receipt = posting.estimateReceipt(from, call)
             val gas = callbackGas(receipt)

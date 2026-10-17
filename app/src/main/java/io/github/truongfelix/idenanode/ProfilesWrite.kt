@@ -18,6 +18,26 @@ object ProfileCalls {
 
     fun setProfile(bio: String, picture: String) = call("setProfile", "{\"bio\":${jsonString(bio)},\"picture\":${jsonString(picture)}}")
 
+    /** Trust a person (an address) or a topic ("r/<name>"), or take it back. */
+    fun trust(target: String) = call("trust", arg("target", target.lowercase()))
+
+    fun untrust(target: String) = call("untrust", arg("target", target.lowercase()))
+
+    fun challengeName(name: String) = call("challengeName", arg("name", name))
+
+    fun vouch(member: String) = call("vouch", arg("member", member.lowercase()))
+
+    fun acceptVouch(voucher: String) = call("acceptVouch", arg("voucher", voucher.lowercase()))
+
+    fun declineOffer(voucher: String) = call("declineOffer", arg("voucher", voucher.lowercase()))
+
+    fun cancelOffer(member: String) = call("cancelOffer", arg("member", member.lowercase()))
+
+    /** The voucher ends a member's vouch; the member ends its own with an empty [member]. */
+    fun endVouch(member: String = "") = call("endVouch", arg("member", member.lowercase()))
+
+    private fun arg(key: String, value: String) = "{\"$key\":${jsonString(value)}}"
+
     private fun call(method: String, argument: String?) = SocialCall(method, argument, "0", PROFILE_CONTRACT)
 }
 
@@ -108,6 +128,11 @@ fun readsMemberExtra(kept: String?, epoch: Int): Boolean {
     val parts = kept.split(":")
     return parts[0].toIntOrNull() != epoch || parts.getOrNull(1) in VOUCHABLE_CODES
 }
+
+/** The calls a vouched member pays the extra amount with (the contract's payIfVouched): any other keeps it, lost. */
+private val MEMBER_PAYS = setOf("claimName", "setProfile", "trust", "challengeName")
+
+fun memberPays(call: SocialCall) = call.method in MEMBER_PAYS
 
 /** The gas a vouched member's call adds, burned by the contract (VOUCHED_EXTRA_GAS). */
 private val VOUCHED_EXTRA_GAS = BigInteger.valueOf(25_000)

@@ -277,12 +277,20 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     val myProfileState = LazyListState()
 
     /** The editor and the paid actions. */
+    /** Counts the sent actions found in a block: the profile pages read the contract again at each. */
+    var profileWrites by mutableIntStateOf(0)
+        private set
+
     val sending = SocialSending(context, scope) {
         scanNewOnce.set(true)
         wake++
         // A profile call changes what the contract holds for the account: shown at once, not at the next epoch.
         refreshProfile(myAddress)
+        profileWrites++
     }
+
+    /** Sends a call to the profiles contract, its fees shown first. */
+    val profileAction: ProfileAction = { what, detail, call -> sending.prepareProfile(what, detail) { call } }
 
     /** Reads [address]'s profile in the profiles contract again. */
     fun refreshProfile(address: String?) {

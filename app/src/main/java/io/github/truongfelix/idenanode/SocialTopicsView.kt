@@ -131,7 +131,7 @@ private fun FollowTopicButton(following: Boolean, onFollow: (Boolean) -> Unit) {
 
 /**
  * The page of topic [name]: Follow (its posts join the Following feed) and Block (its posts hidden on this phone, the
- * page then offers Unblock), then its posts (+ writes in the topic), newest first, each drawn by [postCard].
+ * page then offers Unblock), its public [trust], then its posts (+ writes in the topic), newest first, each drawn by [postCard].
  */
 @Composable
 fun TopicView(
@@ -143,6 +143,7 @@ fun TopicView(
     onFollow: (Boolean) -> Unit,
     onBlock: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    trust: @Composable () -> Unit = {},
     postCard: @Composable (SocialPost) -> Unit,
 ) {
     val posts = remember(feed, name) { topicFeed(feed, name) }
@@ -172,6 +173,7 @@ fun TopicView(
                         FollowTopicButton(following, onFollow)
                         OutlinedButton(onClick = { onBlock(true) }) { Text("Block") }
                     }
+                    trust()
                 }
                 Spacer(Modifier.padding(2.dp))
             }

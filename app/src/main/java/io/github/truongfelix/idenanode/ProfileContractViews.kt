@@ -70,25 +70,27 @@ private fun rememberPicture(cid: String): ImageBitmap? {
 
 /**
  * What a profile adds from the profiles contract, under the address, as the desktop shows it: the claimed name when
- * the title does not show it (a name given on this phone there, [localName], or the name hidden), the bio, "Trusted
- * by …" ([trust]) and "Vouched for by …" for an account without an identity. Out of good standing the name and bio
- * show only to the account itself ([isMe]), marked hidden. [names] gives the voucher's name.
+ * the title does not show it (a name given on this phone there, [localName], or the name hidden), the bio, and on
+ * another's profile who vouches for an account without an identity ("You vouch for them" when it is [me]). Out of
+ * good standing the name and bio show only to the account itself ([isMe]), marked hidden. [names] gives the
+ * voucher's name.
  */
 @Composable
-fun ContractProfileLines(profile: ContractProfile?, trust: TrustCount?, names: Map<String, String>, isMe: Boolean, localName: Boolean) {
+fun ContractProfileLines(profile: ContractProfile?, names: Map<String, String>, me: String?, isMe: Boolean, localName: Boolean) {
     val body = MaterialTheme.typography.bodyMedium
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    if (profile != null) {
-        val shown = profile.inStanding || isMe
-        if (shown && profile.name != null && (localName || !profile.inStanding)) {
-            val hidden = if (profile.inStanding) "" else " · hidden: not validated, nor vouched for"
-            Text("@${profile.name}$hidden", style = body, fontWeight = FontWeight.Medium)
-        }
-        if (shown) profile.bio?.takeIf { it.isNotBlank() }?.let { Text(it, style = body) }
+    if (profile == null) return
+    val shown = profile.inStanding || isMe
+    if (shown && profile.name != null && (localName || !profile.inStanding)) {
+        val hidden = if (profile.inStanding) "" else " · hidden: not validated, nor vouched for"
+        Text("@${profile.name}$hidden", style = body, fontWeight = FontWeight.Medium)
     }
-    trust?.let(::trustText)?.let { Text(it, style = body) }
-    profile?.shownVoucher?.let { voucher ->
+    if (shown) profile.bio?.takeIf { it.isNotBlank() }?.let { Text(it, style = body) }
+    // The account's own voucher shows with its End button (MyVouching).
+    if (isMe) return
+    profile.shownVoucher?.let { voucher ->
+        val who = if (voucher == me?.lowercase()) "You vouch for them" else "Vouched for by ${displayName(voucher, names)}"
         val note = if (profile.inStanding) "" else " (their voucher is not validated now)"
-        Text("Vouched for by ${displayName(voucher, names)}$note", style = body, color = muted)
+        Text("$who$note", style = body, color = muted)
     }
 }

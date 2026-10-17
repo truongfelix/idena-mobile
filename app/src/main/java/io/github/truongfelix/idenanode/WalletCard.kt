@@ -142,9 +142,10 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, network: Network
 
     when (dialog) {
         WalletDialog.Receive -> ReceiveDialog(status.address) { dialog = null }
-        WalletDialog.Send -> SendDialog(status, people, onDismiss = { dialog = null }) { to, amount ->
+        WalletDialog.Send -> SendDialog(status, people, onDismiss = { dialog = null }) { to, name, amount ->
             dialog = null
-            prepare(PendingTx(SEND_TX, to, amount, "Send", "Send ${idna(amount.toPlainString())} to ${recipientText(to, people)}."))
+            val shown = name?.let { "@$it ($to)" } ?: recipientText(to, people)
+            prepare(PendingTx(SEND_TX, to, amount, "Send", "Send ${idna(amount.toPlainString())} to $shown."))
         }
         WalletDialog.Stake -> StakeDialog(status, onDismiss = { dialog = null }) { amount ->
             dialog = null
@@ -210,18 +211,30 @@ internal fun qrCode(text: String): ImageBitmap {
 }
 
 /**
- * The recipient (typed, pasted or picked among the named people of the Social tab's People list) and the
- * amount; checked here, then by the node's fee estimate.
+ * The recipient (typed, pasted or picked among the named people of the Social tab's People list; "@name" sends to
+ * the holder of a name in the profiles contract, shown with its robot, address and state) and the amount; checked
+ * here, then by the node's fee estimate. [onNext] gets the address and, for "@name", the name.
  */
 @Composable
-private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismiss: () -> Unit, onNext: (String, BigDecimal) -> Unit) {
+private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismiss: () -> Unit, onNext: (String, String?, BigDecimal) -> Unit) {
+    val context = LocalContext.current
     var to by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf(false) }
     val named = remember(people) { sortedPeople(people).filter { it.name.isNotEmpty() && it.address != status.address.lowercase() } }
     var amountText by remember { mutableStateOf("") }
     val amount = parseIdna(amountText)
     val balance = status.balance.toBigDecimalOrNull() ?: BigDecimal.ZERO
-    val toValid = isAddress(to)
+    val recipient = parseRecipient(to)
+    val name = (recipient as? Recipient.Name)?.name
+    // Null while the node is asked; looked up once the typing pauses.
+    var resolved by remember(name) { mutableStateOf<Result<ResolvedName>?>(null) }
+    LaunchedEffect(name) {
+        if (name == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(300)
+        resolved = withContext(Dispatchers.IO) { runCatching { NodeProfilesSource(rpc(context)).resolve(name) } }
+    }
+    val address = recipientAddress(recipient, resolved?.getOrNull())
+    val toValid = address != null
     val tooMuch = amount != null && amount > balance
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -232,12 +245,13 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismis
                 OutlinedTextField(
                     value = to,
                     onValueChange = { to = it.trim() },
-                    label = { Text("To (0x…)") },
+                    label = { Text("To (0x… or @name)") },
                     singleLine = true,
-                    isError = to.isNotEmpty() && !toValid,
+                    isError = recipient == Recipient.Invalid || (name != null && resolved != null && !toValid),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 )
-                if (toValid) people[to.lowercase()]?.name?.takeIf { it.isNotEmpty() }?.let {
+                name?.let { RecipientLine(it, resolved) }
+                if (recipient is Recipient.Address) people[recipient.address]?.name?.takeIf { it.isNotEmpty() }?.let {
                     Text("To: $it", style = MaterialTheme.typography.bodyMedium)
                 }
                 if (named.isNotEmpty()) {
@@ -250,7 +264,7 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismis
                         }
                     }
                 }
-                if (toValid && to.equals(status.address, ignoreCase = true)) {
+                if (address != null && address.equals(status.address, ignoreCase = true)) {
                     Text("This is your own address.", style = MaterialTheme.typography.bodySmall)
                 }
                 OutlinedTextField(
@@ -266,10 +280,40 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, onDismis
             }
         },
         confirmButton = {
-            TextButton(onClick = { amount?.let { onNext(to, it) } }, enabled = toValid && amount != null && !tooMuch) { Text("Next") }
+            TextButton(onClick = { if (address != null && amount != null) onNext(address, name, amount) }, enabled = toValid && amount != null && !tooMuch) { Text("Next") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/**
+ * Whom "@[name]" sends to: its holder's robot, address and identity state, or why it cannot be sent to (looking it up,
+ * the node did not answer, nobody holds it, or its holder is out of good standing: the name is hidden and may change
+ * hands).
+ */
+@Composable
+private fun RecipientLine(name: String, resolved: Result<ResolvedName>?) {
+    val small = MaterialTheme.typography.bodySmall
+    val error = MaterialTheme.colorScheme.error
+    val found = resolved?.getOrNull()
+    val problem = when {
+        resolved == null -> "Looking up @$name…"
+        resolved.isFailure -> "The node did not answer for @$name."
+        found?.holder == null -> "Nobody holds @$name."
+        found.profile?.inStanding != true -> "The holder of @$name is neither validated nor vouched for: the name is hidden and may change hands. Send to an address."
+        else -> null
+    }
+    if (problem != null || found?.holder == null) {
+        Text(problem.orEmpty(), style = small, color = if (resolved == null) MaterialTheme.colorScheme.onSurfaceVariant else error)
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Avatar(found.holder, 32.dp)
+        Column {
+            Text(found.holder, style = small, fontFamily = FontFamily.Monospace)
+            Text(identityStatus(found.profile?.state.orEmpty()), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 /**
