@@ -10,6 +10,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +49,27 @@ fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
         PicturesSetting(model.picturesMode, model::changePicturesMode)
         HorizontalDivider()
         ListsBackup(model)
+    }
+}
+
+/**
+ * ⚙ on the account's own profile (B-79): Edit your public profile ([onEdit], the profiles contract), Name on this
+ * phone ([onName]) and Social settings.
+ */
+@Composable
+fun OwnProfileMenu(onEdit: (() -> Unit)?, onName: () -> Unit, onSettings: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }, Modifier.size(40.dp)) {
+            Icon(Icons.Filled.Settings, contentDescription = "Profile and settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            onEdit?.let {
+                DropdownMenuItem(text = { Text("Edit your public profile") }, onClick = { open = false; it() })
+            }
+            DropdownMenuItem(text = { Text("Name on this phone") }, onClick = { open = false; onName() })
+            DropdownMenuItem(text = { Text("Social settings") }, onClick = { open = false; onSettings() })
+        }
     }
 }
 

@@ -47,8 +47,6 @@ import java.math.RoundingMode
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Email
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
@@ -60,6 +58,8 @@ private fun SocialProfile.list(tab: ProfileTab): List<ProfileItem> = when (tab) 
     ProfileTab.Likes -> likes
     ProfileTab.Tips -> tips
     ProfileTab.Media -> media
+    // Read from the node and the contract ([ProfileCircle]), not from the posts.
+    ProfileTab.Invitees, ProfileTab.Members -> emptyList()
 }
 
 /**
@@ -120,17 +120,36 @@ fun ProfileList(
         }
     }
     val items = profile.list(tab)
+    val circle = rememberProfileCircle(address, identity?.getOrNull(), reload)
+    val circleTab = tab == ProfileTab.Invitees || tab == ProfileTab.Members
+    fun count(t: ProfileTab): String = when (t) {
+        ProfileTab.Invitees -> circle?.getOrNull()?.invitees?.size?.toString() ?: "…"
+        ProfileTab.Members -> circle?.getOrNull()?.members?.size?.toString() ?: "…"
+        else -> profile.list(t).size.toString()
+    }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
-        item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras) }
+        item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, onProfile, contractExtras) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
-                    FilterChip(selected = tab == it, onClick = { onTab(it) }, label = { Text("${it.title} ${profile.list(it).size}") })
+                    FilterChip(selected = tab == it, onClick = { onTab(it) }, label = { Text("${it.title} ${count(it)}") })
                 }
             }
         }
-        if (items.isEmpty()) item { Text("Nothing here yet.", style = MaterialTheme.typography.bodyMedium) }
-        if (tab == ProfileTab.Posts) {
+        if (circleTab) {
+            val loaded = circle
+            when {
+                loaded == null -> item { Text("Asking the node…", style = MaterialTheme.typography.bodyMedium) }
+                loaded.isFailure -> item { Text("The node did not answer: ${loaded.exceptionOrNull()?.message}", style = MaterialTheme.typography.bodyMedium) }
+                else -> {
+                    val c = loaded.getOrThrow()
+                    val people = if (tab == ProfileTab.Invitees) c.invitees else c.members
+                    if (people.isEmpty()) item { Text(emptyCircleText(tab), style = MaterialTheme.typography.bodyMedium) }
+                    items(people, key = { "circle:$it" }) { CirclePersonRow(it, c.identities[it], onProfile) }
+                }
+            }
+        } else if (items.isEmpty()) item { Text("Nothing here yet.", style = MaterialTheme.typography.bodyMedium) }
+        if (!circleTab && tab == ProfileTab.Posts) {
             items(items, key = { it.node.id }) { item ->
                 PostCard(
                     post = item.node,
@@ -144,7 +163,7 @@ fun ProfileList(
                     onWho = { onWho(item.node) },
                 )
             }
-        } else {
+        } else if (!circleTab) {
             items(items, key = { "${it.node.id}:${it.like?.hash ?: it.tip?.hash ?: ""}" }) { item ->
                 ProfileItemCard(tab, item, states, onProfile) { onOpen(item.threadId, item.node.id) }
             }
@@ -179,6 +198,7 @@ private fun ProfileHeader(
     contract: ContractProfile?,
     myAddress: String?,
     onEditProfile: (() -> Unit)?,
+    onProfile: (String) -> Unit,
     contractExtras: @Composable () -> Unit,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -187,7 +207,8 @@ private fun ProfileHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ProfilePicture(address, contract?.shownPicture, 72.dp)
             Spacer(Modifier.weight(1f))
-            mine?.let { SmallIconButton(Icons.Filled.Settings, "Social settings", muted, size = 40.dp, onClick = it.onSettings) }
+            // The account's own edits and settings are in ⚙ (B-79, user 2026-10-17).
+            mine?.let { OwnProfileMenu(onEdit = onEditProfile, onName = { onName(person) }, onSettings = it.onSettings) }
             if (!isMe && person.blocked) {
                 OutlinedButton(onClick = { onBlock(person.copy(blocked = false)) }) { Text("Unblock") }
             } else if (!isMe) {
@@ -208,7 +229,7 @@ private fun ProfileHeader(
                 }
                 val follow = { onFollow(person.copy(following = !person.following)) }
                 if (person.following) OutlinedButton(onClick = follow) { Text("Following") } else Button(onClick = follow) { Text("Follow") }
-                BlockMenu(person, onBlock)
+                BlockMenu(person, onBlock, onName = { onName(person) })
             }
         }
         // The name on the whole width, on two lines if it needs them.
@@ -221,7 +242,6 @@ private fun ProfileHeader(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            SmallIconButton(Icons.Filled.Edit, if (person.name.isEmpty()) "Name" else "Rename", muted) { onName(person) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(address, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = muted)
@@ -229,7 +249,6 @@ private fun ProfileHeader(
         }
         ContractProfileLines(contract, LocalNames.current, myAddress, isMe, localName = person.name.isNotEmpty())
         contractExtras()
-        onEditProfile?.let { OutlinedButton(onClick = it) { Text("Edit your public profile") } }
         if (!isMe && person.blocked) Text(BLOCKED_TEXT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         val palette = statusPalette()
         Text(
@@ -245,6 +264,14 @@ private fun ProfileHeader(
             ) ?: AnnotatedString("Identity: asking the node…"),
             style = MaterialTheme.typography.bodyMedium,
         )
+        identity?.getOrNull()?.inviter?.let { inviter ->
+            Text(
+                "Invited by ${displayName(inviter, LocalNames.current)}",
+                Modifier.clickable { onProfile(inviter) },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         val counts = MaterialTheme.typography.bodyMedium
         mine?.let {
             Row {
@@ -322,6 +349,7 @@ private fun ProfileItemCard(
                     )
                     PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = 4, showMedia = false)
                 }
+                ProfileTab.Invitees, ProfileTab.Members -> {}
                 ProfileTab.Posts, ProfileTab.Media -> {
                     PostHeader(call, states, onProfile)
                     PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES)

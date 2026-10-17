@@ -51,14 +51,20 @@ import kotlinx.coroutines.withContext
 /** Under a blocked account's name. */
 const val BLOCKED_TEXT = "Blocked: its posts, replies, comments and messages are hidden on this phone."
 
-/** ⋮ on another's profile, with Block; Block asks first. */
+/** ⋮ on another's profile: Name on this phone ([onName]), Mute or Unmute, Block (asked first). */
 @Composable
-fun BlockMenu(person: Person, onBlock: (Person) -> Unit) {
+fun BlockMenu(person: Person, onBlock: (Person) -> Unit, onName: (() -> Unit)? = null) {
     var open by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            onName?.let {
+                DropdownMenuItem(text = { Text("Name on this phone") }, onClick = {
+                    open = false
+                    it()
+                })
+            }
             // Mute: their posts leave the feeds, their replies fold; the profile still lists them.
             DropdownMenuItem(text = { Text(if (person.muted) "Unmute" else "Mute") }, onClick = {
                 open = false

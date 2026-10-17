@@ -82,6 +82,14 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
     /** The state, age and stake of [address]'s identity. */
     fun identity(address: String): ProfileIdentity =
         ProfileIdentity.fromJson(rpc.call("dna_identity", JSONArray().put(address)) as JSONObject)
+
+    /** The identities of [addresses] in one request (a JSON-RPC batch), by lowercase address. */
+    fun identities(addresses: List<String>): Map<String, ProfileIdentity> {
+        val list = addresses.map { it.lowercase() }.distinct()
+        if (list.isEmpty()) return emptyMap()
+        return list.zip(rpc.batch("dna_identity", list.map { JSONArray().put(it) }))
+            .associate { (address, json) -> address to ProfileIdentity.fromJson(json as? JSONObject ?: JSONObject()) }
+    }
 }
 
 /** The fee of a post as the node estimates it, and the most it may cost (the transaction's max fee). */
