@@ -142,4 +142,34 @@ class SocialHidingTest {
         assertEquals(setOf(eve), blockedAddresses(mapOf(eve to person, bob to Person(bob, "Bob"))))
         assertTrue(emptyMap<String, Person>().with(person).with(person.copy(blocked = false)).isEmpty())
     }
+
+    private fun withPicture(post: SocialPost) = post.copy(call = post.call.copy(hasMedia = true))
+
+    @Test
+    fun aMutedAuthorsPostsLeaveTheFeedsOnly() {
+        val feed = listOf(post(1, bob), post(2, eve), post(3, me))
+        val hiding = Hiding(muted = setOf(bob, me))
+        assertEquals("never one's own", listOf(2L, 3L), feedPosts(feed, hiding, me).map { it.id })
+        // Not a block: the feed as shown everywhere else (profiles, threads, search) keeps them.
+        assertEquals(listOf(1L, 2L, 3L), visibleFeed(feed, hiding, me).map { it.id })
+        assertTrue(hiding.leavesFeeds(post(4, bob, replyTo = "1"), me))
+        assertFalse(hiding.leavesFeeds(post(5, eve, replyTo = "1"), me))
+    }
+
+    @Test
+    fun postsWithPicturesLeaveTheFeedsOnlyWhenHidden() {
+        val feed = listOf(withPicture(post(1, bob)), post(2, eve), withPicture(post(3, me)))
+        assertEquals(listOf(1L, 2L, 3L), feedPosts(feed, Hiding(pictures = PicturesMode.Show), me).map { it.id })
+        assertEquals(listOf(1L, 2L, 3L), feedPosts(feed, Hiding(pictures = PicturesMode.TapToShow), me).map { it.id })
+        assertEquals("never one's own", listOf(2L, 3L), feedPosts(feed, Hiding(pictures = PicturesMode.Hide), me).map { it.id })
+        assertSame("nothing to filter: the same list", feed, feedPosts(feed, Hiding(), me))
+    }
+
+    @Test
+    fun thePicturesSettingIsReadByNameShowByDefault() {
+        assertEquals(PicturesMode.TapToShow, PicturesMode.of("TapToShow"))
+        assertEquals(PicturesMode.Hide, PicturesMode.of("Hide"))
+        assertEquals(PicturesMode.Show, PicturesMode.of(null))
+        assertEquals(PicturesMode.Show, PicturesMode.of("tap"))
+    }
 }

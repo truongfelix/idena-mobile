@@ -214,7 +214,7 @@ fun ListsBackup(model: SocialModel) {
         }
         note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
         Text(
-            "One file with the names you gave, the people and the topics you follow, the accounts and topics you blocked, " +
+            "One file with the names you gave, the people and the topics you follow, the accounts you muted, the accounts and topics you blocked, " +
                 "the hidden words and posts: to keep them or move them to another " +
                 "phone. Whoever gets the file sees them. An import adds to these lists; nothing is removed.",
             style = MaterialTheme.typography.bodySmall,

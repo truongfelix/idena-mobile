@@ -13,17 +13,29 @@ class SocialListsTest {
     @Test
     fun theFileHoldsNamesPeopleTopicsBlocksAndHiddenWords() {
         val lists = SocialLists(
-            mapOf(a to Person(a, "Anna", following = true), b to Person(b, "Bob"), c to Person(c, blocked = true)),
+            mapOf(a to Person(a, "Anna", following = true), b to Person(b, "Bob", muted = true), c to Person(c, blocked = true)),
             setOf("idena", "flips"),
             setOf("spam", "free coins"),
             setOf("0x" + "ab".repeat(32)),
             setOf("scam_topic"),
         )
         val json = socialListsToJson(lists)
-        assertEquals(3, json.getInt("version"))
+        assertEquals(4, json.getInt("version"))
         assertEquals("sorted", "[\"free coins\",\"spam\"]", json.getJSONArray("hiddenWords").toString())
         assertEquals("sorted", "[\"flips\",\"idena\"]", json.getJSONArray("topics").toString())
         assertEquals(lists, socialListsFromJson(JSONObject(json.toString())))
+    }
+
+    @Test
+    fun aVersion3FileImportsWithNobodyMutedAndAnImportAddsMutes() {
+        val v3 = JSONObject("""{"version":3,"people":[{"address":"$a","name":"Anna","following":false,"message":false,"blocked":false}]}""")
+        assertEquals(Person(a, "Anna"), socialListsFromJson(v3)!!.people[a])
+        // A mute set on either side stays, and a person only muted is kept in the list.
+        val current = SocialLists(mapOf(a to Person(a, "Anna")), emptySet())
+        val file = SocialLists(mapOf(a to Person(a, muted = true), b to Person(b, muted = true)), emptySet())
+        val merged = mergeLists(current, file).lists.people
+        assertEquals(Person(a, "Anna", muted = true), merged[a])
+        assertEquals(Person(b, muted = true), merged[b])
     }
 
     @Test

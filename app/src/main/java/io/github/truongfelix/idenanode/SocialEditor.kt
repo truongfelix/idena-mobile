@@ -84,7 +84,7 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${displayName(it.author, model.names)}  ·  ${ago(it.time)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    PostContent(it, MaterialTheme.typography.bodyLarge, selectable = true)
+                    PostContent(it, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
                 }
             }
         }

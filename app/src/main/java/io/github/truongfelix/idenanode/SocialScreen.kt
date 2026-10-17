@@ -191,7 +191,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                     BackRow(model::back)
                     TopicView(
                         name = page.name,
-                        feed = feed,
+                        feed = feedPosts(feed, model.hiding, myAddress),
                         following = page.name in model.followedTopics,
                         blocked = page.name in model.hidden.topics,
                         listState = model.pageState(page).list,
@@ -234,6 +234,12 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
                     BlockedTopicsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
+            page is SocialPage.Muted -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    MutedView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
                 }
             }
             page is SocialPage.Blocked -> key(page) {
@@ -290,8 +296,10 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 val epochStart = model.node?.epochStart
                 val topics = model.followedTopics
                 val filter = model.feedFilter
-                val sorted = remember(feed, filter, people, topics, epochStart) {
-                    filter.apply(feed, people, topics, System.currentTimeMillis() / 1000, epochStart)
+                val hiding = model.hiding
+                val sorted = remember(feed, filter, people, topics, epochStart, hiding) {
+                    // Muted accounts and, at Hide, posts with pictures leave the feeds only.
+                    filter.apply(feedPosts(feed, hiding, myAddress), people, topics, System.currentTimeMillis() / 1000, epochStart)
                 }
                 val query = model.searchQuery.trim()
                 // "r/…" lists the topics instead of searching the posts.

@@ -13,6 +13,25 @@ import java.text.Normalizer
 /** The addresses blocked in the People list. */
 fun blockedAddresses(people: Map<String, Person>): Set<String> = people.values.filter { it.blocked }.map { it.address }.toSet()
 
+/** The addresses muted in the People list. */
+fun mutedAddresses(people: Map<String, Person>): Set<String> = people.values.filter { it.muted }.map { it.address }.toSet()
+
+/**
+ * The Social setting "Pictures in posts" (user 2026-10-17): [Show] them (as before); [TapToShow]: the post stays, its
+ * picture one line until tapped in its thread (nothing downloaded before); [Hide] posts with pictures: they leave the
+ * feeds, a reply or comment with one folds in its thread. The identity's own posts are never filtered.
+ */
+enum class PicturesMode(val title: String) {
+    Show("Show"),
+    TapToShow("Tap to show"),
+    Hide("Hide posts with pictures"),
+    ;
+
+    companion object {
+        fun of(name: String?): PicturesMode = entries.firstOrNull { it.name == name } ?: Show
+    }
+}
+
 /** [text] as a hidden word or phrase: one line, spaces collapsed, trimmed, at most [MAX_HIDDEN_WORD] characters; null if empty. */
 fun cleanHiddenWord(text: String): String? =
     text.map { if (it.isISOControl()) ' ' else it }.joinToString("").trim().replace(Regex("\\s+"), " ")
@@ -50,14 +69,25 @@ class WordFilter(words: Collection<String>) {
 
 /**
  * What is hidden: the accounts blocked ([blocked], lowercase), the hidden words ([words]), the posts, replies and
- * comments hidden one by one (by transaction hash, [posts]) and the topics blocked ([topics]).
+ * comments hidden one by one (by transaction hash, [posts]) and the topics blocked ([topics]); what leaves the feeds
+ * only: the accounts muted ([muted]) and, with [pictures] at Hide, the posts with pictures.
  */
 data class Hiding(
     val blocked: Set<String> = emptySet(),
     val words: WordFilter = WordFilter.None,
     val posts: Set<String> = emptySet(),
     val topics: Set<String> = emptySet(),
+    val muted: Set<String> = emptySet(),
+    val pictures: PicturesMode = PicturesMode.Show,
 ) {
+    /**
+     * Whether [post] leaves the feeds (Home, Following, a topic's page), but stays on its author's profile and in
+     * threads: a muted author's, or one with a picture while pictures are hidden; never [me]'s. In a thread, such a
+     * reply or comment starts folded.
+     */
+    fun leavesFeeds(post: SocialPost, me: String?): Boolean =
+        post.call.author != me && (post.call.author in muted || (pictures == PicturesMode.Hide && post.call.hasMedia))
+
     val isEmpty: Boolean
         get() = blocked.isEmpty() && words.isEmpty && posts.isEmpty() && topics.isEmpty()
 
@@ -100,6 +130,10 @@ private fun withoutBlocked(post: SocialPost, blocked: Set<String>, me: String?):
         replies = kept.map { withoutBlocked(it, blocked, me) },
     )
 }
+
+/** The posts of a feed ([posts]) without those that leave the feeds ([Hiding.leavesFeeds]). */
+fun feedPosts(posts: List<SocialPost>, hiding: Hiding, me: String?): List<SocialPost> =
+    if (hiding.muted.isEmpty() && hiding.pictures != PicturesMode.Hide) posts else posts.filterNot { hiding.leavesFeeds(it, me) }
 
 /** [items] without those made by a blocked account, nor answers hidden ([Hiding.hidesText]). */
 fun visibleActivity(items: List<ActivityItem>, hiding: Hiding, me: String?): List<ActivityItem> =

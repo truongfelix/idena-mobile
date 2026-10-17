@@ -43,8 +43,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /*
- * Blocking an account (⋮ on its profile, ⋯ on its posts), hiding a post, blocking a topic (⋯, or its page), and the
- * hidden words: the lists of Social settings, each entry undone there. What they hide: [visibleFeed].
+ * Blocking or muting an account (⋮ on its profile, ⋯ on its posts), hiding a post, blocking a topic (⋯, or its page),
+ * and the hidden words: the lists of Social settings, each entry undone there. What they hide: [visibleFeed],
+ * [Hiding.leavesFeeds].
  */
 
 /** Under a blocked account's name. */
@@ -58,6 +59,11 @@ fun BlockMenu(person: Person, onBlock: (Person) -> Unit) {
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // Mute: their posts leave the feeds, their replies fold; the profile still lists them.
+            DropdownMenuItem(text = { Text(if (person.muted) "Unmute" else "Mute") }, onClick = {
+                open = false
+                onBlock(person.copy(muted = !person.muted))
+            })
             DropdownMenuItem(text = { Text("Block") }, onClick = {
                 open = false
                 asking = true
@@ -136,7 +142,10 @@ class PostMenu(
 /** The post menu of the Social tab; none: no ⋯ (as in the editor). */
 val LocalPostMenu = staticCompositionLocalOf<PostMenu?> { null }
 
-/** ⋯ at the top right of [call] (a post, reply or comment, not one's own): Hide (or Show again), Block its author (asked first), Block its topic. */
+/**
+ * ⋯ at the top right of [call] (a post, reply or comment, not one's own): Hide (or Show again), Mute (or Unmute) its
+ * author, Block its author (asked first), Block its topic.
+ */
 @Composable
 fun PostMenuButton(call: PostCall) {
     val menu = LocalPostMenu.current ?: return
@@ -153,6 +162,11 @@ fun PostMenuButton(call: PostCall) {
             DropdownMenuItem(text = { Text(if (hidden) "Show again" else "Hide") }, onClick = {
                 open = false
                 menu.onHide(call.hash, !hidden)
+            })
+            val author = menu.person(call.author)
+            DropdownMenuItem(text = { Text("${if (author.muted) "Unmute" else "Mute"} $name", maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
+                open = false
+                menu.onBlock(author.copy(muted = !author.muted))
             })
             DropdownMenuItem(text = { Text("Block $name", maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
                 open = false

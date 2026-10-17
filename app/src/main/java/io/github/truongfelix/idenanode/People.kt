@@ -5,9 +5,10 @@ import org.json.JSONObject
 
 /*
  * The People list, kept on the phone only (files/social/people.json): a private name for an address,
- * shown instead of the address in the Social tab, and three marks: Following (their posts in the feed's
- * Following filter), Message (their conversations out of Requests) and Blocked (hidden everywhere on this phone,
- * [visibleFeed]). Nothing is published.
+ * shown instead of the address in the Social tab, and four marks: Following (their posts in the feed's
+ * Following filter), Message (their conversations out of Requests), Blocked (hidden everywhere on this phone,
+ * [visibleFeed]) and Muted (their posts out of the feeds, their replies folded: [Hiding.leavesFeeds]). Nothing is
+ * published.
  */
 
 /** Someone of the People list: [address] lowercase, [name] empty when not named. */
@@ -17,13 +18,15 @@ data class Person(
     val following: Boolean = false,
     val message: Boolean = false,
     val blocked: Boolean = false,
+    val muted: Boolean = false,
 ) {
     /** Whether there is anything to keep: a person with no name and no mark leaves the list. */
     val isEmpty: Boolean
-        get() = name.isEmpty() && !following && !message && !blocked
+        get() = name.isEmpty() && !following && !message && !blocked && !muted
 
     fun toJson(): JSONObject =
         JSONObject().put("address", address).put("name", name).put("following", following).put("message", message).put("blocked", blocked)
+            .put("muted", muted)
 
     companion object {
         /** A name is one line, trimmed, at most this long. */
@@ -33,6 +36,7 @@ data class Person(
             val address = json.optString("address").lowercase().takeIf(::isAddress) ?: return null
             return Person(
                 address, cleanName(json.optString("name")), json.optBoolean("following"), json.optBoolean("message"), json.optBoolean("blocked"),
+                json.optBoolean("muted"),
             )
         }
     }
@@ -164,6 +168,7 @@ fun mergePeople(current: Map<String, Person>, imported: Map<String, Person>): Pe
             following = old.following || person.following,
             message = old.message || person.message,
             blocked = old.blocked || person.blocked,
+            muted = old.muted || person.muted,
         )
         if (old == null) added++ else if (merged != old) changed++
         people = people.with(merged)

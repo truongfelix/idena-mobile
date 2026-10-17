@@ -256,6 +256,15 @@ object SocialStore {
         seenFile(context).writeText(height.toString())
     }
 
+    private fun picturesFile(context: Context) = File(dir(context), "pictures_in_posts")
+
+    /** The Social setting "Pictures in posts": Show until changed. */
+    fun picturesMode(context: Context): PicturesMode = PicturesMode.of(runCatching { picturesFile(context).readText().trim() }.getOrNull())
+
+    fun setPicturesMode(context: Context, mode: PicturesMode) {
+        picturesFile(context).writeText(mode.name)
+    }
+
     private fun topicsFile(context: Context) = File(dir(context), "topics_followed")
 
     /** The topics followed, kept on the phone only: one name per line. */
