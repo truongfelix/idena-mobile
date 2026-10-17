@@ -200,4 +200,6 @@
     <string name="flip_deleting_waiting">Deleting: waiting for a block</string>
     <string name="flip_made_elsewhere">Made in another app</string>
     <string name="flip_published_at">Published · %1$s</string>
+    <!-- The flip keyword list of this language, in the assets (the same indexes as keywords.json). -->
+    <string name="keywords_file">keywords.json</string>
 </resources>

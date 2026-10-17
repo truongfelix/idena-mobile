@@ -18,14 +18,15 @@ class Practice(val short: List<PracticeFlip>, val long: List<PracticeFlip>) {
     companion object {
         fun load(context: Context, random: Random = Random.Default): Practice {
             val json = JSONObject(context.assets.open("practice-flips.json").bufferedReader().use { it.readText() })
+            val translate = keywordTranslator(context)
             fun flips(name: String): List<PracticeFlip> {
                 val array = json.getJSONArray(name)
-                return (0 until array.length()).map { flip(array.getJSONObject(it), random) }.shuffled(random)
+                return (0 until array.length()).map { flip(array.getJSONObject(it), random, translate) }.shuffled(random)
             }
             return Practice(flips("short"), flips("long"))
         }
 
-        private fun flip(json: JSONObject, random: Random): PracticeFlip {
+        private fun flip(json: JSONObject, random: Random, translate: (Keyword) -> Keyword): PracticeFlip {
             val images = json.getJSONArray("images")
             val orders = json.getJSONArray("orders")
             val keywords = json.getJSONArray("keywords")
@@ -40,7 +41,7 @@ class Practice(val short: List<PracticeFlip>, val long: List<PracticeFlip>) {
                 rightOrder = if (swap) first else second,
                 keywords = (0 until keywords.length()).map {
                     val keyword = keywords.getJSONObject(it)
-                    Keyword(keyword.getString("name"), keyword.optString("desc"))
+                    translate(Keyword(keyword.getString("name"), keyword.optString("desc")))
                 },
             )
             val answer = if (firstIsRight != swap) Choice.Left else Choice.Right
