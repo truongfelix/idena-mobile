@@ -123,18 +123,18 @@ fun parseValidationTime(value: String): Instant? = runCatching { OffsetDateTime.
 fun timeUntil(now: Instant, then: Instant): String {
     val left = Duration.between(now, then)
     return when {
-        left.isNegative || left.isZero -> "now"
-        left.toDays() >= 2 -> "in ${left.toDays()} days"
-        left.toHours() >= 1 -> "in ${left.toHours()} h"
-        else -> "in ${maxOf(1, left.toMinutes())} min"
+        left.isNegative || left.isZero -> t(R.string.time_now)
+        left.toDays() >= 2 -> t(R.string.validation_in_days, left.toDays())
+        left.toHours() >= 1 -> t(R.string.validation_in_hours, left.toHours())
+        else -> t(R.string.time_in_minutes, maxOf(1, left.toMinutes()))
     }
 }
 
 /** The ceremony period the node reports, as the screen says it; null outside the ceremony. */
 fun periodText(period: String): String? = when (period) {
-    "FlipLottery" -> "Flip lottery: the validation starts soon"
-    "ShortSession" -> "Short session"
-    "LongSession" -> "Long session"
-    "AfterLongSession" -> "Long session over: results soon"
+    "FlipLottery" -> t(R.string.validation_period_lottery)
+    "ShortSession" -> t(R.string.validation_short_session)
+    "LongSession" -> t(R.string.validation_long_session)
+    "AfterLongSession" -> t(R.string.validation_period_after_long)
     else -> null
 }

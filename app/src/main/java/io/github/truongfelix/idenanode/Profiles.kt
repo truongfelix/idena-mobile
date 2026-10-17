@@ -160,4 +160,4 @@ fun countTrust(givers: List<TrustGiver>, states: Map<String, String>, vouchers: 
 }
 
 /** "Trusted by 15": the identities and the vouched members together (the list gives the split); null when nobody counts. */
-fun trustText(count: TrustCount): String? = if (count.total == 0) null else "Trusted by ${count.total}"
+fun trustText(count: TrustCount): String? = if (count.total == 0) null else t(R.string.profile_trusted_by_n, count.total)

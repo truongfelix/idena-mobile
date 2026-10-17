@@ -52,21 +52,21 @@ fun ActivityList(model: SocialModel, modifier: Modifier, onOpen: (ActivityItem) 
                     FilterChip(selected = kind in model.notify, onClick = { model.setNotifyOn(kind, kind !in model.notify) }, label = { Text(kind.title) })
                 }
                 IconButton(onClick = { about = true }) {
-                    Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Filled.Notifications, contentDescription = t(R.string.socialb_notifications), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (about) {
                 AlertDialog(
                     onDismissRequest = { about = false },
-                    title = { Text("Notifications") },
-                    text = { Text("A notice comes for each new like, comment or tip on your posts of the kinds selected. All of them are listed here.") },
-                    confirmButton = { TextButton(onClick = { about = false }) { Text("Close") } },
+                    title = { Text(t(R.string.socialb_notifications)) },
+                    text = { Text(t(R.string.socialb_notifications_note)) },
+                    confirmButton = { TextButton(onClick = { about = false }) { Text(t(R.string.common_close)) } },
                 )
             }
         }
         // The vouch offers made to the account wait here for its answer (B-81).
         items(model.offersToMe, key = { "offer:${it.address}" }) { offer -> OfferCard(offer.address, onProfile = model::openProfile) }
-        if (items.isEmpty()) item { Text("No likes, answers or tips on your posts yet.", style = MaterialTheme.typography.bodyMedium) }
+        if (items.isEmpty()) item { Text(t(R.string.socialb_no_activity), style = MaterialTheme.typography.bodyMedium) }
         items(items, key = { "${it.kind}:${it.height}:${it.index}:${it.what.hash}" }) { item ->
             ActivityCard(item, isNew = newAfter != null && item.height > newAfter, onProfile = model::openProfile) { onOpen(item) }
         }
@@ -76,23 +76,25 @@ fun ActivityList(model: SocialModel, modifier: Modifier, onOpen: (ActivityItem) 
 /** One entry of the Activity list, marked when [isNew]; a tap opens its thread, a tap on the address its profile. */
 @Composable
 private fun ActivityCard(item: ActivityItem, isNew: Boolean, onProfile: (String) -> Unit, onOpen: () -> Unit) {
-    val action = when (item.kind) {
-        ActivityKind.Like -> "liked"
-        ActivityKind.Reply -> "replied to"
-        ActivityKind.Comment -> "commented on"
-        ActivityKind.Tip -> "tipped you ${item.amount?.let(::tipText)} iDNA for"
+    // The line with a mark where the actor's address goes (a link), so that each language orders it as it needs.
+    val line = when (item.kind) {
+        ActivityKind.Like -> t(R.string.socialb_activity_liked, ADDRESS_MARK, ago(item.time))
+        ActivityKind.Reply -> t(R.string.socialb_activity_replied, ADDRESS_MARK, ago(item.time))
+        ActivityKind.Comment -> t(R.string.socialb_activity_commented, ADDRESS_MARK, ago(item.time))
+        ActivityKind.Tip -> t(R.string.socialb_activity_tipped, ADDRESS_MARK, ago(item.time), "${item.amount?.let(::tipText)}")
     }
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             val styles = addressLinkStyles()
-            if (isNew) Text("● New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            if (isNew) Text(t(R.string.socialb_new), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PersonAvatar(item.actor, 32.dp, Modifier.clickable { onProfile(item.actor) })
                 Spacer(Modifier.width(10.dp))
                 Text(
                     buildAnnotatedString {
+                        append(line.substringBefore(ADDRESS_MARK))
                         appendAddress(item.actor, styles, onProfile)
-                        append(" $action your post  ·  ${ago(item.time)}")
+                        append(line.substringAfter(ADDRESS_MARK, ""))
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -106,6 +108,9 @@ private fun ActivityCard(item: ActivityItem, isNew: Boolean, onProfile: (String)
     }
 }
 
+/** Where an address (a link) goes in a translated line: the text is split around it. */
+const val ADDRESS_MARK = "\u0000"
+
 /** A vouch offer to the account: who offers, what it means, Accept and Decline (each with its fee shown first). */
 @Composable
 private fun OfferCard(voucher: String, onProfile: (String) -> Unit) {
@@ -115,10 +120,10 @@ private fun OfferCard(voucher: String, onProfile: (String) -> Unit) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.clickable { onProfile(voucher) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PersonAvatar(voucher, 32.dp)
-                Text("$name offers to vouch for you.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(t(R.string.socialb_offer_vouch, name), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             }
             Text(
-                "Once you accept, you may hold a name, write a profile and give Trust while they are validated.",
+                t(R.string.socialb_offer_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

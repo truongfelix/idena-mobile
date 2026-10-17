@@ -49,7 +49,7 @@ object SocialBadge {
 
     fun createChannel(context: Context) {
         val channel = NotificationChannel(CHANNEL_ID, "Social", NotificationManager.IMPORTANCE_DEFAULT)
-        channel.description = "New likes, replies and tips on your posts, also counted on the app's icon"
+        channel.description = t(R.string.social_channel_description)
         channel.setShowBadge(true)
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }

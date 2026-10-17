@@ -130,7 +130,7 @@ fun SmallIconButton(icon: ImageVector, description: String, tint: Color, size: D
 fun CopyAddressButton(address: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     val clipboard = LocalClipboardManager.current
     var copied by remember(address) { mutableStateOf(false) }
-    SmallIconButton(if (copied) Icons.Filled.Check else CopyIcon, if (copied) "Copied" else "Copy the address", tint) {
+    SmallIconButton(if (copied) Icons.Filled.Check else CopyIcon, t(if (copied) R.string.wallet_copied else R.string.wallet_copy_address), tint) {
         clipboard.setText(AnnotatedString(address))
         copied = true
     }
@@ -147,7 +147,7 @@ fun AddressLine(address: String, modifier: Modifier = Modifier, color: Color = M
             clipboard.setText(AnnotatedString(address))
             copied = true
         }) {
-            Icon(if (copied) Icons.Filled.Check else CopyIcon, contentDescription = if (copied) "Copied" else "Copy the address", tint = color)
+            Icon(if (copied) Icons.Filled.Check else CopyIcon, contentDescription = t(if (copied) R.string.wallet_copied else R.string.wallet_copy_address), tint = color)
         }
     }
 }

@@ -39,11 +39,11 @@ fun syncStep(chain: Long, headers: Long, highest: Long, chainMoving: Boolean): S
 
 /** The status bar's words for [step], with the time left at [speed] blocks per second of that step. */
 fun syncLabel(step: SyncStep, speed: Double?): String {
-    val left = speed?.takeIf { it > 0 && step.phase != SyncPhase.Snapshot }?.let { " · ${duration(step.remaining / it)}" }.orEmpty()
+    val left = speed?.takeIf { it > 0 && step.phase != SyncPhase.Snapshot }?.let { duration(step.remaining / it) }
     return when (step.phase) {
-        SyncPhase.Headers -> "Downloading headers ${step.percent}%$left"
-        SyncPhase.Snapshot -> "Waiting for the snapshot"
-        SyncPhase.Blocks -> "Syncing ${step.percent}%$left"
+        SyncPhase.Headers -> if (left == null) t(R.string.node_sync_headers, step.percent) else t(R.string.node_sync_headers_left, step.percent, left)
+        SyncPhase.Snapshot -> t(R.string.node_sync_snapshot)
+        SyncPhase.Blocks -> if (left == null) t(R.string.node_sync_blocks, step.percent) else t(R.string.node_sync_blocks_left, step.percent, left)
     }
 }
 

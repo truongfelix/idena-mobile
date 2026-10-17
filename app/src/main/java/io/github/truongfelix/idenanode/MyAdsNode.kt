@@ -81,10 +81,10 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
         val known = drafts.mapTo(HashSet()) { it.cid }
         val elsewhere = entries.filter { it.cid !in known }.distinctBy { it.cid }.map { entry ->
             val content = read(entry.cid)?.let(::decodeAd)
-            MyAd(null, entry.cid, entry.contract, content?.title ?: "Ad ${entry.cid.take(12)}…", content?.desc.orEmpty(), content?.thumb, entry,
+            MyAd(null, entry.cid, entry.contract, content?.title ?: t(R.string.ads_fallback_title, entry.cid.take(12)), content?.desc.orEmpty(), content?.thumb, entry,
                 adStage(entry.contract, null, null, true, burntFor(burns, me, entry.cid), now))
         }
-        return MyAds(mine + elsewhere, posting.balance(me), profile.exceptionOrNull()?.let { it.message ?: "unknown error" })
+        return MyAds(mine + elsewhere, posting.balance(me), profile.exceptionOrNull()?.let { it.message ?: t(R.string.ads_unknown_error) })
     }
 
     /** The review of [contract] for the ad [cid] (the banner's check), or null when it cannot be read. */
@@ -99,8 +99,8 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
     fun profileEntries(address: String): List<ProfileEntry> {
         val hash = (rpc.call("dna_identity", JSONArray().put(address)) as JSONObject).optString("profileHash")
         if (hash.isEmpty()) return emptyList()
-        val bytes = read(hash) ?: throw IOException("the profile cannot be read from IPFS now")
-        return runCatching { decodeProfile(bytes) }.getOrElse { throw IOException("the profile is not a list of ads") }
+        val bytes = read(hash) ?: throw IOException(t(R.string.ads_profile_not_readable_ipfs))
+        return runCatching { decodeProfile(bytes) }.getOrElse { throw IOException(t(R.string.ads_profile_not_list)) }
     }
 
     /** Every ad burn of the last day (bcn_burntCoins), whoever burnt it. */
@@ -124,9 +124,9 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
      * desktop's settings, shorter ones only on a test network.
      */
     fun planReview(me: String, draft: AdDraft, thumb: ByteArray, media: ByteArray, reviewFee: BigDecimal, params: AdVotingParams = AD_REVIEW_PARAMS): ReviewPlan {
-        if (!rpc.synced()) throw IOException("the node is still syncing; send it once it is synced")
+        if (!rpc.synced()) throw IOException(t(R.string.ads_still_syncing_send))
         val bytes = encodeAd(draft.title.trim(), draft.desc.trim(), draft.url.trim(), thumb, media, params)
-        if (bytes.size > MAX_IPFS_FILE) throw IOException("the pictures are too large")
+        if (bytes.size > MAX_IPFS_FILE) throw IOException(t(R.string.ads_pictures_too_large))
         val cid = posting.cid(bytes)
         val storeFee = posting.estimateStore(me, cid, bytes.size)
         val form = adReviewForm(draft.title, cid, reviewFee, params)
@@ -136,7 +136,7 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
     /** Adds the ad of [plan] to IPFS and sends its storage; returns the storage transaction. */
     fun storeAd(plan: ReviewPlan): String {
         val added = posting.add(plan.adBytes)
-        if (added != plan.cid) throw IOException("IPFS gave the ad another cid")
+        if (added != plan.cid) throw IOException(t(R.string.ads_ipfs_other_cid_ad))
         return posting.store(added)
     }
 
@@ -145,7 +145,7 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
      * (or its new audience) unless it lists it so already.
      */
     fun planShow(me: String, cid: String, contract: String, target: AdTarget, amount: BigDecimal): ShowPlan {
-        if (!rpc.synced()) throw IOException("the node is still syncing; try once it is synced")
+        if (!rpc.synced()) throw IOException(t(R.string.ads_still_syncing))
         val entry = ProfileEntry(cid, targetHex(target), contract, me)
         val entries = profileEntries(me)
         if (entries.contains(entry)) return planBurn(me, entry, amount)
@@ -168,7 +168,7 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
     fun sendShow(me: String, plan: ShowPlan): String {
         plan.profile?.let { profile ->
             val added = posting.add(profile)
-            if (added != plan.profileCid) throw IOException("IPFS gave the profile another cid")
+            if (added != plan.profileCid) throw IOException(t(R.string.ads_ipfs_other_cid_profile))
             posting.store(added)
             send(JSONObject().put("type", CHANGE_PROFILE_TX).put("from", me).put("payload", bytesToHex(changeProfilePayload(added))))
         }
@@ -181,10 +181,10 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
      * the empty file's cid at once): only the change, to that cid. Throws when the profile does not list it.
      */
     fun planRemoval(me: String, entry: ProfileEntry): RemovalPlan {
-        if (!rpc.synced()) throw IOException("the node is still syncing; try once it is synced")
+        if (!rpc.synced()) throw IOException(t(R.string.ads_still_syncing))
         val entries = profileEntries(me)
         val remaining = withoutProfileEntry(entries, entry)
-        if (remaining.size == entries.size) throw IOException("your profile does not list this campaign")
+        if (remaining.size == entries.size) throw IOException(t(R.string.ads_profile_no_campaign))
         val profile = encodeProfile(remaining)
         val profileCid = posting.cid(profile)
         val storeFee = if (profile.isEmpty()) BigDecimal.ZERO else posting.estimateStore(me, profileCid, profile.size)
@@ -197,7 +197,7 @@ class MyAdsNode(private val rpc: NodeRpc, private val ipfs: (String) -> ByteArra
     fun sendRemoval(me: String, plan: RemovalPlan): String {
         if (plan.profile.isNotEmpty()) {
             val added = posting.add(plan.profile)
-            if (added != plan.profileCid) throw IOException("IPFS gave the profile another cid")
+            if (added != plan.profileCid) throw IOException(t(R.string.ads_ipfs_other_cid_profile))
             posting.store(added)
         }
         return send(JSONObject().put("type", CHANGE_PROFILE_TX).put("from", me).put("payload", bytesToHex(changeProfilePayload(plan.profileCid))))

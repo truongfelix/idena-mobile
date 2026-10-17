@@ -53,22 +53,22 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
     val ready = status?.takeUnless { it.accountPending }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Profile", style = MaterialTheme.typography.titleMedium)
+            Text(t(R.string.profile_title), style = MaterialTheme.typography.titleMedium)
             val address = status?.address ?: state.keyAddress
             if (address == null) {
-                Text("No key yet: import one below.")
+                Text(t(R.string.profile_no_key))
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(address, 56.dp)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         when {
-                            status == null -> Text("Switch sync on to read the identity from the node.", style = MaterialTheme.typography.bodyMedium)
-                            ready == null -> Text("Identity and age: after sync", style = MaterialTheme.typography.bodyMedium)
+                            status == null -> Text(t(R.string.profile_switch_sync_on), style = MaterialTheme.typography.bodyMedium)
+                            ready == null -> Text(t(R.string.profile_identity_after_sync), style = MaterialTheme.typography.bodyMedium)
                             else -> {
                                 val color = statusPalette()(ready.identityState)
-                                Field("Identity", identityStatus(ready.identityState), color)
-                                Field("Age", if (ready.age == 1) "1 epoch" else "${ready.age} epochs", color)
+                                Field(t(R.string.profile_identity), identityStatus(ready.identityState), color)
+                                Field(t(R.string.profile_age), tp(R.plurals.profile_n_epochs, ready.age, ready.age), color)
                             }
                         }
                     }
@@ -76,7 +76,7 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                 AddressLine(address)
                 if (ready != null && ready.syncing) {
                     Text(
-                        "Values are those of the synced block; they are current once the sync is done.",
+                        t(R.string.profile_values_synced_block),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -100,11 +100,11 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
             SectionDivider()
             // During the validation, only its own button: no practice next to it.
             val validating = ready != null && periodText(ready.period) != null
-            if (ready != null && !validating) ProfileLink("My flips") { context.startActivity(Intent(context, FlipActivity::class.java)) }
-            if (!validating) ProfileLink("Practice validation") { context.startActivity(Intent(context, CeremonyActivity::class.java)) }
-            if (ready != null) ProfileLink("History") { context.startActivity(Intent(context, HistoryActivity::class.java)) }
+            if (ready != null && !validating) ProfileLink(t(R.string.profile_my_flips)) { context.startActivity(Intent(context, FlipActivity::class.java)) }
+            if (!validating) ProfileLink(t(R.string.profile_practice_validation)) { context.startActivity(Intent(context, CeremonyActivity::class.java)) }
+            if (ready != null) ProfileLink(t(R.string.profile_history)) { context.startActivity(Intent(context, HistoryActivity::class.java)) }
             if (ready != null && !validating) OracleVotingsLink(ready)
-            if (ready != null && !validating) ProfileLink("My ads") { context.startActivity(Intent(context, MyAdsActivity::class.java)) }
+            if (ready != null && !validating) ProfileLink(t(R.string.profile_my_ads)) { context.startActivity(Intent(context, MyAdsActivity::class.java)) }
         }
     }
 }
@@ -126,28 +126,27 @@ fun ValidationSection(status: NodeStatus) {
         "${format.format(it)} · $left"
     } ?: status.nextValidation
     val running = periodText(status.period)
-    Text(if (running != null) "Validation · now" else "Next validation", style = MaterialTheme.typography.titleSmall)
-    Field("Date", date)
-    running?.let { Field("Now", it) }
+    Text(if (running != null) t(R.string.profile_validation_now) else t(R.string.profile_next_validation), style = MaterialTheme.typography.titleSmall)
+    Field(t(R.string.profile_date), date)
+    running?.let { Field(t(R.string.profile_now), it) }
     if (status.period in listOf("FlipLottery", "ShortSession", "LongSession")) {
         Button(
             onClick = { context.startActivity(Intent(context, ValidationActivity::class.java)) },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Open the validation") }
+        ) { Text(t(R.string.profile_open_validation)) }
     }
     val answersSent = NodeSettings.answersSentFile(context, status.epoch, short = false).exists()
     Field(
-        "My task",
+        t(R.string.profile_my_task),
         currentTask(status.period, status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips, answersSent),
     )
     if (status.requiredFlips > 0 || status.availableFlips > 0) {
         val quota = FlipQuota(status.identityState, status.requiredFlips, status.availableFlips, status.madeFlips)
-        val extra = if (quota.available > quota.required) " (up to ${quota.available})" else ""
-        Field("Flips", "${quota.made} of ${quota.required} made$extra" + if (quota.missing == 0) " ✓" else "")
+        val extra = if (quota.available > quota.required) t(R.string.profile_flips_up_to, quota.available) else ""
+        Field(t(R.string.profile_flips), t(R.string.profile_flips_made, quota.made, quota.required, extra) + if (quota.missing == 0) " ✓" else "")
         if (quota.missing > 0) {
             Text(
-                "Make ${quota.missing} more flip${if (quota.missing > 1) "s" else ""} before the flip lottery, 5 minutes " +
-                    "before the validation; without them the identity becomes ${quota.missingOutcome}.",
+                tp(R.plurals.profile_flips_missing, quota.missing, quota.missing, quota.missingOutcomeLabel),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -155,7 +154,7 @@ fun ValidationSection(status: NodeStatus) {
                 Button(
                     onClick = { context.startActivity(Intent(context, FlipActivity::class.java)) },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Make a flip") }
+                ) { Text(t(R.string.profile_make_flip)) }
             }
         }
     }
@@ -186,7 +185,7 @@ private fun OracleVotingsLink(status: NodeStatus) {
             }
         }
     }
-    ProfileLink("Oracle votings", toVote) { context.startActivity(Intent(context, OracleVotingsActivity::class.java)) }
+    ProfileLink(t(R.string.profile_oracle_votings), toVote) { context.startActivity(Intent(context, OracleVotingsActivity::class.java)) }
 }
 
 /** A screen behind the profile: its title, what waits there ([detail]), and a chevron. */

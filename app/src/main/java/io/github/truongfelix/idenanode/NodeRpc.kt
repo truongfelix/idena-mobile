@@ -401,10 +401,10 @@ data class NodeStatus(
      */
     val miningStatus: String
         get() = when {
-            delegatee != null -> "Delegated to pool $delegatee"
-            online -> "Mining (online)"
-            syncing -> "Not mining (offline)"
-            else -> "Not mining"
+            delegatee != null -> t(R.string.node_mining_delegated, delegatee)
+            online -> t(R.string.node_mining_online)
+            syncing -> t(R.string.node_mining_offline)
+            else -> t(R.string.node_not_mining)
         }
 }
 

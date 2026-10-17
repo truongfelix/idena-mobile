@@ -16,7 +16,7 @@ private val PICTURE_QUALITIES = listOf(80, 70, 60, 50, 40)
  * out the photo's metadata. Throws with a reason the editor shows.
  */
 fun encodePicture(context: Context, uri: Uri): ByteArray {
-    val source = decodeUpright(readImage(context, uri), PICTURE_SIDE) ?: throw IOException("Android cannot read this image")
+    val source = decodeUpright(readImage(context, uri), PICTURE_SIDE) ?: throw IOException(t(R.string.profile_picture_unreadable))
     val (x, y, side) = squareCrop(source.width, source.height)
     val out = minOf(PICTURE_SIDE, side)
     val square = Bitmap.createScaledBitmap(Bitmap.createBitmap(source, x, y, side, side), out, out, true)
@@ -24,7 +24,7 @@ fun encodePicture(context: Context, uri: Uri): ByteArray {
         val bytes = webp(square, quality)
         if (bytes.size <= MAX_PICTURE_BYTES) return bytes
     }
-    throw IOException("the picture stays above ${MAX_PICTURE_BYTES / 1000} KB")
+    throw IOException(t(R.string.profile_picture_too_large, MAX_PICTURE_BYTES / 1000))
 }
 
 @Suppress("DEPRECATION")

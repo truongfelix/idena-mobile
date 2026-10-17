@@ -84,39 +84,42 @@ fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Field("Sync", if (state.syncEnabled) "on" else "off")
-                Field("Network", state.network)
+                Field(t(R.string.node_field_sync), if (state.syncEnabled) t(R.string.node_on) else t(R.string.node_off))
+                Field(t(R.string.node_field_network), state.network)
                 if (node != null) {
-                    Field("Peers", node.peers.toString())
+                    Field(t(R.string.node_field_peers), node.peers.toString())
                     val step = node.syncStep(model.chainMoving)
                     val chain = node.chainBlock ?: node.currentBlock
                     val syncing = node.syncing && node.highestBlock > 0
-                    Field("Block", if (syncing) "${format.format(chain)} / ${format.format(step.total)}" else format.format(chain))
+                    Field(t(R.string.node_field_block), if (syncing) "${format.format(chain)} / ${format.format(step.total)}" else format.format(chain))
                     // A fast sync's headers above the chain.
-                    if (syncing && node.currentBlock > chain) Field("Headers", "${format.format(node.currentBlock)} / ${format.format(step.total)}")
-                    node.headTime?.let { Field("Last block", timeAgo(it, System.currentTimeMillis() / 1000).let { ago -> if (ago == "now") ago else "$ago ago" }) }
+                    if (syncing && node.currentBlock > chain) Field(t(R.string.node_field_headers), "${format.format(node.currentBlock)} / ${format.format(step.total)}")
+                    node.headTime?.let {
+                        val now = System.currentTimeMillis() / 1000
+                        Field(t(R.string.node_field_last_block), if (it > now) t(R.string.time_now) else t(R.string.node_ago, timeAgo(it, now)))
+                    }
                     val speed = model.stepSpeed(step)
                     if (syncing && step.phase != SyncPhase.Snapshot && speed != null && speed > 0) {
-                        Field("Speed", "${format.format(Math.round(speed))} ${if (step.phase == SyncPhase.Headers) "headers" else "blocks"}/s")
-                        Field("Time left", duration(step.remaining / speed))
+                        Field(t(R.string.node_field_speed), t(if (step.phase == SyncPhase.Headers) R.string.node_speed_headers else R.string.node_speed_blocks, format.format(Math.round(speed))))
+                        Field(t(R.string.node_field_time_left), duration(step.remaining / speed))
                     }
-                    if (node.wrongTime) Text("The phone's clock is wrong: fix the time for the node to work.", color = MaterialTheme.colorScheme.error)
+                    if (node.wrongTime) Text(t(R.string.node_clock_wrong), color = MaterialTheme.colorScheme.error)
                 } else if (state.syncEnabled) {
-                    Text("The node does not answer yet.")
+                    Text(t(R.string.node_no_answer_yet))
                 }
-                state.runningForMs?.takeIf { state.syncEnabled }?.let { Field("Started", "${duration(it / 1000.0).removePrefix("about ")} ago") }
+                state.runningForMs?.takeIf { state.syncEnabled }?.let { Field(t(R.string.node_field_started), t(R.string.node_ago, duration(it / 1000.0).removePrefix(t(R.string.node_about_prefix)))) }
                 state.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 DotLegend(
-                    Health.Good to "Synced with peers",
-                    Health.Warn to "Starting, looking for peers (often several minutes after a start), syncing, or a background setting to fix",
-                    Health.Bad to "No peers after ${PEER_GRACE_MS / 60_000} min, no answer, or a wrong clock",
-                    Health.Off to "Sync off",
+                    Health.Good to t(R.string.node_legend_good),
+                    Health.Warn to t(R.string.node_legend_warn),
+                    Health.Bad to t(R.string.node_legend_bad, PEER_GRACE_MS / 60_000),
+                    Health.Off to t(R.string.status_sync_off),
                 )
                 HorizontalDivider()
                 BackgroundSettings(state)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 
@@ -128,24 +131,23 @@ fun NodeInfoDialog(model: NodeModel, onDismiss: () -> Unit) {
 fun BackgroundSettings(state: ScreenState) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Running with the screen off", style = MaterialTheme.typography.titleSmall)
-        Field("Battery optimization", if (state.ignoringBatteryOptimizations) "off ✓" else "on: Android may pause the node")
+        Text(t(R.string.node_screen_off_title), style = MaterialTheme.typography.titleSmall)
+        Field(t(R.string.node_field_battery_optimization), if (state.ignoringBatteryOptimizations) t(R.string.node_battery_optimization_off) else t(R.string.node_battery_optimization_on))
         if (!state.ignoringBatteryOptimizations) {
             OutlinedButton(onClick = {
                 context.startActivity(
                     Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")),
                 )
-            }) { Text("Allow background running") }
+            }) { Text(t(R.string.node_allow_background)) }
         }
         Text(
-            "Some phones also close apps in the background: allow this app to start automatically and to run " +
-                "without battery restrictions, and lock it in the recent apps.",
+            t(R.string.node_background_phones),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { openFirstOrAppSettings(context, autostartPages()) }) { Text("Autostart") }
-            OutlinedButton(onClick = { openFirstOrAppSettings(context, batteryPages(context)) }) { Text("Battery saver") }
+            OutlinedButton(onClick = { openFirstOrAppSettings(context, autostartPages()) }) { Text(t(R.string.node_autostart)) }
+            OutlinedButton(onClick = { openFirstOrAppSettings(context, batteryPages(context)) }) { Text(t(R.string.node_battery_saver)) }
         }
     }
 }

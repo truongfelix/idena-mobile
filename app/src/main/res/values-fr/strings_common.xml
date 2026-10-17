@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Words used on many screens. -->
+<resources>
+    <string name="common_cancel">Annuler</string>
+    <string name="common_close">Fermer</string>
+    <string name="common_try_again">Réessayer</string>
+    <string name="common_send">Envoyer</string>
+    <string name="common_next">Suivant</string>
+    <string name="common_ok">OK</string>
+    <string name="common_remove">Retirer</string>
+    <string name="common_delete">Supprimer</string>
+    <string name="common_back">Retour</string>
+    <string name="common_more">Plus</string>
+    <string name="common_details">Détails</string>
+</resources>

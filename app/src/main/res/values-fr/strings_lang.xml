@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Language line of the Node card (LanguageRow.kt). -->
+<resources>
+    <string name="lang_title">Langue</string>
+    <string name="lang_phone">Celle du téléphone</string>
+</resources>

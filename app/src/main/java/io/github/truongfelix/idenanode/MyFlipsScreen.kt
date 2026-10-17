@@ -110,21 +110,21 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
     fun askDelete(row: MyFlipRow) {
         val current = read ?: return
         message = null
-        busy = "Asking the node for the fee…"
+        busy = t(R.string.flip_asking_fee)
         scope.launch {
             val fee = withContext(Dispatchers.IO) { runCatching { rpc(context).estimateDeleteFlip(current.address, row.cid) } }
             busy = null
-            fee.onSuccess { pending = PendingDelete(row, it) }.onFailure { message = "The node refuses to delete it: ${it.message}" }
+            fee.onSuccess { pending = PendingDelete(row, it) }.onFailure { message = t(R.string.flip_delete_refuses, it.message.toString()) }
         }
     }
 
     fun delete(row: MyFlipRow) {
         pending = null
-        busy = "Deleting the flip…"
+        busy = t(R.string.flip_deleting)
         scope.launch {
             val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).deleteFlip(row.cid) } }.getOrElse {
                 busy = null
-                message = "The node refused: ${it.message}"
+                message = t(R.string.flip_delete_refused, it.message.toString())
                 return@launch
             }
             busy = null
@@ -132,16 +132,16 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
             val mined = waitUntilMined(context, hash)
             if (mined) withContext(Dispatchers.IO) { MadeFlipStore.remove(context, row.cid) }
             deleting = deleting - row.cid
-            message = if (mined) "Flip deleted: its words can be used for a new flip." else "The flip is not deleted: $NOT_SENT"
+            message = if (mined) t(R.string.flip_deleted) else t(R.string.flip_not_deleted, NOT_SENT)
             reads++
         }
     }
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) { Text(t(R.string.common_close)) }
             Spacer(Modifier.weight(1f))
-            Text("My flips", style = MaterialTheme.typography.titleMedium)
+            Text(t(R.string.flip_my_flips), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.width(64.dp))
         }
@@ -149,31 +149,31 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
         when {
             current == null -> { CircularProgressIndicator(); return@Column }
             current.isFailure -> {
-                Text("The node did not answer: ${current.exceptionOrNull()?.message}")
-                Button(onClick = { reads++ }) { Text("Try again") }
+                Text(t(R.string.flip_node_no_answer, current.exceptionOrNull()?.message.toString()))
+                Button(onClick = { reads++ }) { Text(t(R.string.common_try_again)) }
                 return@Column
             }
         }
         val node = read!!
         val waiting = rows.count { it.state == MyFlipState.Waiting }
         val q = node.quota
-        val extra = if (q.available > q.required) " (up to ${q.available})" else ""
-        Text("${q.made + waiting} of ${q.required} made$extra", style = MaterialTheme.typography.bodyLarge)
+        val madeText = if (q.available > q.required) t(R.string.flip_made_up_to, q.made + waiting, q.required, q.available) else t(R.string.flip_made, q.made + waiting, q.required)
+        Text(madeText, style = MaterialTheme.typography.bodyLarge)
         if (q.missing - waiting > 0) {
             Text(
-                "Without ${q.missing - waiting} more, the identity becomes ${q.missingOutcome} at the validation.",
+                t(R.string.flip_without_more, q.missing - waiting, q.missingOutcomeLabel),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
         when {
-            node.period != "None" -> Text("Flips are made and deleted outside the validation.", style = MaterialTheme.typography.bodySmall)
-            q.copy(made = q.made + waiting).canMake -> Button(onClick = onMake, enabled = busy == null) { Text("Make a flip") }
+            node.period != "None" -> Text(t(R.string.flip_outside_validation), style = MaterialTheme.typography.bodySmall)
+            q.copy(made = q.made + waiting).canMake -> Button(onClick = onMake, enabled = busy == null) { Text(t(R.string.flip_make_title)) }
         }
         busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (rows.isEmpty()) Text("No flip made this epoch.", style = MaterialTheme.typography.bodyMedium)
+            if (rows.isEmpty()) Text(t(R.string.flip_none_made), style = MaterialTheme.typography.bodyMedium)
             rows.forEach { row ->
                 key(row.cid) {
                     HorizontalDivider()
@@ -200,22 +200,21 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
         val after = q?.let { it.made - 1 }
         AlertDialog(
             onDismissRequest = { pending = null },
-            title = { Text("Delete the flip") },
+            title = { Text(t(R.string.flip_delete_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("The flip leaves the validation and its words can be used again. Fee: ${idna(delete.fee.toPlainString())}.")
+                    Text(t(R.string.flip_delete_text, idna(delete.fee.toPlainString())))
                     if (q != null && after != null && after < q.required) {
                         Text(
-                            "Then $after of ${q.required} required flips are made: make another before the flip lottery, " +
-                                "or the identity becomes ${q.missingOutcome}.",
+                            t(R.string.flip_delete_then, after, q.required, q.missingOutcomeLabel),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { delete(delete.row) }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Keep it") } },
+            confirmButton = { TextButton(onClick = { delete(delete.row) }) { Text(t(R.string.common_delete)) } },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text(t(R.string.flip_keep_it)) } },
         )
     }
 
@@ -225,14 +224,14 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
             title = { Text(flip.keywords.joinToString(" / ") { it.name.uppercase() }) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("As validators see it: the story and the shuffled story, in a random order.", style = MaterialTheme.typography.bodySmall)
+                    Text(t(R.string.flip_as_validators_see), style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().height(440.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Story(flip, flip.leftOrder, selected = false, modifier = Modifier.weight(1f), onClick = null)
                         Story(flip, flip.rightOrder, selected = false, modifier = Modifier.weight(1f), onClick = null)
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { shown = null }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { shown = null }) { Text(t(R.string.common_close)) } },
         )
     }
 }
@@ -256,13 +255,13 @@ private fun FlipRowView(row: MyFlipRow, keywords: List<Keyword>, canDelete: Bool
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             val text = when (row.state) {
-                MyFlipState.Waiting -> "Waiting for a block"
-                MyFlipState.Deleting -> "Deleting: waiting for a block"
+                MyFlipState.Waiting -> t(R.string.flip_waiting_block)
+                MyFlipState.Deleting -> t(R.string.flip_deleting_waiting)
                 MyFlipState.Published ->
-                    if (made == null) "Made in another app" else "Published · ${dateFormat.format(Instant.ofEpochMilli(made.sentAt))}"
+                    if (made == null) t(R.string.flip_made_elsewhere) else t(R.string.flip_published_at, dateFormat.format(Instant.ofEpochMilli(made.sentAt)))
             }
             Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            if (canDelete) TextButton(onClick = onDelete) { Text("Delete") }
+            if (canDelete) TextButton(onClick = onDelete) { Text(t(R.string.common_delete)) }
         }
     }
 }

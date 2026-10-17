@@ -36,7 +36,7 @@ fun ProfilePicture(address: String, cid: String?, size: Dp, modifier: Modifier =
     Box(modifier.size(size)) {
         Image(
             bitmap = picture,
-            contentDescription = "Profile picture",
+            contentDescription = t(R.string.profile_picture),
             modifier = Modifier.size(size).clip(RoundedCornerShape(size / 5)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentScale = ContentScale.Crop,
         )
@@ -82,15 +82,19 @@ fun ContractProfileLines(profile: ContractProfile?, names: Map<String, String>, 
     if (profile == null) return
     val shown = profile.inStanding || isMe
     if (shown && profile.name != null && (localName || !profile.inStanding)) {
-        val hidden = if (profile.inStanding) "" else " · hidden: not validated, nor vouched for"
-        Text("@${profile.name}$hidden", style = body, fontWeight = FontWeight.Medium)
+        Text(if (profile.inStanding) "@${profile.name}" else t(R.string.profile_name_hidden, "${profile.name}"), style = body, fontWeight = FontWeight.Medium)
     }
     if (shown) profile.bio?.takeIf { it.isNotBlank() }?.let { Text(it, style = body) }
     // The account's own voucher shows with its End button (MyVouching).
     if (isMe) return
     profile.shownVoucher?.let { voucher ->
-        val who = if (voucher == me?.lowercase()) "You vouch for them" else "Vouched for by ${displayName(voucher, names)}"
-        val note = if (profile.inStanding) "" else " (their voucher is not validated now)"
-        Text("$who$note", style = body, color = muted)
+        val mine = voucher == me?.lowercase()
+        val text = when {
+            mine && profile.inStanding -> t(R.string.profile_you_vouch)
+            mine -> t(R.string.profile_you_vouch_not_validated)
+            profile.inStanding -> t(R.string.profile_vouched_for_by, displayName(voucher, names))
+            else -> t(R.string.profile_vouched_for_by_not_validated, displayName(voucher, names))
+        }
+        Text(text, style = body, color = muted)
     }
 }

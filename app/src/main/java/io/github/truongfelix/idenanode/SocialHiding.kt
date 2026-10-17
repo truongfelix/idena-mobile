@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import java.text.Normalizer
 
 /*
@@ -21,10 +22,10 @@ fun mutedAddresses(people: Map<String, Person>): Set<String> = people.values.fil
  * picture one line until tapped in its thread (nothing downloaded before); [Hide] posts with pictures: they leave the
  * feeds, a reply or comment with one folds in its thread. The identity's own posts are never filtered.
  */
-enum class PicturesMode(val title: String) {
-    Show("Show"),
-    TapToShow("Tap to show"),
-    Hide("Hide posts with pictures"),
+enum class PicturesMode(@StringRes val title: Int) {
+    Show(R.string.socialb_pictures_show),
+    TapToShow(R.string.socialb_pictures_tap),
+    Hide(R.string.socialb_pictures_hide),
     ;
 
     companion object {

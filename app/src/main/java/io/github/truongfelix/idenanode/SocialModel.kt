@@ -1,6 +1,7 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -95,8 +96,13 @@ class PageState {
 enum class SocialView { Feed, Me, Activity, Messages }
 
 /** The lists of a profile, as idena.social's profile page has them. */
-enum class ProfileTab(val title: String) {
-    Posts("Posts"), Replies("Replies"), Comments("Comments"), Likes("Likes"), Tips("Tips"), Media("Media"),
+enum class ProfileTab(@StringRes private val titleId: Int) {
+    Posts(R.string.social_tab_posts), Replies(R.string.social_tab_replies), Comments(R.string.social_tab_comments),
+    Likes(R.string.social_tab_likes), Tips(R.string.social_tab_tips), Media(R.string.social_tab_media),
+    ;
+
+    val title: String
+        get() = t(titleId)
 }
 
 /**
@@ -125,7 +131,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         private set
 
     /** What the scan is doing, shown at the top of the tab. */
-    var scanStatus by mutableStateOf("Loading…")
+    var scanStatus by mutableStateOf(t(R.string.social_scan_loading))
         private set
 
     /** Whether the node is synced and outside a validation: posting needs it. */
@@ -144,7 +150,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
      */
     fun status(peers: Int?): BarState {
         val view = node?.let { if (peers != null) it.copy(peers = peers) else it }
-        return if (view == null && !nodeFailed) BarState(Health.Off, "Connecting to the node…") else scanState(view, scanning, head, cache)
+        return if (view == null && !nodeFailed) BarState(Health.Off, t(R.string.social_bar_connecting)) else scanState(view, scanning, head, cache)
     }
     var scanning by mutableStateOf(SocialStore.isScanning(context))
         private set
@@ -578,7 +584,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                         node = null
                         nodeFailed = true
                         ready = false
-                        scanStatus = "The node did not answer: ${e.message}"
+                        scanStatus = t(R.string.social_scan_no_answer, "${e.message}")
                         pause(10_000)
                         continue
                     }
@@ -589,7 +595,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                     if (address != myAddress) setAccount(address)
                     ready = !view.syncing && !view.validation
                     if (!ready) {
-                        scanStatus = if (view.syncing) "Waiting: the node is syncing." else "Paused during the validation."
+                        scanStatus = if (view.syncing) t(R.string.social_scan_waiting_sync) else t(R.string.social_scan_paused_validation)
                         pause(30_000)
                         continue
                     }
@@ -606,15 +612,15 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                         }
                         // The first time, the scan starts at the head: nothing to read yet.
                         current == null && wantsNew -> {
-                            scanStatus = "Starting at the node's block…"
+                            scanStatus = t(R.string.social_scan_starting)
                             show(withContext(Dispatchers.IO) { checkNewBlocks(null, source) { SocialStore.save(context, it) } })
                         }
                         current == null -> {
-                            scanStatus = "Select \"Scan blocks\" to read the posts from the node."
+                            scanStatus = t(R.string.social_scan_select)
                             pause(20_000)
                         }
                         wantsNew && (current.high < nodeHead || current.authorsHeight < current.high) -> {
-                            scanStatus = "Scanning new blocks…"
+                            scanStatus = t(R.string.social_scan_new_blocks)
                             val next = withContext(Dispatchers.IO) {
                                 checkNewBlocks(current, source, keepGoing = { scanningFlag.get() || scanNewOnce.get() }) { SocialStore.save(context, it) }
                             }
@@ -623,18 +629,18 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                         }
                         // Once, for a scan made before the app read messages: those of the blocks already read.
                         visible && current.messagesPending && scanningFlag.get() -> {
-                            scanStatus = "Reading the private messages of the blocks read before…"
+                            scanStatus = t(R.string.social_scan_messages)
                             show(withContext(Dispatchers.IO) { scanOlderMessages(current, source) { SocialStore.save(context, it) } })
                         }
                         visible && !current.historyDone && scanningFlag.get() -> {
-                            scanStatus = "Scanning the history…"
+                            scanStatus = t(R.string.social_scan_history)
                             show(withContext(Dispatchers.IO) { scanOlderBlocks(current, source) { SocialStore.save(context, it) } })
                         }
                         else -> {
                             scanNewOnce.set(false)
                             scanStatus = when {
-                                !scanningFlag.get() -> "Stopped. Select \"Scan blocks\" to read the newest posts."
-                                else -> "Up to date."
+                                !scanningFlag.get() -> t(R.string.social_scan_stopped)
+                                else -> t(R.string.social_scan_up_to_date)
                             }
                             // A new block comes about every 20 seconds.
                             pause(20_000)
@@ -642,7 +648,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    scanStatus = "The node did not answer: ${e.message}"
+                    scanStatus = t(R.string.social_scan_no_answer, "${e.message}")
                     pause(10_000)
                 }
             }

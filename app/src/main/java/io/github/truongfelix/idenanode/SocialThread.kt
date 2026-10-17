@@ -64,7 +64,7 @@ fun ThreadView(
     Column(Modifier.fillMaxSize().imePadding()) {
         header()
         if (post == null) {
-            Text("This post is not in the scanned blocks.", Modifier.padding(16.dp))
+            Text(t(R.string.social_thread_missing), Modifier.padding(16.dp))
             return
         }
         LaunchedEffect(post.id) {
@@ -83,18 +83,18 @@ fun ThreadView(
                     PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
                     if (post.isOlder) {
                         Text(
-                            "From an earlier idena.social contract (${post.call.version}): read only.",
+                            t(R.string.social_thread_older, post.call.version),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    ActionBar(post, myAddress, canAct, "💬 Reply", onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
-                        onAnswer(Draft("Reply", "Reply", PostTarget.onPost(post.id), post.call))
+                    ActionBar(post, myAddress, canAct, t(R.string.social_reply_pill), onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
+                        onAnswer(replyDraft(post))
                     }, onTip = { onTip(post) }, onWho = { onWho(post) })
                     ad?.invoke()
                     HorizontalDivider()
                     val answers = replyCount(post)
-                    Text(if (answers == 1) "1 answer" else "$answers answers", style = MaterialTheme.typography.titleSmall)
+                    Text(tp(R.plurals.social_thread_answers, answers, answers), style = MaterialTheme.typography.titleSmall)
                 }
             }
             items(post.replies, key = { it.id }) { reply ->
@@ -170,9 +170,9 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
             PostContent(item.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
             val target = if (isReply) PostTarget.onReply(item.id) else PostTarget.onComment(replyId, item.id)
             ActionBar(
-                item, thread.myAddress, thread.canAct, "💬 Reply",
+                item, thread.myAddress, thread.canAct, t(R.string.social_reply_pill),
                 onLike = { thread.onLike(target) },
-                onAnswer = { thread.onAnswer(Draft("Comment", "Comment", target, item.call)) },
+                onAnswer = { thread.onAnswer(Draft(t(R.string.social_what_comment), t(R.string.social_what_comment), target, item.call)) },
                 onTip = { thread.onTip(item) },
                 onWho = { thread.onWho(item) },
             )
@@ -188,11 +188,11 @@ private fun FoldedLine(item: SocialPost, hidden: Int, onProfile: (String) -> Uni
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val content = LocalHiding.current
     val preview = when {
-        content.hiding.hidesText(item.call, content.me) -> "Hidden"
-        item.call.author != content.me && item.call.author in content.hiding.muted -> "Muted"
-        content.hiding.leavesFeeds(item, content.me) -> "🖼 A picture: hidden"
-        ipfsCid(item.call.message) != null -> "Text on IPFS"
-        item.call.message.isEmpty() && item.call.hasMedia -> "🖼 Media"
+        content.hiding.hidesText(item.call, content.me) -> t(R.string.social_folded_hidden)
+        item.call.author != content.me && item.call.author in content.hiding.muted -> t(R.string.social_folded_muted)
+        content.hiding.leavesFeeds(item, content.me) -> t(R.string.social_folded_picture)
+        ipfsCid(item.call.message) != null -> t(R.string.social_text_on_ipfs)
+        item.call.message.isEmpty() && item.call.hasMedia -> t(R.string.social_media)
         else -> item.call.message.replace(Regex("\\s+"), " ").trim()
     }
     Row(Modifier.fillMaxWidth().clickable(onClick = onUnfold).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {

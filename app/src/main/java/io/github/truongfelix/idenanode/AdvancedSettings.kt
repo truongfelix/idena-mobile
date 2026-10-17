@@ -65,30 +65,30 @@ fun AdvancedSettings(
         Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Advanced settings", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(t(R.string.node_advanced_settings), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Icon(
             if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (open) "Fold the advanced settings" else "Open the advanced settings",
+            contentDescription = if (open) t(R.string.node_advanced_fold) else t(R.string.node_advanced_open),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
     if (pending.isNotEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Restart to apply: " + pending.joinToString(", ") { it.title },
+                t(R.string.node_restart_to_apply, pending.joinToString(", ") { it.title }),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = { confirm = true }) { Text("Restart") }
+            TextButton(onClick = { confirm = true }) { Text(t(R.string.node_restart)) }
         }
     }
     if (open) {
         state.status?.takeUnless { it.accountPending }?.let {
-            GroupTitle("Mining")
+            GroupTitle(t(R.string.node_group_mining))
             delegation(it)
         }
-        GroupTitle("Connections")
+        GroupTitle(t(R.string.node_group_connections))
         routerPort()
         DirectPeersSection(state) { saved(DIRECT_PEERS_TITLE) }
         ChoiceRow(
@@ -97,7 +97,7 @@ fun AdvancedSettings(
             choices = PeerLevel.entries,
             chosen = options.peerLevel,
             label = { it.label },
-            note = { "up to ${it.maxPeers} peers" + if (it == PeerLevel.DEFAULT) ", default" else "" },
+            note = { if (it == PeerLevel.DEFAULT) t(R.string.node_peer_level_note_default, it.maxPeers) else t(R.string.node_peer_level_note, it.maxPeers) },
             onChange = {
                 NodeSettings.setPeerLevel(context, it)
                 saved(PEER_LEVEL_TITLE)
@@ -111,8 +111,8 @@ fun AdvancedSettings(
             label = { it.label },
             note = {
                 when {
-                    !it.allows(options.peerLevel) -> "too few for ${options.peerLevel.label}"
-                    it == IpfsConnections.DEFAULT -> "default"
+                    !it.allows(options.peerLevel) -> t(R.string.node_ipfs_too_few, options.peerLevel.label)
+                    it == IpfsConnections.DEFAULT -> t(R.string.node_default)
                     else -> null
                 }
             },
@@ -122,11 +122,11 @@ fun AdvancedSettings(
                 saved(IPFS_CONNECTIONS_TITLE)
             },
         )
-        GroupTitle("Storage")
+        GroupTitle(t(R.string.node_group_storage))
         NodeDatabase.entries.forEach { database ->
             ChoiceRow(
                 title = database.title,
-                info = { "${database.about}\n\n$WRITE_BUFFER_INFO\n\nThis phone: ${ramGb(totalRam(context))} GB of RAM." },
+                info = { "${database.about}\n\n$WRITE_BUFFER_INFO\n\n" + t(R.string.node_phone_ram, ramGb(totalRam(context))) },
                 choices = WriteBuffer.entries,
                 chosen = options.writeBuffers[database] ?: WriteBuffer.DEFAULT,
                 label = { it.label },
@@ -137,7 +137,7 @@ fun AdvancedSettings(
                 },
             )
         }
-        GroupTitle("Node reports")
+        GroupTitle(t(R.string.node_reports_title))
         NodeReportsSection(state.syncEnabled)
     }
     if (confirm) {
@@ -145,18 +145,18 @@ fun AdvancedSettings(
         val risk = status?.let { restartRisk(Instant.now(), parseValidationTime(it.nextValidation), it.period) }
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Restart the node?") },
+            title = { Text(t(R.string.node_restart_question)) },
             text = {
                 Text(
-                    "The node takes these at its next start:\n" + pending.joinToString("\n") { "• ${it.title}: ${it.value}" } +
-                        "\n\nA restart now takes a few minutes: the node opens its databases and looks for peers again." +
+                    t(R.string.node_restart_takes) + "\n" + pending.joinToString("\n") { t(R.string.node_restart_item, it.title, it.value) } +
+                        "\n\n" + t(R.string.node_restart_takes_minutes) +
                         (risk?.let { "\n\n${it.message}" } ?: ""),
                 )
             },
             confirmButton = {
-                TextButton(enabled = risk?.canRestart != false, onClick = { confirm = false; onRestart() }) { Text("Restart now") }
+                TextButton(enabled = risk?.canRestart != false, onClick = { confirm = false; onRestart() }) { Text(t(R.string.node_restart_now)) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Later") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(t(R.string.node_later)) } },
         )
     }
 }
@@ -190,7 +190,7 @@ private fun <T> ChoiceRow(
             Text(title, style = MaterialTheme.typography.bodyMedium)
             Icon(
                 Icons.Outlined.Info,
-                contentDescription = "About $title",
+                contentDescription = t(R.string.node_about_setting, title),
                 Modifier.clickable { showInfo = true }.padding(6.dp).size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -224,7 +224,7 @@ private fun <T> ChoiceRow(
             onDismissRequest = { showInfo = false },
             title = { Text(title) },
             text = { Text(info()) },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(t(R.string.common_ok)) } },
         )
     }
 }

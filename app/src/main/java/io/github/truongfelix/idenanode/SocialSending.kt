@@ -33,8 +33,8 @@ fun contentToPutBack(sent: EditorContent?, text: String, image: ImageDraft?): Ed
 /** What the report of a failed send says of the editor's post ([sent]), put back or not; null for a like or a tip. */
 fun putBackNote(sent: EditorContent?, putBack: Boolean): String? = when {
     sent == null -> null
-    putBack -> "The draft is back in the editor."
-    else -> "The editor holds another draft, so this one was not put back."
+    putBack -> t(R.string.social_draft_back)
+    else -> t(R.string.social_draft_not_back)
 }
 
 /** An image chosen for a post: its encodings at the offered sizes (longer side in pixels), and the chosen size. */
@@ -47,7 +47,19 @@ data class ImageDraft(val sizes: Map<Int, ByteArray>, val chosen: Int) {
  * A file stored on IPFS before a post: the text or the image, its CID and the node's fee for storing it;
  * no fee when the app [stored] it already (a try whose post failed).
  */
-class IpfsFile(val what: String, val bytes: ByteArray, val cid: String, val fee: BigDecimal, val stored: Boolean = false)
+class IpfsFile(val what: String, val bytes: ByteArray, val cid: String, val fee: BigDecimal, val stored: Boolean = false) {
+    /** [what] as the texts name it, in the app's language. */
+    val shownName: String
+        get() = ipfsFileName(what)
+}
+
+/** A file stored on IPFS ([IpfsFile.what]: text, image, picture) as the texts name it, in the app's language. */
+fun ipfsFileName(what: String): String = when (what) {
+    "text" -> t(R.string.social_file_text)
+    "image" -> t(R.string.social_file_image)
+    "picture" -> t(R.string.social_file_picture)
+    else -> what
+}
 
 /**
  * A paid action waiting for the user's confirmation, with the node's fee estimates: the files to store on
@@ -149,15 +161,15 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
      * order ([findPublicKey]): the plain message in idena.social's format ([plainMessage]), encrypted by the node for the
      * account and each recipient (social_encrypt), then sendMessage with the website's 0.00002 iDNA.
      */
-    fun prepareMessage(recipients: List<String>, keys: List<String>, text: String) = prepareWith("Message") { posting, from ->
+    fun prepareMessage(recipients: List<String>, keys: List<String>, text: String) = prepareWith(t(R.string.social_what_message)) { posting, from ->
         val me = from.lowercase()
         val others = recipients.filter { it != me }.ifEmpty { listOf(me) }
-        if (keys.size != others.size) throw IOException("no public key for every person of the conversation")
+        if (keys.size != others.size) throw IOException(t(R.string.social_error_no_key))
         val plain = plainMessage(me, others, text)
         val parts = posting.encrypt(keys, plain)
-        if (parts.size != others.size + 1) throw IOException("the node encrypted ${parts.size} parts for ${others.size + 1} participants")
+        if (parts.size != others.size + 1) throw IOException(t(R.string.social_error_parts, parts.size, others.size + 1))
         val call = SocialPosting.message(sendMessageArgument(parts, keccak256Hex(plain)))
-        PendingPost("Message", call, from, posting.estimate(from, call), "A private message to ${others.size} ${if (others.size == 1) "person" else "people"}")
+        PendingPost(t(R.string.social_what_message), call, from, posting.estimate(from, call), tp(R.plurals.social_message_detail, others.size, others.size))
     }
 
     /**
@@ -174,7 +186,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
         else typedTopic(draftTopic)?.let(::topicChannel)
         prepareWith(current.what) { posting, from ->
             if (current.target == PostTarget.NEW_POST && draftTopic.isNotBlank() && channel == null) {
-                throw IOException("\"${draftTopic.trim()}\" is not a topic name (a-z, 0-9 and _, 3 to 21 characters)")
+                throw IOException(t(R.string.social_error_topic_name, draftTopic.trim()))
             }
             val files = ArrayList<IpfsFile>()
             fun file(what: String, bytes: ByteArray) = ipfsFile(posting, from, what, bytes).also { files += it }
@@ -187,18 +199,24 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             // Every transaction may take up to twice its fee: the balance must cover them all.
             val most = fee.maxFee + files.sumOf { it.fee * BigDecimal(2) } + BigDecimal(call.amount)
             val balance = posting.balance(from)
-            if (balance < most) throw IOException("up to ${most.setScale(2, java.math.RoundingMode.UP)} iDNA needed, the balance is ${balance.setScale(2, java.math.RoundingMode.DOWN)}")
+            if (balance < most) throw IOException(balanceText(most, balance))
             PendingPost(current.what, call, from, fee, null, files, fromEditor = true)
         }
     }
 
     /** A file to store on IPFS from [from] before a call: its CID and fee; no fee when this app stored it already. */
     private fun ipfsFile(posting: SocialPosting, from: String, what: String, bytes: ByteArray): IpfsFile {
-        if (bytes.size > MAX_IPFS_FILE) throw IOException("the $what is too large (${bytes.size / 1000} KB, at most ${MAX_IPFS_FILE / 1000} KB)")
+        if (bytes.size > MAX_IPFS_FILE) {
+            throw IOException(t(R.string.social_error_too_large, ipfsFileName(what), bytes.size / 1000, MAX_IPFS_FILE / 1000))
+        }
         val cid = posting.cid(bytes)
         return if (cid in stored) IpfsFile(what, bytes, cid, BigDecimal.ZERO, stored = true)
         else IpfsFile(what, bytes, cid, posting.estimateStore(from, cid, bytes.size))
     }
+
+    /** Why a paid action cannot be sent: up to [most] iDNA needed, more than the [balance]. */
+    private fun balanceText(most: BigDecimal, balance: BigDecimal): String =
+        t(R.string.social_error_balance, "${most.setScale(2, java.math.RoundingMode.UP)}", "${balance.setScale(2, java.math.RoundingMode.DOWN)}")
 
     /**
      * A call to the profiles contract ([ProfileCalls]) made by [makeCall] with the "ipfs://" reference of [picture]
@@ -224,7 +242,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             // Every transaction may take up to twice its fee: the balance must cover them all, and the extra amount.
             val most = fee.maxFee + files.sumOf { it.fee * BigDecimal(2) } + BigDecimal(call.amount)
             val balance = posting.balance(from)
-            if (balance < most) throw IOException("up to ${most.setScale(2, java.math.RoundingMode.UP)} iDNA needed, the balance is ${balance.setScale(2, java.math.RoundingMode.DOWN)}")
+            if (balance < most) throw IOException(balanceText(most, balance))
             PendingPost(what, call, from, fee, detail, files, memberExtra = extra)
         }
 
@@ -239,7 +257,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 }
             }
             busy = false
-            result.onSuccess { confirm = it }.onFailure { report("$what: the node refused: ${it.message}", ERROR_KEEP_MS) }
+            result.onSuccess { confirm = it }.onFailure { report(t(R.string.social_send_refused, what, "${it.message}"), ERROR_KEEP_MS) }
         }
     }
 
@@ -256,9 +274,9 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                     val posting = SocialPosting(rpc(context))
                     for (file in pending.files) {
                         if (file.stored) continue
-                        withContext(Dispatchers.Main) { report("${pending.what}: storing the ${file.what} on IPFS…") }
+                        withContext(Dispatchers.Main) { report(t(R.string.social_send_storing, pending.what, file.shownName)) }
                         val cid = posting.add(file.bytes)
-                        if (cid != file.cid) throw IOException("the node stored the ${file.what} under another CID ($cid)")
+                        if (cid != file.cid) throw IOException(t(R.string.social_error_other_cid, file.shownName, cid))
                         IpfsStore.put(context, cid, file.bytes)
                         posting.store(cid)
                         stored += cid
@@ -267,7 +285,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 }
             }.getOrElse {
                 busy = false
-                report("${pending.what}: the node refused: ${it.message}", ERROR_KEEP_MS)
+                report(t(R.string.social_send_refused, pending.what, "${it.message}"), ERROR_KEEP_MS)
                 return@launch
             }
             busy = false
@@ -281,23 +299,23 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 draftTopic = ""
             }
             sent.add(hash, pending.likeOf)
-            report("${pending.what} sent, waiting for a block (${hash.take(10)}…)")
+            report(t(R.string.social_send_waiting, pending.what, hash.take(10)))
             val block = withContext(Dispatchers.IO) { waitForBlock(NodeTxLookup(rpc(context)), hash) }
             inFlight = inFlight.filter { it.hash != hash }
             val note = if (block == null || block.error != null) putBack(sentContent) else null
             when {
                 block == null -> {
                     sent.remove(hash)
-                    report("${pending.what} was not sent: the node no longer has it. ${note ?: "Try again."}", ERROR_KEEP_MS)
+                    report(t(R.string.social_send_dropped, pending.what, note ?: t(R.string.social_send_try_again)), ERROR_KEEP_MS)
                 }
                 block.error != null -> {
                     sent.remove(hash)
-                    val refused = "${pending.what} is in a block, but the contract refused it (${block.error}): the fee is paid, nothing is posted."
+                    val refused = t(R.string.social_send_contract_refused, pending.what, "${block.error}")
                     report(listOfNotNull(refused, note).joinToString(" "), ERROR_KEEP_MS)
                 }
                 else -> {
                     sent.inBlock(hash, block.height)
-                    report("${pending.what} is in a block.", DONE_KEEP_MS)
+                    report(t(R.string.social_send_in_block, pending.what), DONE_KEEP_MS)
                     onInBlock()
                 }
             }

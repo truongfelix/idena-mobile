@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status bar's texts and the durations (Status.kt). -->
+<resources>
+    <string name="status_could_not_start">Le nœud n\'a pas pu démarrer</string>
+    <string name="status_sync_off">Synchronisation arrêtée</string>
+    <string name="status_sync_off_no_key">Synchronisation arrêtée : créez ou importez d\'abord une clé</string>
+    <string name="status_no_answer">Le nœud ne répond pas</string>
+    <string name="status_wrong_clock">L\'horloge du téléphone n\'est pas à l\'heure</string>
+    <string name="status_no_peers">Aucun pair</string>
+    <string name="status_looking_for_peers">Recherche de pairs…</string>
+    <string name="status_looking_for_peers_minutes">Recherche de pairs · %1$d min</string>
+    <string name="status_syncing">Synchronisation</string>
+    <string name="status_behind">En retard : recherche de pairs</string>
+    <string name="status_synced_issue">Synchronisé · %1$s</string>
+    <plurals name="status_synced_peers">
+        <item quantity="one">Synchronisé · %1$d pair</item>
+        <item quantity="other">Synchronisé · %1$d pairs</item>
+        <item quantity="many">Synchronisé · %1$d pairs</item>
+    </plurals>
+    <string name="status_battery_saver_on">économiseur de batterie activé</string>
+    <string name="time_under_a_minute">moins d\'une minute</string>
+    <string name="time_about_minutes">environ %1$d min</string>
+    <string name="time_about_hours">environ %1$d h %2$s min</string>
+    <string name="time_now">maintenant</string>
+    <string name="time_in_days">dans %1$d j %2$d h</string>
+    <string name="time_in_hours">dans %1$d h %2$d min</string>
+    <string name="time_in_minutes">dans %1$d min</string>
+</resources>

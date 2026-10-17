@@ -70,11 +70,11 @@ fun ProfileEditDialog(
     var note by remember { mutableStateOf<String?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        note = "Preparing the picture…"
+        note = t(R.string.profile_preparing_picture)
         scope.launch {
             withContext(Dispatchers.Default) { runCatching { encodePicture(context, uri) } }
                 .onSuccess { newPicture = it; removed = false; note = null }
-                .onFailure { note = "Not read: ${it.message}" }
+                .onFailure { note = t(R.string.profile_not_read, "${it.message}") }
         }
     }
     val oldPicture = profile?.picture.orEmpty()
@@ -83,53 +83,53 @@ fun ProfileEditDialog(
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Your public profile") },
+        title = { Text(t(R.string.profile_public_profile)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Your name, bio and picture are public, for everyone using Idena, and each version stays in the blockchain history. Each save is a transaction with its fee.",
+                    t(R.string.profile_public_note),
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.lowercase().filter { c -> c in 'a'..'z' || c in '0'..'9' || c == '_' }.take(20) },
-                    label = { Text("Name") },
+                    label = { Text(t(R.string.profile_name)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "a-z, 0-9 and _, 3 to 20 characters. One name change per epoch; a name you leave stays blocked for 2 epochs.",
+                    t(R.string.profile_name_rules),
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onSave(ProfileEdit.Name(name)) }, enabled = nameValid && name != profile?.name && !nameWaits) { Text("Save the name") }
-                    if (profile?.name != null) TextButton(onClick = { onSave(ProfileEdit.DropName) }, enabled = !nameWaits) { Text("Drop the name") }
+                    Button(onClick = { onSave(ProfileEdit.Name(name)) }, enabled = nameValid && name != profile?.name && !nameWaits) { Text(t(R.string.profile_save_name)) }
+                    if (profile?.name != null) TextButton(onClick = { onSave(ProfileEdit.DropName) }, enabled = !nameWaits) { Text(t(R.string.profile_drop_name)) }
                 }
-                if (nameWaits) Text("Your name change waits for its block.", style = MaterialTheme.typography.bodySmall, color = muted)
+                if (nameWaits) Text(t(R.string.profile_name_waits), style = MaterialTheme.typography.bodySmall, color = muted)
                 OutlinedTextField(
                     value = bio,
                     onValueChange = { bio = it.take(MAX_BIO) },
-                    label = { Text("Bio") },
+                    label = { Text(t(R.string.profile_bio)) },
                     supportingText = { Text("${bio.length} / $MAX_BIO") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Picture", style = MaterialTheme.typography.titleSmall)
+                Text(t(R.string.profile_picture_heading), style = MaterialTheme.typography.titleSmall)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val chosen = newPicture
                     when {
                         chosen != null -> remember(chosen) { decodeScaled(chosen, PICTURE_SIDE) }?.let {
-                            Image(it, "The new picture", Modifier.size(56.dp).clip(RoundedCornerShape(11.dp)))
+                            Image(it, t(R.string.profile_new_picture), Modifier.size(56.dp).clip(RoundedCornerShape(11.dp)))
                         }
                         removed -> Avatar(address, 56.dp)
                         else -> ProfilePicture(address, ipfsCid(oldPicture), 56.dp)
                     }
-                    OutlinedButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose") }
-                    if (chosen != null || (oldPicture.isNotEmpty() && !removed)) TextButton(onClick = { newPicture = null; removed = true }) { Text("Remove") }
+                    OutlinedButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text(t(R.string.profile_choose)) }
+                    if (chosen != null || (oldPicture.isNotEmpty() && !removed)) TextButton(onClick = { newPicture = null; removed = true }) { Text(t(R.string.common_remove)) }
                 }
                 Text(
-                    "A square of $PICTURE_SIDE pixels, at most ${MAX_PICTURE_BYTES / 1000} KB, stored on IPFS (a storeToIpfs transaction with its own fee).",
+                    t(R.string.profile_picture_rules, PICTURE_SIDE, MAX_PICTURE_BYTES / 1000),
                     style = MaterialTheme.typography.bodySmall, color = muted,
                 )
                 note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -137,18 +137,18 @@ fun ProfileEditDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(ProfileEdit.Profile(bio.trim(), newPicture, if (removed) "" else oldPicture)) }, enabled = profileChanged && !profileWaits) {
-                Text("Save the profile")
+                Text(t(R.string.profile_save_profile))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 
 /** Sends an [edit] of the editor through [sending], each with its fees shown first. */
 fun sendProfileEdit(sending: SocialSending, edit: ProfileEdit) = when (edit) {
-    is ProfileEdit.Name -> sending.prepareProfile("Name @${edit.name}", "Claims the name @${edit.name} for your address") { ProfileCalls.claimName(edit.name) }
-    ProfileEdit.DropName -> sending.prepareProfile("Drop the name", "Drops your name: it stays blocked for 2 epochs, for everyone") { ProfileCalls.dropName() }
-    is ProfileEdit.Profile -> sending.prepareProfile("Profile", "Saves your bio and picture", edit.newPicture) { stored ->
+    is ProfileEdit.Name -> sending.prepareProfile(t(R.string.profile_claim_what, edit.name), t(R.string.profile_claim_detail, edit.name)) { ProfileCalls.claimName(edit.name) }
+    ProfileEdit.DropName -> sending.prepareProfile(t(R.string.profile_drop_name), t(R.string.profile_drop_detail)) { ProfileCalls.dropName() }
+    is ProfileEdit.Profile -> sending.prepareProfile(t(R.string.profile_title), t(R.string.profile_save_detail), edit.newPicture) { stored ->
         ProfileCalls.setProfile(edit.bio, stored ?: edit.keptPicture)
     }
 }

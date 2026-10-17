@@ -215,11 +215,11 @@ private fun readLocal(context: Context, state: ScreenState): ScreenState {
 
 private fun networkName(context: Context): String {
     val cm = context.getSystemService(ConnectivityManager::class.java)
-    val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return "Offline"
+    val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return t(R.string.node_network_offline)
     return when {
         caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
-        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile data"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> t(R.string.node_network_mobile_data)
         caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
-        else -> "Other"
+        else -> t(R.string.node_network_other)
     }
 }

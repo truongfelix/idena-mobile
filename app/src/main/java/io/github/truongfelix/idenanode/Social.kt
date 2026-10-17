@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -433,16 +434,27 @@ fun lastActivityHeight(post: SocialPost): Long = maxOf(
  * How the feed is ordered: as idena.social offers it, by the newest posts or by the latest activity; or
  * the posts of a period ([FeedPeriod]) with the most likes, answers (replies and comments) or iDNA tipped.
  */
-enum class FeedSort(val title: String, val ranked: Boolean = false) {
-    Activity("Latest activity"),
-    Newest("Newest posts"),
-    Likes("Most liked", ranked = true),
-    Comments("Most commented", ranked = true),
-    Tips("Most tipped", ranked = true),
+enum class FeedSort(@StringRes private val titleId: Int, val ranked: Boolean = false) {
+    Activity(R.string.social_sort_activity),
+    Newest(R.string.social_sort_newest),
+    Likes(R.string.social_sort_likes, ranked = true),
+    Comments(R.string.social_sort_comments, ranked = true),
+    Tips(R.string.social_sort_tips, ranked = true),
+    ;
+
+    val title: String
+        get() = t(titleId)
 }
 
 /** The posts a ranked sort looks at: made in the current epoch, the last 7 days, 30 days, 365 days, or ever. */
-enum class FeedPeriod(val title: String, val days: Int = 0) { Epoch("This epoch"), Week("7 days", 7), Month("1 month", 30), Year("1 year", 365), All("All") }
+enum class FeedPeriod(@StringRes private val titleId: Int, val days: Int = 0) {
+    Epoch(R.string.social_period_epoch), Week(R.string.social_period_week, 7), Month(R.string.social_period_month, 30),
+    Year(R.string.social_period_year, 365), All(R.string.social_period_all),
+    ;
+
+    val title: String
+        get() = t(titleId)
+}
 
 /** What a ranked sort counts on [post] itself. */
 private fun rankOf(post: SocialPost, sort: FeedSort): BigDecimal = when (sort) {
@@ -550,7 +562,13 @@ fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
 }
 
 /** What can notify the identity, each kind on or off: likes, replies and comments, tips. */
-enum class NotifyKind(val title: String) { Likes("Likes"), Comments("Comments"), Tips("Tips") }
+enum class NotifyKind(@StringRes private val titleId: Int) {
+    Likes(R.string.social_notify_likes), Comments(R.string.social_notify_comments), Tips(R.string.social_notify_tips),
+    ;
+
+    val title: String
+        get() = t(titleId)
+}
 
 val ActivityKind.notifyKind: NotifyKind
     get() = when (this) {
@@ -567,24 +585,24 @@ fun newActivity(items: List<ActivityItem>, seenThrough: Long, enabled: Set<Notif
 fun noticeText(news: List<ActivityItem>, shortAddress: (String) -> String): String {
     if (news.size == 1) {
         val item = news[0]
-        val action = when (item.kind) {
-            ActivityKind.Like -> "liked your post"
-            ActivityKind.Reply -> "replied to your post"
-            ActivityKind.Comment -> "commented on your post"
-            ActivityKind.Tip -> "tipped you ${item.amount?.let(::tipText)} iDNA"
+        val actor = shortAddress(item.actor)
+        return when (item.kind) {
+            ActivityKind.Like -> t(R.string.social_notice_liked, actor)
+            ActivityKind.Reply -> t(R.string.social_notice_replied, actor)
+            ActivityKind.Comment -> t(R.string.social_notice_commented, actor)
+            ActivityKind.Tip -> t(R.string.social_notice_tipped, actor, "${item.amount?.let(::tipText)}")
         }
-        return "${shortAddress(item.actor)} $action"
     }
     val counts = news.groupingBy { it.kind.notifyKind }.eachCount()
     val parts = NotifyKind.entries.mapNotNull { kind ->
         val n = counts[kind] ?: return@mapNotNull null
         when (kind) {
-            NotifyKind.Likes -> if (n == 1) "1 like" else "$n likes"
-            NotifyKind.Comments -> if (n == 1) "1 reply" else "$n replies"
-            NotifyKind.Tips -> if (n == 1) "1 tip" else "$n tips"
+            NotifyKind.Likes -> tp(R.plurals.social_notice_likes, n, n)
+            NotifyKind.Comments -> tp(R.plurals.social_notice_replies, n, n)
+            NotifyKind.Tips -> tp(R.plurals.social_notice_tips, n, n)
         }
     }
-    return "${news.size} new on your posts: ${parts.joinToString(", ")}"
+    return t(R.string.social_notice_many, news.size, parts.joinToString(", "))
 }
 
 /**
@@ -681,14 +699,18 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
     )
 }
 
-/** An identity's state (dna_identity) as idena.social names it: "Not validated" for an address without one. */
-fun identityStatus(state: String): String = if (state.isEmpty() || state == "Undefined") "Not validated" else state
+/**
+ * An identity's state (dna_identity) as idena.social names it, in the app's language: "Not validated" for an
+ * address without one; a state the app does not know shows as the node writes it.
+ */
+fun identityStatus(state: String): String =
+    if (state.isEmpty() || state == "Undefined") t(R.string.social_not_validated) else identityStateText(state)
 
 /** What a post's header shows of its author's identity: the state and the age in epochs. */
 data class AuthorIdentity(val state: String, val age: Int) {
     /** "Human · age 12"; the state alone without an identity or at age 0. */
     val label: String
-        get() = identityStatus(state) + if (age > 0 && identityStatus(state) != "Not validated") "  ·  age $age" else ""
+        get() = if (age > 0 && state.isNotEmpty() && state != "Undefined") t(R.string.social_status_age, identityStatus(state), age) else identityStatus(state)
 }
 
 /**
@@ -698,13 +720,13 @@ data class AuthorIdentity(val state: String, val age: Int) {
 fun timeAgo(time: Long, now: Long): String {
     val s = now - time
     return when {
-        s < 0 -> "now"
-        s < 60 -> "${s}s"
-        s < 3600 -> "${s / 60}min"
-        s < 86_400 -> "${s / 3600}h"
-        s < 30 * 86_400 -> "${s / 86_400}d"
-        s < 365 * 86_400 -> "${s / (30 * 86_400)}mo"
-        else -> "${s / (365 * 86_400)}y"
+        s < 0 -> t(R.string.social_ago_now)
+        s < 60 -> t(R.string.social_ago_seconds, s)
+        s < 3600 -> t(R.string.social_ago_minutes, s / 60)
+        s < 86_400 -> t(R.string.social_ago_hours, s / 3600)
+        s < 30 * 86_400 -> t(R.string.social_ago_days, s / 86_400)
+        s < 365 * 86_400 -> t(R.string.social_ago_months, s / (30 * 86_400))
+        else -> (s / (365 * 86_400)).toInt().let { tp(R.plurals.social_ago_years, it, it) }
     }
 }
 
@@ -932,16 +954,16 @@ const val MAX_START_BLOCK_AGE_SECONDS = 3_600L
 fun scanStartWait(height: Long, time: Long, now: Long): String? {
     val age = now - time
     return when {
-        height < SOCIAL_FIRST_BLOCK -> "Waiting for the node's newest blocks: it is at block ${blockNumber.format(height)}, before idena.social."
-        age > MAX_START_BLOCK_AGE_SECONDS -> "Waiting for the node's newest blocks: its newest one is ${ageText(age)} old."
+        height < SOCIAL_FIRST_BLOCK -> t(R.string.social_wait_before_contract, blockNumber.format(height))
+        age > MAX_START_BLOCK_AGE_SECONDS -> t(R.string.social_wait_old_head, ageText(age))
         else -> null
     }
 }
 
 private fun ageText(seconds: Long): String = when {
-    seconds >= 2 * 86_400 -> "${seconds / 86_400} days"
-    seconds >= 2 * 3_600 -> "${seconds / 3_600} h"
-    else -> "${seconds / 60} min"
+    seconds >= 2 * 86_400 -> t(R.string.social_age_days, seconds / 86_400)
+    seconds >= 2 * 3_600 -> t(R.string.social_age_hours, seconds / 3_600)
+    else -> t(R.string.social_age_minutes, seconds / 60)
 }
 
 /**
@@ -950,24 +972,23 @@ private fun ageText(seconds: Long): String = when {
  * syncs, the posts are more than [UP_TO_DATE_LAG] blocks behind its head, or the history is not read yet.
  */
 fun scanState(node: NodeView?, scanning: Boolean, head: Long?, cache: SocialCache?): BarState {
-    if (node == null) return BarState(Health.Bad, "The node does not answer")
-    if (node.peers == 0) return BarState(Health.Bad, "No peers")
-    if (node.validation) return BarState(Health.Off, "Paused during the validation")
-    if (node.syncing) return BarState(Health.Warn, "The node is syncing")
-    if (cache == null) return if (scanning) BarState(Health.Warn, "Starting the scan") else BarState(Health.Off, "Scan off")
-    if (!scanning) return BarState(Health.Off, "Scan off")
+    if (node == null) return BarState(Health.Bad, t(R.string.social_bar_no_answer))
+    if (node.peers == 0) return BarState(Health.Bad, t(R.string.social_bar_no_peers))
+    if (node.validation) return BarState(Health.Off, t(R.string.social_bar_validation))
+    if (node.syncing) return BarState(Health.Warn, t(R.string.social_bar_node_syncing))
+    if (cache == null) return if (scanning) BarState(Health.Warn, t(R.string.social_bar_starting)) else BarState(Health.Off, t(R.string.social_bar_scan_off))
+    if (!scanning) return BarState(Health.Off, t(R.string.social_bar_scan_off))
     val behind = (head ?: cache.authorsHeight) - cache.authorsHeight
-    if (behind > UP_TO_DATE_LAG) return BarState(Health.Warn, if (behind == 1L) "1 block behind" else "${blockNumber.format(behind)} blocks behind")
-    if (!cache.historyDone) return BarState(Health.Warn, "Reading older posts: ${(cache.scannedShare * 100).toInt()}%")
-    return BarState(Health.Good, "Up to date")
+    if (behind > UP_TO_DATE_LAG) {
+        return BarState(Health.Warn, tp(R.plurals.social_bar_blocks_behind, behind.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), blockNumber.format(behind)))
+    }
+    if (!cache.historyDone) return BarState(Health.Warn, t(R.string.social_bar_reading_older, (cache.scannedShare * 100).toInt()))
+    return BarState(Health.Good, t(R.string.social_bar_up_to_date))
 }
 
 /** The Social status in the title row: [state]'s label, then the node's peers while it has some. */
-fun socialBarLabel(state: BarState, peers: Int?): String = when {
-    peers == null || peers <= 0 -> state.label
-    peers == 1 -> "${state.label} · 1 peer"
-    else -> "${state.label} · $peers peers"
-}
+fun socialBarLabel(state: BarState, peers: Int?): String =
+    if (peers == null || peers <= 0) state.label else tp(R.plurals.social_bar_peers, peers, state.label, peers)
 
 /** Posts between two ads in the feed. */
 const val POSTS_PER_AD = 5

@@ -55,7 +55,7 @@ fun SearchField(model: SocialModel, trailing: @Composable () -> Unit) {
                 Icon(Icons.Filled.Search, contentDescription = null, Modifier.size(20.dp), tint = colors.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    if (model.searchQuery.isEmpty()) Text("Search, or r/ for the topics", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                    if (model.searchQuery.isEmpty()) Text(t(R.string.social_search_hint), style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
                     field()
                 }
                 if (model.searchQuery.isNotEmpty()) {
@@ -96,7 +96,7 @@ fun HitCard(
                 PersonAvatar(hit.address, 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Open the profile of ${displayName(hit.address, LocalNames.current)}  ›", style = MaterialTheme.typography.titleSmall)
+                    Text(t(R.string.social_search_open_profile, displayName(hit.address, LocalNames.current)), style = MaterialTheme.typography.titleSmall)
                     Text(shortAddress(hit.address), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 }
             }

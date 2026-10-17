@@ -48,10 +48,22 @@ fun TrustChip(target: String, trust: TrustCount?, me: String?, canAct: Boolean, 
         selected = mine,
         enabled = canAct && trust != null && !waiting,
         onClick = {
-            if (mine) onCall("Take your Trust back", "Your Trust in ${trustName(target)} no longer counts", ProfileCalls.untrust(target))
-            else onCall("Trust", "Gives your public Trust to ${trustName(target)}: everyone sees it; you can take it back", ProfileCalls.trust(target))
+            val topic = target.startsWith(TOPIC_PREFIX)
+            if (mine) {
+                onCall(
+                    t(R.string.profile_untrust_what),
+                    if (topic) t(R.string.profile_untrust_topic_detail, target) else t(R.string.profile_untrust_detail),
+                    ProfileCalls.untrust(target),
+                )
+            } else {
+                onCall(
+                    t(R.string.profile_trust),
+                    if (topic) t(R.string.profile_trust_topic_detail, target) else t(R.string.profile_trust_person_detail),
+                    ProfileCalls.trust(target),
+                )
+            }
         },
-        label = { Text(if (waiting) "Trust · waiting for a block" else if (mine) "Trusted" else "Trust") },
+        label = { Text(if (waiting) t(R.string.profile_trust_waiting) else if (mine) t(R.string.profile_trusted) else t(R.string.profile_trust)) },
     )
 }
 
@@ -66,10 +78,10 @@ fun TrustRow(target: String, trust: TrustCount?, failed: Boolean, me: String?, c
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TrustChip(target, trust, me, canAct, onCall)
         when {
-            failed -> Text("Trust: the node did not answer.", style = body)
-            trust == null -> Text("Trust: reading…", style = body)
+            failed -> Text(t(R.string.profile_trust_no_answer), style = body)
+            trust == null -> Text(t(R.string.profile_trust_reading), style = body)
             else -> Text(
-                "🤝 ${trustText(trust) ?: "Trusted by nobody yet"}",
+                "🤝 ${trustText(trust) ?: t(R.string.profile_trusted_by_nobody)}",
                 Modifier.clickable(enabled = trust.counted.isNotEmpty()) { listing = true },
                 style = body,
                 fontWeight = FontWeight.Medium,
@@ -81,15 +93,13 @@ fun TrustRow(target: String, trust: TrustCount?, failed: Boolean, me: String?, c
     }
 }
 
-private fun trustName(target: String) = if (target.startsWith(TOPIC_PREFIX)) target else "this person"
-
 /** The givers counted now, each opening its profile: the split, then the identities, then the vouched members. */
 @Composable
 private fun TrustGiversDialog(trust: TrustCount, onDismiss: () -> Unit, onProfile: (String) -> Unit) {
     val names = LocalNames.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Trusted by ${trust.total}") },
+        title = { Text(t(R.string.profile_trusted_by_n, trust.total)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(trustSplit(trust), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -100,12 +110,12 @@ private fun TrustGiversDialog(trust: TrustCount, onDismiss: () -> Unit, onProfil
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         PersonAvatar(giver.address, 32.dp)
-                        Text(displayName(giver.address, names) + if (giver.vouched) " (vouched)" else "", style = MaterialTheme.typography.bodyMedium)
+                        Text(if (giver.vouched) t(R.string.profile_giver_vouched, displayName(giver.address, names)) else displayName(giver.address, names), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
 }
 

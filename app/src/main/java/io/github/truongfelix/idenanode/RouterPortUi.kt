@@ -168,15 +168,15 @@ class RouterPortModel(private val context: Context) {
 
 /** What the row says while the node looks for the router, [minutes] after the search started. */
 fun routerSearchingText(heard: String?, minutes: Long): String {
-    val answered = heard?.let { " $it answered, without port opening (UPnP)." }.orEmpty()
-    val soFar = if (minutes > 0) " ($minutes min so far)." else "."
-    return "Looking for the router of this Wi-Fi…$answered Some routers announce themselves only every 15 minutes$soFar"
+    val answered = heard?.let { t(R.string.router_answered_without_upnp, it) }
+    val soFar = if (minutes > 0) t(R.string.router_announce_minutes, minutes) else t(R.string.router_announce)
+    return listOfNotNull(t(R.string.router_searching), answered, soFar).joinToString(" ")
 }
 
 /** What the row says when the search found no router to open the port on. */
 fun routerNotFoundText(heard: String?): String =
-    heard?.let { "$it offers no port opening (UPnP): it may be turned off in the router's settings" }
-        ?: "No router with UPnP heard on this Wi-Fi"
+    heard?.let { t(R.string.router_no_upnp_on, it) }
+        ?: t(R.string.router_none_heard)
 
 /** What the row says about a found router, and which buttons it offers. */
 data class RouterPortView(val text: String, val canOpen: Boolean, val canClose: Boolean)
@@ -192,24 +192,22 @@ fun routerPortView(found: RouterPortState.Found, now: Instant, zone: ZoneId = Zo
             val mapping = found.mapping!!
             val end = found.opening?.takeIf { it.client == found.phoneIp }?.let { Instant.ofEpochMilli(it.endMs) }
                 ?: mapping.leaseSeconds.takeIf { it > 0 }?.let { now.plusSeconds(it) }
-            val until = end?.let { "until ${formatOpeningEnd(it, zone)}" } ?: "with no end"
-            val incoming = found.inbound?.let { " · $it ${if (it == 1) "peer" else "peers"} connected from outside since" }.orEmpty()
-            RouterPortView("Open on $name $until$incoming", canOpen = false, canClose = true)
+            val until = end?.let { t(R.string.router_until, formatOpeningEnd(it, zone)) } ?: t(R.string.router_no_end)
+            val text = found.inbound?.let { tp(R.plurals.router_open_inbound, it, name, until, it) } ?: t(R.string.router_open_on, name, until)
+            RouterPortView(text, canOpen = false, canClose = true)
         }
         MappingOwner.PhoneBefore ->
-            RouterPortView("Open on $name for the phone's former address; the node moves it to the new one", canOpen = false, canClose = true)
+            RouterPortView(t(R.string.router_open_former_address, name), canOpen = false, canClose = true)
         MappingOwner.Other ->
-            RouterPortView("Port $NODE_PORT on $name goes to another device (${found.mapping!!.client})", canOpen = false, canClose = false)
-        MappingOwner.None -> RouterPortView("Closed on $name", canOpen = true, canClose = false)
+            RouterPortView(t(R.string.router_other_device, NODE_PORT, name, found.mapping!!.client), canOpen = false, canClose = false)
+        MappingOwner.None -> RouterPortView(t(R.string.router_closed_on, name), canOpen = true, canClose = false)
     }
 }
 
-const val ROUTER_PORT_TITLE = "Router port"
+val ROUTER_PORT_TITLE: String get() = t(R.string.router_port_title)
 
-val ROUTER_PORT_INFO =
-    "Opens the node's port ($NODE_PORT) on this Wi-Fi's router (UPnP), so that outside Idena nodes can connect to " +
-        "the phone. The router keeps it open until the end you choose, even if the phone leaves this Wi-Fi.\n\n" +
-        "Open a port only if you know what it means: the node can then be reached from the internet."
+val ROUTER_PORT_INFO: String
+    get() = t(R.string.router_port_info, NODE_PORT)
 
 /**
  * The Router port row of the advanced settings, on Wi-Fi: the search, a found router's state, and the Open and
@@ -229,7 +227,7 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
             Text(ROUTER_PORT_TITLE, style = MaterialTheme.typography.bodyMedium)
             Icon(
                 Icons.Outlined.Info,
-                contentDescription = "About $ROUTER_PORT_TITLE",
+                contentDescription = t(R.string.node_about_setting, ROUTER_PORT_TITLE),
                 Modifier.clickable { showInfo = true }.padding(6.dp).size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -244,18 +242,18 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
             }
             is RouterPortState.NotFound -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(routerNotFoundText(state.heard), style = small, color = muted, modifier = Modifier.weight(1f))
-                TextButton(onClick = { model.searchAgain() }) { Text("Search again") }
+                TextButton(onClick = { model.searchAgain() }) { Text(t(R.string.router_search_again)) }
             }
             is RouterPortState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Router: ${state.message}", style = small, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                TextButton(onClick = { scope.launch { model.refresh(syncEnabled, search = true) } }) { Text("Try again") }
+                Text(t(R.string.router_failed, state.message), style = small, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                TextButton(onClick = { scope.launch { model.refresh(syncEnabled, search = true) } }) { Text(t(R.string.common_try_again)) }
             }
             is RouterPortState.Found -> {
                 val view = routerPortView(state, Instant.now())
                 Text(view.text, style = small, color = muted)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    if (view.canOpen) TextButton(enabled = !model.busy, onClick = { choose = true }) { Text("Open…") }
-                    if (view.canClose) TextButton(enabled = !model.busy, onClick = { confirmClose = true }) { Text("Close") }
+                    if (view.canOpen) TextButton(enabled = !model.busy, onClick = { choose = true }) { Text(t(R.string.router_open_ellipsis)) }
+                    if (view.canClose) TextButton(enabled = !model.busy, onClick = { confirmClose = true }) { Text(t(R.string.common_close)) }
                 }
                 if (choose) {
                     OpenDialog(state.gateway.name, validation, onDismiss = { choose = false }) { end ->
@@ -266,17 +264,14 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
                 if (confirmClose) {
                     AlertDialog(
                         onDismissRequest = { confirmClose = false },
-                        title = { Text("Close the router port?") },
+                        title = { Text(t(R.string.router_close_question)) },
                         text = {
-                            Text(
-                                "Outside nodes can no longer connect to the phone. The peers connected at this moment " +
-                                    "drop within a minute; the node keeps looking for peers itself.",
-                            )
+                            Text(t(R.string.router_close_text))
                         },
                         confirmButton = {
-                            TextButton(onClick = { confirmClose = false; scope.launch { model.close(state) } }) { Text("Close the port") }
+                            TextButton(onClick = { confirmClose = false; scope.launch { model.close(state) } }) { Text(t(R.string.router_close_port)) }
                         },
-                        dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("Cancel") } },
+                        dismissButton = { TextButton(onClick = { confirmClose = false }) { Text(t(R.string.common_cancel)) } },
                     )
                 }
             }
@@ -287,7 +282,7 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
             onDismissRequest = { showInfo = false },
             title = { Text(ROUTER_PORT_TITLE) },
             text = { Text(ROUTER_PORT_INFO) },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(t(R.string.common_ok)) } },
         )
     }
 }
@@ -299,11 +294,11 @@ private fun OpenDialog(routerName: String, validation: Instant?, onDismiss: () -
     var chosen by remember { mutableStateOf(PortDuration.H6) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Open the node's port on $routerName?") },
+        title = { Text(t(R.string.router_open_question, routerName)) },
         text = {
             Column {
                 Text(
-                    "For how long? The router keeps it until then, also if the phone leaves this Wi-Fi.",
+                    t(R.string.router_how_long),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 PortDuration.entries.forEach { duration ->
@@ -316,7 +311,7 @@ private fun OpenDialog(routerName: String, validation: Instant?, onDismiss: () -
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(duration.label)
                             Text(
-                                end?.let { "until ${formatOpeningEnd(it)}" } ?: "the validation date is not known yet",
+                                end?.let { t(R.string.router_until, formatOpeningEnd(it)) } ?: t(R.string.router_validation_unknown),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -326,8 +321,8 @@ private fun OpenDialog(routerName: String, validation: Instant?, onDismiss: () -
             }
         },
         confirmButton = {
-            TextButton(onClick = { chosen.end(Instant.now(), validation)?.let(onOpen) }) { Text("Open") }
+            TextButton(onClick = { chosen.end(Instant.now(), validation)?.let(onOpen) }) { Text(t(R.string.router_open)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }

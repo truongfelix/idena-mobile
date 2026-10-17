@@ -37,9 +37,9 @@ fun HiddenPostsView(model: SocialModel, modifier: Modifier = Modifier) {
         hashes.map { found[it] ?: HiddenEntry(it) }.sortedByDescending { it.call?.height ?: Long.MAX_VALUE }
     }
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        item { Text("Hidden posts", style = MaterialTheme.typography.titleLarge) }
-        item { Hint("Posts, replies and comments you hid: they leave the lists, and show folded in their thread.") }
-        if (entries.isEmpty()) item { Text("Nothing is hidden. To hide a post: ⋯ at its top right.", style = MaterialTheme.typography.bodyMedium) }
+        item { Text(t(R.string.socialb_hidden_posts), style = MaterialTheme.typography.titleLarge) }
+        item { Hint(t(R.string.socialb_hidden_posts_note)) }
+        if (entries.isEmpty()) item { Text(t(R.string.socialb_nothing_hidden), style = MaterialTheme.typography.bodyMedium) }
         items(entries, key = { it.hash }) { entry ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 val call = entry.call
@@ -56,9 +56,9 @@ fun HiddenPostsView(model: SocialModel, modifier: Modifier = Modifier) {
                     )
                     Text(
                         when {
-                            call == null -> "Not in the posts read so far."
-                            ipfsCid(call.message) != null -> "Text on IPFS"
-                            call.message.isEmpty() -> "🖼 Media"
+                            call == null -> t(R.string.socialb_not_in_posts_read)
+                            ipfsCid(call.message) != null -> t(R.string.socialb_preview_ipfs)
+                            call.message.isEmpty() -> t(R.string.socialb_media)
                             else -> call.message.replace(Regex("\\s+"), " ").trim()
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -67,7 +67,7 @@ fun HiddenPostsView(model: SocialModel, modifier: Modifier = Modifier) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                OutlinedButton(onClick = { model.hidden.hidePost(entry.hash, false) }) { Text("Show again") }
+                OutlinedButton(onClick = { model.hidden.hidePost(entry.hash, false) }) { Text(t(R.string.socialb_show_again)) }
             }
         }
     }
@@ -78,9 +78,9 @@ fun HiddenPostsView(model: SocialModel, modifier: Modifier = Modifier) {
 fun BlockedTopicsView(model: SocialModel, modifier: Modifier = Modifier) {
     val topics = model.hidden.topics.sorted()
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        item { Text("Blocked topics", style = MaterialTheme.typography.titleLarge) }
-        item { Hint("Their posts are hidden on this phone only.") }
-        if (topics.isEmpty()) item { Text("No topic is blocked. To block one: Block on its page, or ⋯ on one of its posts.", style = MaterialTheme.typography.bodyMedium) }
+        item { Text(t(R.string.socialb_blocked_topics), style = MaterialTheme.typography.titleLarge) }
+        item { Hint(t(R.string.socialb_blocked_topics_note)) }
+        if (topics.isEmpty()) item { Text(t(R.string.socialb_no_topic_blocked), style = MaterialTheme.typography.bodyMedium) }
         items(topics, key = { it }) { topic ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -88,7 +88,7 @@ fun BlockedTopicsView(model: SocialModel, modifier: Modifier = Modifier) {
                     Modifier.weight(1f).clickable { model.openTopic(topic) }.padding(vertical = 10.dp),
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                OutlinedButton(onClick = { model.setTopicBlocked(topic, false) }) { Text("Unblock") }
+                OutlinedButton(onClick = { model.setTopicBlocked(topic, false) }) { Text(t(R.string.socialb_unblock)) }
             }
         }
     }

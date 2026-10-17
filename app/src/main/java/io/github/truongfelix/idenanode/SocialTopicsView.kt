@@ -92,8 +92,8 @@ fun LazyListScope.topicItems(
     if (topics.isEmpty()) {
         item(key = "no-topics") {
             Text(
-                if (query.trim().removePrefix(TOPIC_PREFIX).isBlank()) "No posts in a topic yet. Write one: the editor's Topic field puts a post in a topic."
-                else "No topic holds \"${query.trim().removePrefix(TOPIC_PREFIX)}\" in the posts read so far.",
+                if (query.trim().removePrefix(TOPIC_PREFIX).isBlank()) t(R.string.social_topics_none)
+                else t(R.string.social_topics_no_match, query.trim().removePrefix(TOPIC_PREFIX)),
                 Modifier.padding(vertical = 8.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -112,7 +112,7 @@ fun LazyListScope.topicItems(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(topicChannel(topic.name), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "${topic.posts} ${if (topic.posts == 1) "post" else "posts"}  ·  last activity ${ago(topic.lastTime)}",
+                        tp(R.plurals.social_topic_summary, topic.posts, topic.posts, ago(topic.lastTime)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -125,8 +125,8 @@ fun LazyListScope.topicItems(
 
 @Composable
 private fun FollowTopicButton(following: Boolean, onFollow: (Boolean) -> Unit) {
-    if (following) OutlinedButton(onClick = { onFollow(false) }) { Text("Following") }
-    else Button(onClick = { onFollow(true) }) { Text("Follow") }
+    if (following) OutlinedButton(onClick = { onFollow(false) }) { Text(t(R.string.social_following)) }
+    else Button(onClick = { onFollow(true) }) { Text(t(R.string.social_follow)) }
 }
 
 /**
@@ -156,29 +156,28 @@ fun TopicView(
                     Text(topicChannel(name), style = MaterialTheme.typography.headlineSmall)
                 }
                 Text(
-                    "${posts.size} ${if (posts.size == 1) "post" else "posts"} in the posts read so far. Anyone can write in " +
-                        "any topic; idena.social does not show topic posts.",
+                    tp(R.plurals.social_topic_header, posts.size, posts.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (blocked) {
                     Text(
-                        "Blocked: its posts are hidden on this phone.",
+                        t(R.string.social_topic_blocked),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    OutlinedButton(onClick = { onBlock(false) }) { Text("Unblock") }
+                    OutlinedButton(onClick = { onBlock(false) }) { Text(t(R.string.social_unblock)) }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FollowTopicButton(following, onFollow)
-                        OutlinedButton(onClick = { onBlock(true) }) { Text("Block") }
+                        OutlinedButton(onClick = { onBlock(true) }) { Text(t(R.string.social_block)) }
                     }
                     trust()
                 }
                 Spacer(Modifier.padding(2.dp))
             }
         }
-        if (posts.isEmpty()) item(key = "empty") { Text("No posts in this topic yet.", style = MaterialTheme.typography.bodySmall) }
+        if (posts.isEmpty()) item(key = "empty") { Text(t(R.string.social_topic_empty), style = MaterialTheme.typography.bodySmall) }
         items(posts, key = { it.id }) { post ->
             Column {
                 HorizontalDivider()
@@ -197,12 +196,12 @@ fun TopicField(text: String, feed: List<SocialPost>, onChange: (String) -> Unit)
         value = text,
         onValueChange = onChange,
         modifier = Modifier.fillMaxWidth(),
-        label = { Text("Topic (optional)") },
+        label = { Text(t(R.string.social_topic_field)) },
         prefix = { Text(TOPIC_PREFIX) },
         singleLine = true,
         isError = !valid,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-        supportingText = if (valid) null else ({ Text("a-z, 0-9 and _, 3 to 21 characters") }),
+        supportingText = if (valid) null else ({ Text(t(R.string.social_topic_rule)) }),
     )
     val offered = remember(feed, typed) {
         topicList(feed, typed).map { it.name }.filter { it != typedTopic(typed) }.take(MAX_OFFERED_TOPICS)

@@ -30,13 +30,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val REPORTS_INFO = "When the node stops answering for 5 minutes, the app writes a report and restarts " +
-    "the node, up to 3 times in 6 hours.\n\n" +
-    "A report shows what each part of the node was doing (its goroutines) and about the last 20 minutes of its log. " +
-    "It holds the node's address and its peers' network addresses, no key.\n\n" +
-    "If your node has trouble connecting or syncing: Make a report, Save the last report, and share it with the Idena " +
-    "community to understand what happens."
-
 /** How long the section waits for the report it asked for. */
 private const val REPORT_WAIT_MS = 30_000L
 
@@ -60,7 +53,7 @@ fun NodeReportsSection(syncEnabled: Boolean) {
         if (uri == null || report == null) return@rememberLauncherForActivityResult
         scope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { NodeReports.save(context, report, uri) } }
-            note = result.fold({ "Saved." }, { "Not saved: ${it.message}" })
+            note = result.fold({ t(R.string.node_report_saved) }, { t(R.string.node_report_not_saved, "${it.message}") })
         }
     }
     LaunchedEffect(making) {
@@ -71,7 +64,7 @@ fun NodeReportsSection(syncEnabled: Boolean) {
             delay(1_000)
             waited += 1_000
         }
-        note = if (NodeReports.latest(context)?.name == before) "The node made no report: is it running?" else null
+        note = if (NodeReports.latest(context)?.name == before) t(R.string.node_report_none_made) else null
         making = false
         reads++
     }
@@ -82,27 +75,27 @@ fun NodeReportsSection(syncEnabled: Boolean) {
         Text(lastRestartText(restarts), Modifier.weight(1f), style = small, color = dim)
         Icon(
             Icons.Outlined.Info,
-            contentDescription = "About the node reports",
+            contentDescription = t(R.string.node_reports_about),
             Modifier.clickable { showInfo = true }.padding(6.dp).size(18.dp),
             tint = dim,
         )
     }
-    latest?.let { Text("Last report: ${reportTime(it.lastModified())}", style = small, color = dim) }
+    latest?.let { Text(t(R.string.node_report_last, reportTime(it.lastModified())), style = small, color = dim) }
     note?.let { Text(it, style = small, color = dim) }
     Row {
         TextButton(enabled = syncEnabled && !making, onClick = {
             note = null
             making = true
             NodeService.makeReport(context)
-        }) { Text(if (making) "Making the report…" else "Make a report") }
-        TextButton(enabled = latest != null, onClick = { latest?.let { saver.launch(it.name) } }) { Text("Save the last report") }
+        }) { Text(if (making) t(R.string.node_report_making) else t(R.string.node_report_make)) }
+        TextButton(enabled = latest != null, onClick = { latest?.let { saver.launch(it.name) } }) { Text(t(R.string.node_report_save_last)) }
     }
     if (showInfo) {
         AlertDialog(
             onDismissRequest = { showInfo = false },
-            title = { Text("Node reports") },
-            text = { Text(REPORTS_INFO) },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            title = { Text(t(R.string.node_reports_title)) },
+            text = { Text(t(R.string.node_reports_info)) },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(t(R.string.common_ok)) } },
         )
     }
 }

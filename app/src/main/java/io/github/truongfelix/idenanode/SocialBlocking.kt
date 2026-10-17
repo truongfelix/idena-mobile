@@ -49,7 +49,8 @@ import kotlinx.coroutines.withContext
  */
 
 /** Under a blocked account's name. */
-const val BLOCKED_TEXT = "Blocked: its posts, replies, comments and messages are hidden on this phone."
+val BLOCKED_TEXT: String
+    get() = t(R.string.socialb_blocked_text)
 
 /** ⋮ on another's profile: Name on this phone ([onName]), Mute or Unmute, Block (asked first). */
 @Composable
@@ -57,20 +58,20 @@ fun BlockMenu(person: Person, onBlock: (Person) -> Unit, onName: (() -> Unit)? =
     var open by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = t(R.string.common_more)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             onName?.let {
-                DropdownMenuItem(text = { Text("Name on this phone") }, onClick = {
+                DropdownMenuItem(text = { Text(t(R.string.socialb_name_on_phone)) }, onClick = {
                     open = false
                     it()
                 })
             }
             // Mute: their posts leave the feeds, their replies fold; the profile still lists them.
-            DropdownMenuItem(text = { Text(if (person.muted) "Unmute" else "Mute") }, onClick = {
+            DropdownMenuItem(text = { Text(if (person.muted) t(R.string.socialb_unmute) else t(R.string.socialb_mute)) }, onClick = {
                 open = false
                 onBlock(person.copy(muted = !person.muted))
             })
-            DropdownMenuItem(text = { Text("Block") }, onClick = {
+            DropdownMenuItem(text = { Text(t(R.string.socialb_block)) }, onClick = {
                 open = false
                 asking = true
             })
@@ -110,30 +111,27 @@ private fun BlockDialog(person: Person, onBlock: (Person) -> Unit, onDismiss: ()
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Block $name?") },
+        title = { Text(t(R.string.socialb_block_ask, name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Their posts, replies, comments, likes, tips and messages are hidden on this phone. The posts stay public " +
-                        "on the chain: they can still see and answer yours. Unblock in Social settings, or on their profile.",
-                )
-                if (giver) Text("You give $name your Trust. Remove it too? It is a transaction: its fee shows before it is sent.")
+                Text(t(R.string.socialb_block_note))
+                if (giver) Text(t(R.string.socialb_block_trust_note, name))
             }
         },
         confirmButton = {
             if (giver && access != null) {
                 TextButton(onClick = {
                     block()
-                    access.onCall("Take your Trust back", "Your Trust in this person no longer counts", ProfileCalls.untrust(person.address))
-                }, enabled = access.canAct) { Text("Block and remove my Trust") }
+                    access.onCall(t(R.string.profile_untrust_what), t(R.string.profile_untrust_detail), ProfileCalls.untrust(person.address))
+                }, enabled = access.canAct) { Text(t(R.string.socialb_block_and_untrust)) }
             } else {
-                TextButton(onClick = block) { Text("Block") }
+                TextButton(onClick = block) { Text(t(R.string.socialb_block)) }
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                if (giver) TextButton(onClick = block) { Text("Block only") }
+                TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) }
+                if (giver) TextButton(onClick = block) { Text(t(R.string.socialb_block_only)) }
             }
         },
     )
@@ -165,24 +163,24 @@ fun PostMenuButton(call: PostCall) {
     val name = displayName(call.author, LocalNames.current)
     Box {
         IconButton(onClick = { open = true }, Modifier.size(28.dp)) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "More", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Filled.MoreVert, contentDescription = t(R.string.common_more), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text(if (hidden) "Show again" else "Hide") }, onClick = {
+            DropdownMenuItem(text = { Text(if (hidden) t(R.string.socialb_show_again) else t(R.string.socialb_hide)) }, onClick = {
                 open = false
                 menu.onHide(call.hash, !hidden)
             })
             val author = menu.person(call.author)
-            DropdownMenuItem(text = { Text("${if (author.muted) "Unmute" else "Mute"} $name", maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
+            DropdownMenuItem(text = { Text(if (author.muted) t(R.string.socialb_unmute_name, name) else t(R.string.socialb_mute_name, name), maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
                 open = false
                 menu.onBlock(author.copy(muted = !author.muted))
             })
-            DropdownMenuItem(text = { Text("Block $name", maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
+            DropdownMenuItem(text = { Text(t(R.string.socialb_block_name, name), maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = {
                 open = false
                 asking = true
             })
             topicOf(call.channel)?.let { topic ->
-                DropdownMenuItem(text = { Text("Block the topic ${topicChannel(topic)}") }, onClick = {
+                DropdownMenuItem(text = { Text(t(R.string.socialb_block_topic, topicChannel(topic))) }, onClick = {
                     open = false
                     menu.onBlockTopic(topic)
                 })
@@ -197,15 +195,15 @@ fun PostMenuButton(call: PostCall) {
 fun BlockedView(model: SocialModel, modifier: Modifier = Modifier) {
     val blocked = sortedPeople(model.people).filter { it.blocked }
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        item { Text("Blocked accounts", style = MaterialTheme.typography.titleLarge) }
+        item { Text(t(R.string.socialb_blocked_accounts), style = MaterialTheme.typography.titleLarge) }
         item {
             Text(
-                "Their posts, replies, comments and messages are hidden on this phone only.",
+                t(R.string.socialb_blocked_accounts_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (blocked.isEmpty()) item { Text("Nobody is blocked. To block an account: ⋮ on its profile.", style = MaterialTheme.typography.bodyMedium) }
+        if (blocked.isEmpty()) item { Text(t(R.string.socialb_nobody_blocked), style = MaterialTheme.typography.bodyMedium) }
         items(blocked, key = { it.address }) { person ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -215,7 +213,7 @@ fun BlockedView(model: SocialModel, modifier: Modifier = Modifier) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                OutlinedButton(onClick = { model.setPerson(person.copy(blocked = false)) }) { Text("Unblock") }
+                OutlinedButton(onClick = { model.setPerson(person.copy(blocked = false)) }) { Text(t(R.string.socialb_unblock)) }
             }
         }
     }
@@ -233,11 +231,10 @@ fun HiddenWordsView(model: SocialModel, modifier: Modifier = Modifier) {
         text = ""
     }
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        item { Text("Hidden words", style = MaterialTheme.typography.titleLarge) }
+        item { Text(t(R.string.socialb_hidden_words), style = MaterialTheme.typography.titleLarge) }
         item {
             Text(
-                "A post with one of these words or phrases leaves the lists; a reply or comment with one shows folded in its " +
-                    "thread. Whole words, capitals and accents ignored. Your own posts are never hidden.",
+                t(R.string.socialb_hidden_words_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -248,14 +245,14 @@ fun HiddenWordsView(model: SocialModel, modifier: Modifier = Modifier) {
                     value = text,
                     onValueChange = { text = it.takeWhole(MAX_HIDDEN_WORD) },
                     Modifier.fillMaxWidth(),
-                    label = { Text("A word or phrase") },
+                    label = { Text(t(R.string.socialb_word_or_phrase)) },
                     singleLine = true,
                     enabled = !full,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { add() }),
-                    trailingIcon = { TextButton(onClick = add, enabled = cleanHiddenWord(text) != null && !full) { Text("Add") } },
+                    trailingIcon = { TextButton(onClick = add, enabled = cleanHiddenWord(text) != null && !full) { Text(t(R.string.socialb_add)) } },
                 )
-                if (full) Text("The list is full ($MAX_HIDDEN_WORDS).", style = MaterialTheme.typography.bodySmall)
+                if (full) Text(t(R.string.socialb_list_full, MAX_HIDDEN_WORDS), style = MaterialTheme.typography.bodySmall)
             }
         }
         items(words, key = { it }) { word ->
@@ -263,7 +260,7 @@ fun HiddenWordsView(model: SocialModel, modifier: Modifier = Modifier) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(word, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                     IconButton(onClick = { model.hidden.changeWords(model.hidden.words - word) }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Remove $word")
+                        Icon(Icons.Filled.Close, contentDescription = t(R.string.socialb_remove_item, word))
                     }
                 }
                 HorizontalDivider()

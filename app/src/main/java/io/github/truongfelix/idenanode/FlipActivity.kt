@@ -4,12 +4,12 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -81,7 +81,7 @@ import java.time.format.FormatStyle
  * Making a flip with the node of the app ([FlipMaking.kt]): the words, the four frames (camera, gallery,
  * or the opt-in image search) with the anti-AI frame, the shuffled order, then the submission.
  */
-class FlipActivity : ComponentActivity() {
+class FlipActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -100,7 +100,9 @@ class FlipActivity : ComponentActivity() {
     }
 }
 
-private enum class FlipStep(val title: String) { Words("Words"), Frames("Pictures"), Shuffle("Shuffle"), Submit("Submit") }
+private enum class FlipStep(@StringRes val title: Int) {
+    Words(R.string.flip_step_words), Frames(R.string.flip_step_pictures), Shuffle(R.string.flip_step_shuffle), Submit(R.string.flip_step_submit),
+}
 
 /**
  * What the node says of the identity's flips: the counts, the keyword pairs, when flips stop, the epoch
@@ -163,7 +165,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
             withContext(Dispatchers.IO) { FlipDraftStore.setSent(context, null) }
             sent = null
             if (check == SentFlipCheck.TimedOut) {
-                message = "The flip sent at ${dateFormat.format(Instant.ofEpochMilli(waiting.sentAt))} was not counted by the node; you can make it again."
+                message = t(R.string.flip_not_counted, dateFormat.format(Instant.ofEpochMilli(waiting.sentAt)))
             }
             return@LaunchedEffect
         }
@@ -185,9 +187,9 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) { Text(t(R.string.common_close)) }
             Spacer(Modifier.weight(1f))
-            Text("Make a flip", style = MaterialTheme.typography.titleMedium)
+            Text(t(R.string.flip_make_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.width(64.dp))
         }
@@ -195,8 +197,8 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
         when {
             state == null -> { CircularProgressIndicator(); return@Column }
             state.isFailure -> {
-                Text("The node did not answer: ${state.exceptionOrNull()?.message}")
-                Button(onClick = { reads++ }) { Text("Try again") }
+                Text(t(R.string.flip_node_no_answer, state.exceptionOrNull()?.message.toString()))
+                Button(onClick = { reads++ }) { Text(t(R.string.common_try_again)) }
                 return@Column
             }
         }
@@ -206,12 +208,12 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
         val nodeState = FlipNodeState(quota, pairs, read.deadline, read.epoch, read.synced)
         QuotaLine(nodeState)
         sent?.takeIf { checkSent(it, read.epoch, read.pairs, System.currentTimeMillis()) == SentFlipCheck.Wait }?.let {
-            Text("Your last flip is sent and waits for a block (${it.hash.take(12)}…).", style = MaterialTheme.typography.bodySmall)
+            Text(t(R.string.flip_last_waits, it.hash.take(12)), style = MaterialTheme.typography.bodySmall)
         }
         if (!nodeState.quota.canMake) {
             Text(
-                if (nodeState.quota.available == 0) "This identity has no flips to make this epoch."
-                else "All the flips of this epoch are made.",
+                if (nodeState.quota.available == 0) t(R.string.flip_none_to_make)
+                else t(R.string.flip_all_made),
                 style = MaterialTheme.typography.bodyLarge,
             )
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
@@ -223,7 +225,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
         val current = draft?.takeIf { d -> free.any { it.words == d.words } }
         if (current == null) {
             LaunchedEffect(free) { draft = withContext(Dispatchers.IO) { FlipDraftStore.open(context, free) } }
-            if (free.isEmpty()) Text("The node gave no unused keyword pair.") else CircularProgressIndicator()
+            if (free.isEmpty()) Text(t(R.string.flip_no_free_pair)) else CircularProgressIndicator()
             return@Column
         }
         val pair = free.first { it.words == current.words }
@@ -232,7 +234,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
         HorizontalDivider()
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         if (!nodeState.synced && step == FlipStep.Submit) {
-            Text("The node is not synced: the flip can be sent once it is.", color = MaterialTheme.colorScheme.error)
+            Text(t(R.string.flip_not_synced), color = MaterialTheme.colorScheme.error)
             // Reads the node again until it is synced.
             LaunchedEffect(read) {
                 kotlinx.coroutines.delay(10_000)
@@ -246,17 +248,17 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                     scope.launch { draft = withContext(Dispatchers.IO) { FlipDraftStore.switchTo(context, next) } }
                 }, onNext = { step = FlipStep.Frames })
                 FlipStep.Frames -> FramesStep(current, words, ::update, onNext = {
-                    working = "Protecting the pictures against AI…"
+                    working = t(R.string.flip_protecting)
                     val fingerprint = draftFingerprint(current.frames, current.adversarial)
                     scope.launch {
                         protectedFor = null
                         protected = withContext(Dispatchers.Default) {
                             runCatching {
                                 current.frames.map { bytes ->
-                                    val pixels = framePixels(bytes!!) ?: error("a picture cannot be read")
+                                    val pixels = framePixels(bytes!!) ?: error(t(R.string.flip_picture_unreadable))
                                     flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, kotlin.random.Random(java.security.SecureRandom().nextLong())))
                                 }
-                            }.onFailure { message = "The pictures could not be prepared: ${it.message}" }.getOrNull()
+                            }.onFailure { message = t(R.string.flip_prepare_failed, it.message.toString()) }.getOrNull()
                         }
                         working = null
                         if (protected != null) {
@@ -284,12 +286,12 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                     // One send at a time, and none while the last one is not counted.
                     if (sending || sent != null || !nodeState.synced || !nodeState.quota.canMake || pairs.none { it.id == current.pairId && !it.used }) return@SubmitStep
                     sending = true
-                    working = "Sending the flip to the node…"
+                    working = t(R.string.flip_sending)
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             runCatching {
                                 val hex = encodeFlip(frames, shuffled, kotlin.random.Random(java.security.SecureRandom().nextLong()))
-                                check(hex.size <= MAX_FLIP_HEX) { "the flip is too large" }
+                                check(hex.size <= MAX_FLIP_HEX) { t(R.string.flip_too_large) }
                                 val sentFlip = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).submitFlip(hex, current.pairId, nodeState.epoch)
                                 // The copy the list of flips shows (the node cannot show it); the flip is sent anyway.
                                 runCatching {
@@ -309,10 +311,10 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                             protected = null
                             protectedFor = null
                             step = FlipStep.Words
-                            message = "Flip submitted (${flip.hash.take(12)}…). The node keeps it on IPFS and sends it at the validation."
+                            message = t(R.string.flip_submitted, flip.hash.take(12))
                             onSent()
                             reads++
-                        }.onFailure { message = "The node refused the flip: ${flipRefusal(it.message.orEmpty())}" }
+                        }.onFailure { message = t(R.string.flip_refused, flipRefusal(it.message.orEmpty())) }
                         sending = false
                     }
                     }
@@ -338,11 +340,11 @@ internal val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDI
 private fun QuotaLine(state: FlipNodeState) {
     val q = state.quota
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        val extra = if (q.available > q.required) " (up to ${q.available})" else ""
-        Text("Flips: ${q.made} of ${q.required} made$extra" + (state.deadline?.let { "  ·  send before ${dateFormat.format(it)}" } ?: ""))
+        val made = if (q.available > q.required) t(R.string.flip_quota_up_to, q.made, q.required, q.available) else t(R.string.flip_quota, q.made, q.required)
+        Text(made + (state.deadline?.let { t(R.string.flip_quota_deadline, dateFormat.format(it)) } ?: ""))
         if (q.missing > 0) {
             Text(
-                "If ${q.missing} required flip${if (q.missing > 1) "s are" else " is"} still missing at the validation, the identity becomes ${q.missingOutcome}.",
+                tp(R.plurals.flip_missing_warning, q.missing, q.missing, q.missingOutcomeLabel),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -355,7 +357,7 @@ private fun StepRow(step: FlipStep) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FlipStep.entries.forEach {
             Text(
-                "${it.ordinal + 1}. ${it.title}",
+                "${it.ordinal + 1}. ${t(it.title)}",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = if (it == step) FontWeight.Bold else FontWeight.Normal,
                 color = if (it == step) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -367,7 +369,7 @@ private fun StepRow(step: FlipStep) {
 @Composable
 private fun WordsStep(words: List<Keyword>, otherPairs: Int, onOther: () -> Unit, onNext: () -> Unit) {
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Tell a short story in four pictures that uses both words:", style = MaterialTheme.typography.bodyMedium)
+        Text(t(R.string.flip_words_intro), style = MaterialTheme.typography.bodyMedium)
         words.forEach {
             Column {
                 Text(it.name.uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -375,14 +377,13 @@ private fun WordsStep(words: List<Keyword>, otherPairs: Int, onOther: () -> Unit
             }
         }
         Text(
-            "Make the story clear for people and not for a computer: the order of the pictures must matter. No text, " +
-                "letters or numbers in the pictures, no violence. One of the four will be a nonsense \"anti-AI\" picture.",
+            t(R.string.flip_words_rules),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (otherPairs > 0) OutlinedButton(onClick = onOther) { Text("Other words") }
-            Button(onClick = onNext) { Text("Next") }
+            if (otherPairs > 0) OutlinedButton(onClick = onOther) { Text(t(R.string.flip_other_words)) }
+            Button(onClick = onNext) { Text(t(R.string.common_next)) }
         }
     }
 }
@@ -423,7 +424,7 @@ internal fun FrameImage(bytes: ByteArray?, modifier: Modifier, selected: Boolean
 
 /** A picture (camera, gallery or search) as a frame: work size, JPEG. */
 private fun frameJpeg(bytes: ByteArray): ByteArray {
-    val pixels = framePixels(bytes) ?: throw java.io.IOException("Android cannot read this picture")
+    val pixels = framePixels(bytes) ?: throw java.io.IOException(t(R.string.flip_android_cannot_read))
     return jpeg(pixels, WORK_WIDTH, WORK_HEIGHT)
 }
 
@@ -452,7 +453,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     var askSearch by remember { mutableStateOf(false) }
 
     fun setFrame(slot: Int, bytes: ByteArray) {
-        note = "Preparing the picture…"
+        note = t(R.string.flip_preparing_picture)
         scope.launch {
             val frame = withContext(Dispatchers.Default) { runCatching { frameJpeg(bytes) } }
             frame.onSuccess { f ->
@@ -489,7 +490,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     }
 
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("The story, in order. Tap a picture to change it.", style = MaterialTheme.typography.bodySmall)
+        Text(t(R.string.flip_story_in_order), style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             (0 until FLIP_FRAMES).forEach { slot ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -497,7 +498,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
                         draft.frames[slot],
                         Modifier.fillMaxWidth().clickable { selected = slot },
                         selected = slot == selected,
-                        label = if (slot == draft.adversarial) "Anti-AI" else "${slot + 1}",
+                        label = if (slot == draft.adversarial) t(R.string.flip_anti_ai) else "${slot + 1}",
                     )
                     Row {
                         TextButton(onClick = { update(moveFrame(draft, slot, -1)); if (selected == slot) selected = slot - 1 }, enabled = slot > 0) { Text("◀") }
@@ -509,29 +510,27 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
         if (selected == draft.adversarial) {
             Text(
-                "This is the nonsense picture that makes the flip hard for AI. It is made from " +
-                    (if (draft.sources.isEmpty()) "your story pictures" else "${draft.sources.size} search pictures") +
-                    ". Move it with ◀ ▶.",
+                if (draft.sources.isEmpty()) t(R.string.flip_adversarial_from_story) else t(R.string.flip_adversarial_from_search, draft.sources.size),
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedButton(onClick = { update(draft.copy(frames = draft.frames.toMutableList().also { it[draft.adversarial] = null })) }) {
-                Text("Make a new anti-AI picture")
+                Text(t(R.string.flip_new_anti_ai))
             }
         } else {
-            Text("Picture ${selected + 1}:", style = MaterialTheme.typography.titleSmall)
+            Text(t(R.string.flip_picture_n, selected + 1), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     cameraFile.parentFile?.mkdirs()
                     camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.files", cameraFile))
-                }) { Text("Camera") }
-                OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Gallery") }
+                }) { Text(t(R.string.flip_camera)) }
+                OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text(t(R.string.flip_gallery)) }
             }
         }
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Image search", style = MaterialTheme.typography.titleSmall)
-                Text("DuckDuckGo, Openverse, Wikimedia · pictures only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(t(R.string.flip_image_search), style = MaterialTheme.typography.titleSmall)
+                Text(t(R.string.flip_image_search_sources), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = searchOn, onCheckedChange = { on ->
                 if (on) askSearch = true else { searchOn = false; FlipDraftStore.setSearchOn(context, false) }
@@ -545,26 +544,21 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
             })
         }
         Button(onClick = onNext, enabled = draft.complete, modifier = Modifier.fillMaxWidth()) {
-            Text(if (draft.complete) "Next: protect and shuffle" else "Choose the ${FLIP_FRAMES - 1} story pictures")
+            Text(if (draft.complete) t(R.string.flip_next_protect) else t(R.string.flip_choose_pictures, FLIP_FRAMES - 1))
         }
     }
 
     if (askSearch) {
         AlertDialog(
             onDismissRequest = { askSearch = false },
-            title = { Text("Turn on image search?") },
+            title = { Text(t(R.string.flip_search_ask_title)) },
             text = {
-                Text(
-                    "The search asks three services directly from this phone: DuckDuckGo, Openverse and Wikimedia " +
-                        "Commons. Each sees the phone's internet address and the words searched. Only pictures are " +
-                        "shown, never web pages, and each comes from the service that found it. Everything else in the " +
-                        "app talks only to your own node.",
-                )
+                Text(t(R.string.flip_search_ask_text))
             },
             confirmButton = {
-                TextButton(onClick = { askSearch = false; searchOn = true; FlipDraftStore.setSearchOn(context, true) }) { Text("Turn on") }
+                TextButton(onClick = { askSearch = false; searchOn = true; FlipDraftStore.setSearchOn(context, true) }) { Text(t(R.string.flip_turn_on)) }
             },
-            dismissButton = { TextButton(onClick = { askSearch = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { askSearch = false }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -624,26 +618,26 @@ private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSou
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             words.forEach { w -> AssistChip(onClick = { search(w.name) }, label = { Text(w.name) }) }
-            if (words.size == 2) AssistChip(onClick = { search("${words[0].name} ${words[1].name}") }, label = { Text("Both") })
+            if (words.size == 2) AssistChip(onClick = { search("${words[0].name} ${words[1].name}") }, label = { Text(t(R.string.flip_search_both)) })
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = query, onValueChange = { query = it.take(100) }, singleLine = true, modifier = Modifier.weight(1f), label = { Text("Search pictures") })
-            Button(onClick = { search(query) }, enabled = query.isNotBlank()) { Text("Search") }
+            OutlinedTextField(value = query, onValueChange = { query = it.take(100) }, singleLine = true, modifier = Modifier.weight(1f), label = { Text(t(R.string.flip_search_pictures)) })
+            Button(onClick = { search(query) }, enabled = query.isNotBlank()) { Text(t(R.string.flip_search)) }
         }
         (if (searched) pictureSearchStatus(pending, failed, results.size) else null)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (results.isNotEmpty()) {
-            Text("Tap a picture to use it. \"Use for anti-AI\" takes 8 of these for the nonsense picture.", style = MaterialTheme.typography.bodySmall)
+            Text(t(R.string.flip_search_tap), style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = {
-                status = "Getting pictures for the anti-AI picture…"
+                status = t(R.string.flip_getting_anti_ai)
                 scope.launch {
                     val picked = withContext(Dispatchers.IO) {
                         results.shuffled().take(12).mapNotNull { url -> thumbnails[url] ?: runCatching { PictureSearch.thumbnail(url, appVersion) }.getOrNull() }.take(8)
                     }
-                    status = if (picked.size >= FLIP_FRAMES) null else "Not enough pictures could be read."
+                    status = if (picked.size >= FLIP_FRAMES) null else t(R.string.flip_not_enough_pictures)
                     if (picked.size >= FLIP_FRAMES) onSources(picked)
                 }
-            }) { Text("Use for anti-AI") }
+            }) { Text(t(R.string.flip_use_for_anti_ai)) }
             LazyVerticalGrid(
                 GridCells.Fixed(3),
                 Modifier.fillMaxWidth().height(360.dp),
@@ -669,13 +663,12 @@ private fun ShuffleStep(draft: FlipDraft, frames: List<ByteArray>, update: (Flip
     val valid = isValidShuffle(shuffled, draft.adversarial)
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Left: the story. Right: the same pictures in an order that breaks it. At the validation, people see both " +
-                "and pick the one that makes sense. Tap two pictures on the right to swap them.",
+            t(R.string.flip_shuffle_help),
             style = MaterialTheme.typography.bodySmall,
         )
         (0 until FLIP_FRAMES).forEach { i ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FrameImage(frames.getOrNull(i), Modifier.weight(1f), label = if (i == draft.adversarial) "Anti-AI" else null)
+                FrameImage(frames.getOrNull(i), Modifier.weight(1f), label = if (i == draft.adversarial) t(R.string.flip_anti_ai) else null)
                 FrameImage(
                     frames.getOrNull(shuffled[i]),
                     Modifier.weight(1f).clickable {
@@ -689,14 +682,14 @@ private fun ShuffleStep(draft: FlipDraft, frames: List<ByteArray>, update: (Flip
                         }
                     },
                     selected = picked == i,
-                    label = if (shuffled[i] == draft.adversarial) "Anti-AI" else null,
+                    label = if (shuffled[i] == draft.adversarial) t(R.string.flip_anti_ai) else null,
                 )
             }
         }
-        if (!valid) Text("The right side still tells the story: shuffle it more.", color = MaterialTheme.colorScheme.error)
+        if (!valid) Text(t(R.string.flip_shuffle_more), color = MaterialTheme.colorScheme.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { update(draft.copy(shuffled = randomShuffle(draft.adversarial))) }) { Text("Shuffle") }
-            Button(onClick = onNext, enabled = valid) { Text("Next") }
+            OutlinedButton(onClick = { update(draft.copy(shuffled = randomShuffle(draft.adversarial))) }) { Text(t(R.string.flip_shuffle)) }
+            Button(onClick = onNext, enabled = valid) { Text(t(R.string.common_next)) }
         }
     }
 }
@@ -706,15 +699,15 @@ private fun SubmitStep(draft: FlipDraft, words: List<Keyword>, frames: List<Byte
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(words.joinToString(" / ") { it.name.uppercase() }, style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            frames.forEachIndexed { i, f -> FrameImage(f, Modifier.weight(1f), label = if (i == draft.adversarial) "Anti-AI" else null) }
+            frames.forEachIndexed { i, f -> FrameImage(f, Modifier.weight(1f), label = if (i == draft.adversarial) t(R.string.flip_anti_ai) else null) }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("The node encrypts the flip, keeps it on IPFS and publishes it with a transaction signed by your identity. A flip has no fee.")
-                Text("Keep the node running until the validation: it hands out the keys of your flips then.", style = MaterialTheme.typography.bodySmall)
-                deadline?.let { Text("Flips are accepted until ${dateFormat.format(it)}.", style = MaterialTheme.typography.bodySmall) }
+                Text(t(R.string.flip_submit_info))
+                Text(t(R.string.flip_keep_running), style = MaterialTheme.typography.bodySmall)
+                deadline?.let { Text(t(R.string.flip_accepted_until, dateFormat.format(it)), style = MaterialTheme.typography.bodySmall) }
             }
         }
-        Button(onClick = onSubmit, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("Submit the flip") }
+        Button(onClick = onSubmit, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(t(R.string.flip_submit_flip)) }
     }
 }

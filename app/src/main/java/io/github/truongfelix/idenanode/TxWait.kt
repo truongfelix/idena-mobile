@@ -50,7 +50,7 @@ suspend fun waitForBlock(lookup: TxLookup, hash: String, pause: suspend (Long) -
                 if (blockHash.removePrefix("0x").any { it != '0' }) {
                     val height = lookup.blockHeight(blockHash)
                     val receipt = runCatching { lookup.receipt(hash) }.getOrNull()
-                    val error = receipt?.takeUnless { it.optBoolean("success", true) }?.let { it.optString("error").ifEmpty { "the contract refused it" } }
+                    val error = receipt?.takeUnless { it.optBoolean("success", true) }?.let { it.optString("error").ifEmpty { t(R.string.wallet_tx_contract_refused) } }
                     return InBlock(height, error)
                 }
             }
@@ -75,7 +75,7 @@ class NodeTxLookup(private val rpc: NodeRpc) : TxLookup {
 }
 
 /** How a screen ends its message when the node no longer has a sent transaction ([waitUntilMined] false). */
-const val NOT_SENT = "the node no longer has the transaction. Try again."
+val NOT_SENT: String get() = t(R.string.wallet_tx_not_sent_reason)
 
 /**
  * Waits until the node has the transaction [hash] in a block ([waitForBlock]): true then, false once the node

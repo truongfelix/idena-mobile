@@ -61,7 +61,7 @@ fun KeyCard(
         scope.launch {
             withContext(Dispatchers.IO) { runCatching { readBackupFile(context, uri) } }
                 .onSuccess { key = it; message = null }
-                .onFailure { message = "Not read: ${it.message}" }
+                .onFailure { message = t(R.string.wallet_key_not_read, it.message.toString()) }
         }
     }
     if (creating) {
@@ -79,47 +79,45 @@ fun KeyCard(
     if (backingUp) KeyBackupDialog(newAccount = false, makeBackup = exportKey, onUse = { _, _ -> }, onClose = { backingUp = false })
     if (state.hasKey && !open) {
         Row {
-            TextButton(onClick = { backingUp = true; message = null }) { Text("Back up my key") }
-            TextButton(onClick = { open = true; message = null }) { Text("Import another key") }
+            TextButton(onClick = { backingUp = true; message = null }) { Text(t(R.string.wallet_key_back_up)) }
+            TextButton(onClick = { open = true; message = null }) { Text(t(R.string.wallet_key_import_another)) }
         }
         message?.let { Text(it) }
         return
     }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Key", style = MaterialTheme.typography.titleMedium)
+            Text(t(R.string.wallet_key_title), style = MaterialTheme.typography.titleMedium)
             if (!open) {
-                Text("No account on this phone yet.")
-                Button(enabled = !busy, onClick = { creating = true; message = null }) { Text("Create a new account") }
-                OutlinedButton(enabled = !busy, onClick = { open = true; message = null }) { Text("Import a key") }
+                Text(t(R.string.wallet_key_no_account))
+                Button(enabled = !busy, onClick = { creating = true; message = null }) { Text(t(R.string.wallet_key_create)) }
+                OutlinedButton(enabled = !busy, onClick = { open = true; message = null }) { Text(t(R.string.wallet_key_import_a_key)) }
                 Text(
-                    "Import takes a private key exported from an Idena app (Settings, Private key, Export) or a backup " +
-                        "made here.",
+                    t(R.string.wallet_key_import_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
             } else {
                 if (state.hasKey) {
-                    Text("The current key is kept in a backup file.", style = MaterialTheme.typography.bodySmall)
+                    Text(t(R.string.wallet_key_current_kept), style = MaterialTheme.typography.bodySmall)
                     Text(IMPORT_KEEPS_NODE_NOTE, style = MaterialTheme.typography.bodySmall)
                 }
                 if (state.status?.let { it.online && it.delegatee == null } == true) {
                     Text(MINING_IMPORT_WARNING, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
                 Text(
-                    "Do not run the same key on two nodes at the same time, for example here and on a desktop " +
-                        "node: both would act for the identity.",
+                    t(R.string.wallet_key_two_nodes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
                 OutlinedTextField(
                     value = key, onValueChange = { key = it },
-                    label = { Text("Exported key") },
+                    label = { Text(t(R.string.wallet_key_exported)) },
                     modifier = Modifier.fillMaxWidth(), minLines = 2,
                 )
-                Pill("Choose a file", enabled = !busy) { keyFile.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
+                Pill(t(R.string.wallet_key_choose_a_file), enabled = !busy) { keyFile.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
                 OutlinedTextField(
                     value = password, onValueChange = { password = it },
-                    label = { Text("Password") },
+                    label = { Text(t(R.string.wallet_key_password)) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
@@ -138,9 +136,9 @@ fun KeyCard(
                                 message = text
                             }
                         },
-                    ) { Text("Import") }
+                    ) { Text(t(R.string.wallet_key_import)) }
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { open = false; key = ""; password = "" }) { Text("Cancel") }
+                    TextButton(onClick = { open = false; key = ""; password = "" }) { Text(t(R.string.common_cancel)) }
                 }
             }
             message?.let { Text(it) }

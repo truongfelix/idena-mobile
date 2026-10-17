@@ -36,31 +36,31 @@ private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.
  */
 fun confirmText(pending: PendingPost): String = buildString {
     pending.detail?.let { append(it).append(". ") }
-    append("It is public and stays on the blockchain for good, signed by your identity ${shortAddress(pending.from)}.")
+    append(t(R.string.social_confirm_public, shortAddress(pending.from)))
     for (file in pending.files) {
         if (file.stored) {
-            append("\n\nThe ${file.what} is already stored on IPFS: no new fee.")
+            append("\n\n").append(t(R.string.social_confirm_file_stored, file.shownName))
             continue
         }
-        append("\n\nStoring the ${file.what} on IPFS (${kilobytes(file.bytes.size)}): about ${fee(file.fee)} iDNA (at most ${fee(file.fee * BigDecimal(2))}).")
+        append("\n\n").append(t(R.string.social_confirm_file_fee, file.shownName, kilobytes(file.bytes.size), fee(file.fee), fee(file.fee * BigDecimal(2))))
     }
-    val callName = if (pending.call.contract == PROFILE_CONTRACT) "The call" else "The post"
-    append("\n\n${if (pending.files.isEmpty()) "Fee" else callName}: about ${fee(pending.fee.fee)} iDNA (at most ${fee(pending.fee.maxFee)}).")
+    val callName = if (pending.call.contract == PROFILE_CONTRACT) t(R.string.social_confirm_the_call) else t(R.string.social_confirm_the_post)
+    append("\n\n").append(t(R.string.social_confirm_fee, if (pending.files.isEmpty()) t(R.string.social_confirm_fee_label) else callName, fee(pending.fee.fee), fee(pending.fee.maxFee)))
     pending.memberExtra?.let {
-        append(
-            if (it.lapsed) "\n\nThe contract still lists you as a vouched member: you also send ${it.amount} iDNA, burned by the contract (about one more fee). Ending the vouch first avoids it."
-            else "\n\nAs a vouched member, you also send ${it.amount} iDNA, burned by the contract (about one more fee).",
+        append("\n\n").append(
+            if (it.lapsed) t(R.string.social_confirm_member_lapsed, "${it.amount}")
+            else t(R.string.social_confirm_member, "${it.amount}"),
         )
     }
-    if (pending.files.isNotEmpty()) append("\n\nTotal: about ${fee(pending.totalFee)} iDNA.")
+    if (pending.files.isNotEmpty()) append("\n\n").append(t(R.string.social_confirm_total, fee(pending.totalFee)))
 }
 
 /** Where a paid action goes, for its confirmation's title. */
-fun placeOf(pending: PendingPost) = if (pending.call.contract == PROFILE_CONTRACT) "in your public profile" else "on idena.social"
+fun placeOf(pending: PendingPost) = if (pending.call.contract == PROFILE_CONTRACT) t(R.string.social_place_profile) else t(R.string.social_place_social)
 
 fun fee(amount: BigDecimal): String = amount.setScale(2, RoundingMode.UP).toPlainString()
 
-fun kilobytes(bytes: Int): String = "${(bytes + 999) / 1000} KB"
+fun kilobytes(bytes: Int): String = t(R.string.social_kilobytes, (bytes + 999) / 1000)
 
 /** The amount of a tip: whole iDNA (the contract refuses fractions), with the balance for reference. */
 @Composable
@@ -79,11 +79,11 @@ fun TipDialog(post: SocialPost, onDismiss: () -> Unit, onTip: (Long) -> Unit) {
     val value = amount.toLongOrNull()?.takeIf { it > 0 }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tip ${displayName(post.call.author, LocalNames.current)}") },
+        title = { Text(t(R.string.social_tip_title, displayName(post.call.author, LocalNames.current))) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("The tip goes to the author of this post, through the idena.social contract. Whole iDNA only.")
-                balance?.let { Text("Your balance: $it iDNA", style = MaterialTheme.typography.bodyMedium) }
+                Text(t(R.string.social_tip_text))
+                balance?.let { Text(t(R.string.social_tip_balance, it), style = MaterialTheme.typography.bodyMedium) }
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { text -> amount = text.filter { it.isDigit() }.take(9) },
@@ -93,8 +93,8 @@ fun TipDialog(post: SocialPost, onDismiss: () -> Unit, onTip: (Long) -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { value?.let(onTip) }, enabled = value != null) { Text("Next") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { value?.let(onTip) }, enabled = value != null) { Text(t(R.string.common_next)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }
 
@@ -104,7 +104,7 @@ fun InFlightLine(inFlight: List<InFlight>) {
     if (inFlight.isEmpty()) return
     var open by remember { mutableStateOf(false) }
     Text(
-        "${count(inFlight.size, "action", "actions")} waiting for a block",
+        tp(R.plurals.social_in_flight, inFlight.size, inFlight.size),
         Modifier.fillMaxWidth().clickable { open = true }.padding(horizontal = 16.dp, vertical = 2.dp),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.primary,
@@ -112,14 +112,14 @@ fun InFlightLine(inFlight: List<InFlight>) {
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
-            title = { Text("Waiting for a block") },
+            title = { Text(t(R.string.social_in_flight_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    inFlight.forEach { Text("${it.what} · sent, waiting for its block (${it.hash.take(10)}…)", style = MaterialTheme.typography.bodyMedium) }
-                    Text("A block comes about every 20 seconds; the same action cannot be sent again meanwhile.", style = MaterialTheme.typography.bodySmall)
+                    inFlight.forEach { Text(t(R.string.social_in_flight_item, it.what, it.hash.take(10)), style = MaterialTheme.typography.bodyMedium) }
+                    Text(t(R.string.social_in_flight_note), style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { open = false }) { Text(t(R.string.common_close)) } },
         )
     }
 }

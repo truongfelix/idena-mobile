@@ -53,53 +53,53 @@ const val PEER_GRACE_MS = 20 * 60_000L
  * when synced with peers.
  */
 fun nodeBarState(input: NodeBarInput): BarState {
-    if (input.startError != null) return BarState(Health.Bad, "The node could not start")
-    if (!input.syncEnabled) return BarState(Health.Off, if (input.hasKey) "Sync off" else "Sync off: create or import a key first")
+    if (input.startError != null) return BarState(Health.Bad, t(R.string.status_could_not_start))
+    if (!input.syncEnabled) return BarState(Health.Off, t(if (input.hasKey) R.string.status_sync_off else R.string.status_sync_off_no_key))
     val starting = input.runningForMs == null || input.runningForMs < PEER_GRACE_MS
     val node = input.node ?: return when {
         input.startPhase != null -> BarState(Health.Warn, startLabel(input.startPhase, input.runningForMs))
         starting -> BarState(Health.Warn, StartPhase.Starting.label)
-        else -> BarState(Health.Bad, "The node does not answer")
+        else -> BarState(Health.Bad, t(R.string.status_no_answer))
     }
-    if (node.wrongTime) return BarState(Health.Bad, "The phone's clock is wrong")
+    if (node.wrongTime) return BarState(Health.Bad, t(R.string.status_wrong_clock))
     if (node.peers == 0) {
-        if (!starting) return BarState(Health.Bad, "No peers")
+        if (!starting) return BarState(Health.Bad, t(R.string.status_no_peers))
         val minutes = input.runningForMs?.let { it / 60_000 }
-        return BarState(Health.Warn, if (minutes == null) "Looking for peers…" else "Looking for peers · $minutes min")
+        return BarState(Health.Warn, if (minutes == null) t(R.string.status_looking_for_peers) else t(R.string.status_looking_for_peers_minutes, minutes))
     }
     if (node.syncing && input.nodeMessage.isNotEmpty()) return BarState(Health.Warn, input.nodeMessage)
     if (node.syncing && node.highestBlock > 0) return BarState(Health.Warn, syncLabel(node.syncStep(input.chainMoving), input.speed))
-    if (node.syncing) return BarState(Health.Warn, "Syncing")
-    if (input.nowSeconds != null && headIsStale(node.headTime, input.nowSeconds)) return BarState(Health.Warn, "Behind: looking for peers")
-    input.backgroundIssue?.let { return BarState(Health.Warn, "Synced · $it") }
-    return BarState(Health.Good, "Synced · ${if (node.peers == 1) "1 peer" else "${node.peers} peers"}")
+    if (node.syncing) return BarState(Health.Warn, t(R.string.status_syncing))
+    if (input.nowSeconds != null && headIsStale(node.headTime, input.nowSeconds)) return BarState(Health.Warn, t(R.string.status_behind))
+    input.backgroundIssue?.let { return BarState(Health.Warn, t(R.string.status_synced_issue, it)) }
+    return BarState(Health.Good, tp(R.plurals.status_synced_peers, node.peers, node.peers))
 }
 
 /** What may stop the node with the screen off: Android's battery optimization on. */
 fun backgroundIssue(ignoringBatteryOptimizations: Boolean): String? =
-    if (ignoringBatteryOptimizations) null else "battery saver on"
+    if (ignoringBatteryOptimizations) null else t(R.string.status_battery_saver_on)
 
 /** "about 1 h 30 min", "about 12 min", "under a minute". */
 fun duration(seconds: Double): String {
     val minutes = (seconds / 60).roundToLong()
     return when {
-        minutes < 1 -> "under a minute"
-        minutes < 60 -> "about $minutes min"
-        else -> "about ${minutes / 60} h ${"%02d".format(minutes % 60)} min"
+        minutes < 1 -> t(R.string.time_under_a_minute)
+        minutes < 60 -> t(R.string.time_about_minutes, minutes)
+        else -> t(R.string.time_about_hours, minutes / 60, "%02d".format(minutes % 60))
     }
 }
 
 /** "in 2 d 23 h", "in 5 h 12 min", "in 12 min", or "now" once [then] is reached. */
 fun countdown(now: Instant, then: Instant): String {
     val left = Duration.between(now, then)
-    if (left.isNegative || left.isZero) return "now"
+    if (left.isNegative || left.isZero) return t(R.string.time_now)
     val days = left.toDays()
     val hours = left.toHours() % 24
     val minutes = maxOf(1, left.toMinutes() % 60)
     return when {
-        days > 0 -> "in $days d $hours h"
-        hours > 0 -> "in $hours h $minutes min"
-        else -> "in $minutes min"
+        days > 0 -> t(R.string.time_in_days, days, hours)
+        hours > 0 -> t(R.string.time_in_hours, hours, minutes)
+        else -> t(R.string.time_in_minutes, minutes)
     }
 }
 

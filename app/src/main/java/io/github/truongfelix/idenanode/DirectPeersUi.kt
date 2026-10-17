@@ -1,6 +1,7 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Intent
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -51,15 +52,15 @@ fun DirectPeersSection(state: ScreenState, onChanged: () -> Unit) {
         Text(DIRECT_PEERS_TITLE, style = MaterialTheme.typography.bodyMedium)
         Icon(
             Icons.Outlined.Info,
-            contentDescription = "About $DIRECT_PEERS_TITLE",
+            contentDescription = t(R.string.node_about_setting, DIRECT_PEERS_TITLE),
             Modifier.clickable { showInfo = true }.padding(6.dp).size(18.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
     Column(Modifier.padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Your node's code", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(t(R.string.node_peer_your_code), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (ownId == null) {
-            Text("Shown while the node runs.", style = MaterialTheme.typography.bodySmall)
+            Text(t(R.string.node_peer_shown_while_running), style = MaterialTheme.typography.bodySmall)
         } else {
             OwnCode(peerCode(ownId, ownName), ownName.isEmpty(), onName = { naming = true })
         }
@@ -67,7 +68,7 @@ fun DirectPeersSection(state: ScreenState, onChanged: () -> Unit) {
             PeerRow(peer, directPeerState(peer.id, state), onRemove = { removing = peer })
         }
         if (peers.size < MAX_DIRECT_PEERS) {
-            TextButton(onClick = { adding = true }) { Text("Add a peer") }
+            TextButton(onClick = { adding = true }) { Text(t(R.string.node_peer_add)) }
         }
     }
 
@@ -76,7 +77,7 @@ fun DirectPeersSection(state: ScreenState, onChanged: () -> Unit) {
             onDismissRequest = { showInfo = false },
             title = { Text(DIRECT_PEERS_TITLE) },
             text = { Text(DIRECT_PEERS_INFO) },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(t(R.string.common_ok)) } },
         )
     }
     if (naming) {
@@ -96,16 +97,16 @@ fun DirectPeersSection(state: ScreenState, onChanged: () -> Unit) {
     removing?.let { peer ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("Remove ${peer.name.ifEmpty { shortPeerId(peer.id) }}?") },
-            text = { Text("The node stops keeping it as a peer from its next start. To add it again, you need its code.") },
+            title = { Text(t(R.string.node_peer_remove_question, peer.name.ifEmpty { shortPeerId(peer.id) })) },
+            text = { Text(t(R.string.node_peer_remove_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     NodeSettings.setDirectPeers(context, peers.filter { it.id != peer.id })
                     removing = null
                     onChanged()
-                }) { Text("Remove") }
+                }) { Text(t(R.string.common_remove)) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(t(R.string.common_cancel)) } },
         )
     }
 }
@@ -123,22 +124,25 @@ private fun OwnCode(code: String, unnamed: Boolean, onName: () -> Unit) {
             copied = true
         }) {
             if (copied) Icon(Icons.Filled.Check, contentDescription = null, Modifier.size(16.dp))
-            Text(if (copied) " Copied" else "Copy")
+            Text(if (copied) " " + t(R.string.node_copied) else t(R.string.node_copy))
         }
         TextButton(onClick = {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, code)
-            context.startActivity(Intent.createChooser(send, "Share your node's code"))
-        }) { Text("Share") }
-        TextButton(onClick = onName) { Text(if (unnamed) "Add a name" else "Rename") }
+            context.startActivity(Intent.createChooser(send, t(R.string.node_peer_share_code)))
+        }) { Text(t(R.string.node_share)) }
+        TextButton(onClick = onName) { Text(if (unnamed) t(R.string.node_peer_add_name) else t(R.string.node_peer_rename)) }
     }
 }
 
 /** How a direct peer stands, for its row. */
-enum class DirectPeerState(val label: String) {
-    Connected("connected"),
-    NotConnected("not connected"),
-    AfterRestart("after a restart"),
-    NodeStopped("node stopped"),
+enum class DirectPeerState(@StringRes private val labelId: Int) {
+    Connected(R.string.node_peer_connected),
+    NotConnected(R.string.node_peer_not_connected),
+    AfterRestart(R.string.node_peer_after_restart),
+    NodeStopped(R.string.node_peer_node_stopped),
+    ;
+
+    val label: String get() = t(labelId)
 }
 
 /** [id]'s state: connected when among the node's peers; "after a restart" when the running node was not given it. */
@@ -161,14 +165,14 @@ private fun PeerRow(peer: DirectPeer, peerState: DirectPeerState, onRemove: () -
             modifier = Modifier.padding(end = 8.dp),
         )
         Column(Modifier.weight(1f)) {
-            Text(peer.name.ifEmpty { "Unnamed node" }, style = MaterialTheme.typography.bodyMedium)
+            Text(peer.name.ifEmpty { t(R.string.node_peer_unnamed) }, style = MaterialTheme.typography.bodyMedium)
             Text(
                 "${shortPeerId(peer.id)} · ${peerState.label}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        SmallIconButton(Icons.Filled.Close, "Remove ${peer.name.ifEmpty { shortPeerId(peer.id) }}", MaterialTheme.colorScheme.onSurfaceVariant) {
+        SmallIconButton(Icons.Filled.Close, t(R.string.node_peer_remove_named, peer.name.ifEmpty { shortPeerId(peer.id) }), MaterialTheme.colorScheme.onSurfaceVariant) {
             onRemove()
         }
     }
@@ -180,15 +184,15 @@ private fun NameDialog(current: String, onDismiss: () -> Unit, onSave: (String) 
     var name by remember { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Name in your code") },
+        title = { Text(t(R.string.node_peer_name_title)) },
         text = {
             Column {
-                Text("The other person sees it in their list; it may stay empty.", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("Name") })
+                Text(t(R.string.node_peer_name_text), style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(t(R.string.node_peer_name)) })
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(name) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onSave(name) }) { Text(t(R.string.node_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }
 
@@ -202,7 +206,7 @@ private fun AddPeerDialog(peers: List<DirectPeer>, ownId: String?, onDismiss: ()
     val parsed = parsePeerCode(code)
     val problem = when {
         code.isBlank() -> null
-        parsed == null -> "Not a peer code: it reads idena-peer:Qm… or idena-peer:12D3Koo…"
+        parsed == null -> t(R.string.node_peer_not_a_code)
         else -> directPeerProblem(parsed, peers, ownId)
     }
     fun setCode(text: String) {
@@ -212,22 +216,22 @@ private fun AddPeerDialog(peers: List<DirectPeer>, ownId: String?, onDismiss: ()
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add a peer") },
+        title = { Text(t(R.string.node_peer_add)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OutlinedTextField(code, { setCode(it) }, label = { Text("Peer code") }, singleLine = true, isError = problem != null)
+                OutlinedTextField(code, { setCode(it) }, label = { Text(t(R.string.node_peer_code)) }, singleLine = true, isError = problem != null)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { clipboard.getText()?.text?.let { setCode(it) } }) { Text("Paste") }
+                    TextButton(onClick = { clipboard.getText()?.text?.let { setCode(it) } }) { Text(t(R.string.node_paste)) }
                 }
                 problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                OutlinedTextField(name, { name = it; nameEdited = true }, label = { Text("Name") }, singleLine = true)
+                OutlinedTextField(name, { name = it; nameEdited = true }, label = { Text(t(R.string.node_peer_name)) }, singleLine = true)
             }
         },
         confirmButton = {
             TextButton(enabled = parsed != null && problem == null, onClick = {
                 parsed?.let { onAdd(it.copy(name = cleanPeerName(name))) }
-            }) { Text("Add") }
+            }) { Text(t(R.string.node_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )
 }

@@ -1,5 +1,7 @@
 package io.github.truongfelix.idenanode
 
+import androidx.annotation.StringRes
+
 /**
  * How many Idena peers the node keeps: incoming and outgoing slots, each split into peers of the node's own
  * shard and peers of other shards (idena-go `protocol/connmanager.go`). Eco has idena-go's low-power numbers,
@@ -7,17 +9,19 @@ package io.github.truongfelix.idenanode
  * a port open on the router can use. The node takes the level at its start.
  */
 enum class PeerLevel(
-    val label: String,
+    @StringRes private val labelId: Int,
     val key: String,
     val inboundOwnShard: Int,
     val inboundOtherShards: Int,
     val outboundOwnShard: Int,
     val outboundOtherShards: Int,
 ) {
-    Eco("Eco", "eco", 3, 1, 2, 1),
-    Normal("Normal", "normal", 8, 4, 4, 2),
-    Hub("Hub", "hub", 16, 8, 4, 2),
+    Eco(R.string.node_peer_level_eco, "eco", 3, 1, 2, 1),
+    Normal(R.string.node_peer_level_normal, "normal", 8, 4, 4, 2),
+    Hub(R.string.node_peer_level_hub, "hub", 16, 8, 4, 2),
     ;
+
+    val label: String get() = t(labelId)
 
     val inbound get() = inboundOwnShard + inboundOtherShards
     val outbound get() = outboundOwnShard + outboundOtherShards
@@ -37,12 +41,15 @@ enum class PeerLevel(
  * official node's (idena-go's CLI default, the desktop app's too); [NoLimit] (0, 0) closes none, as the app
  * did before the setting.
  */
-enum class IpfsConnections(val label: String, val high: Int, val low: Int) {
-    C20("20", 20, 12),
-    C50("50", 50, 30),
-    C100("100", 100, 50),
-    NoLimit("No limit", 0, 0),
+enum class IpfsConnections(val high: Int, val low: Int) {
+    C20(20, 12),
+    C50(50, 30),
+    C100(100, 50),
+    NoLimit(0, 0),
     ;
+
+    /** The limit, or "No limit". */
+    val label: String get() = if (this == NoLimit) t(R.string.node_ipfs_no_limit) else high.toString()
 
     /**
      * Whether [level] can run with this limit: once trimmed, the connections left must hold all its Idena
@@ -67,25 +74,13 @@ const val IPFS_CONNECTIONS_MARGIN = 5
 /** How long a new IPFS connection is kept before the limit may close it: the official node's (idena-go's CLI default). */
 const val IPFS_GRACE_PERIOD = "40s"
 
-const val PEER_LEVEL_TITLE = "Peer level"
-const val IPFS_CONNECTIONS_TITLE = "IPFS connections"
+val PEER_LEVEL_TITLE: String get() = t(R.string.node_peer_level_title)
+val IPFS_CONNECTIONS_TITLE: String get() = t(R.string.node_ipfs_connections_title)
 
 /** What the info of the peer level says. */
-val PEER_LEVEL_INFO =
-    "How many Idena nodes the phone stays connected to. Blocks, votes and transactions come from them.\n\n" +
-        "Eco: up to ${PeerLevel.Eco.maxPeers}. Less data and battery, but after a network drop the node can " +
-        "take longer to find peers again.\n\n" +
-        "Normal (default): up to ${PeerLevel.Normal.maxPeers}, as on a computer.\n\n" +
-        "Hub: up to ${PeerLevel.Hub.maxPeers}, with more room for nodes that connect to the phone. It helps " +
-        "only when nodes outside can reach the phone (a port open on the router). More data and battery: best " +
-        "on Wi-Fi and while charging.\n\n" +
-        "The node takes the level at its start."
+val PEER_LEVEL_INFO: String
+    get() = t(R.string.node_peer_level_info, PeerLevel.Eco.maxPeers, PeerLevel.Normal.maxPeers, PeerLevel.Hub.maxPeers)
 
 /** What the info of the IPFS connection limit says. */
-val IPFS_CONNECTIONS_INFO =
-    "IPFS connections carry flips, posts and the records that tell which node has them. The node finds its " +
-        "Idena peers among them.\n\n" +
-        "Above the limit the node closes the least used ones and keeps its Idena peers: fewer connections " +
-        "use less data and battery. The default is 50, as on a computer; No limit keeps every connection. A " +
-        "low limit leaves too few for many peers: 20 needs Eco, 50 Eco or Normal.\n\n" +
-        "The node takes the limit at its start."
+val IPFS_CONNECTIONS_INFO: String
+    get() = t(R.string.node_ipfs_connections_info)

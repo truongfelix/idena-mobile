@@ -39,11 +39,11 @@ fun votingFailed(voting: OracleVoting, checks: ActionChecks?): Boolean =
     voting.votesSent < voting.quorumVotes && voting.epochWithoutGrowth >= 3 && checks?.prolong != true
 
 fun actionLabel(action: VotingAction, voting: OracleVoting, checks: ActionChecks?): String = when (action) {
-    VotingAction.Launch -> "Launch"
-    VotingAction.AddFunds -> "Add funds"
-    VotingAction.Prolong -> "Prolong"
-    VotingAction.Finish -> if (votingFailed(voting, checks)) "Claim refunds" else "Claim rewards"
-    VotingAction.Terminate -> "Terminate"
+    VotingAction.Launch -> t(R.string.voting_action_launch)
+    VotingAction.AddFunds -> t(R.string.voting_action_add_funds)
+    VotingAction.Prolong -> t(R.string.voting_action_prolong)
+    VotingAction.Finish -> t(if (votingFailed(voting, checks)) R.string.voting_action_claim_refunds else R.string.voting_action_claim_rewards)
+    VotingAction.Terminate -> t(R.string.voting_action_terminate)
 }
 
 /** The contract method behind an action that is a contract call. */
@@ -81,41 +81,28 @@ fun terminateParams(from: String, voting: OracleVoting, maxFee: BigDecimal?): JS
 }
 
 /** The last line of a confirmation: the node's fee estimate, and the most the transaction may pay. */
-fun feeLine(cost: TxCost) = "Fee: about ${fee(cost.fee)} iDNA (at most ${fee(cost.maxFee)})."
+fun feeLine(cost: TxCost) = t(R.string.voting_fee_line, fee(cost.fee), fee(cost.maxFee))
 
 /** Where the owner's share goes: the refund address, else the author; "you" when that is [me]. */
 private fun ownerShareTo(voting: OracleVoting, me: String): String =
-    (voting.refundRecipient ?: voting.author).let { if (it.equals(me, ignoreCase = true)) "you" else shortAddress(it) }
+    (voting.refundRecipient ?: voting.author).let { if (it.equals(me, ignoreCase = true)) t(R.string.voting_owner_share_you) else shortAddress(it) }
 
 /** What a contract action's confirmation says: what the contract does, what it sends, then the fee. */
 fun actionConfirmText(action: VotingAction, voting: OracleVoting, me: String, amount: BigDecimal, cost: TxCost): String {
-    val title = "“${votingTitle(voting)}”"
+    val title = votingTitle(voting)
     val held = idna(voting.balance.toPlainString())
     val text = when (action) {
-        VotingAction.Launch -> buildString {
-            append("Launch $title? ")
-            when {
-                amount.signum() == 0 -> append("It holds its owner deposit already ($held): nothing more is sent. ")
-                voting.balance.signum() == 0 -> append("It sends ${idna(amount.toPlainString())} to the voting: the owner deposit and the rewards fund. ")
-                else -> append("It sends ${idna(amount.toPlainString())} to the voting: the owner deposit and the rewards fund, less the $held it holds. ")
-            }
-            append("Then its committee is drawn and the secret voting starts.")
+        VotingAction.Launch -> when {
+            amount.signum() == 0 -> t(R.string.voting_confirm_launch_held, title, held)
+            voting.balance.signum() == 0 -> t(R.string.voting_confirm_launch, title, idna(amount.toPlainString()))
+            else -> t(R.string.voting_confirm_launch_less, title, idna(amount.toPlainString()), held)
         }
-        VotingAction.Prolong -> "Prolong $title? The contract draws a new committee for it."
-        VotingAction.Finish ->
-            "Finish $title and pay out? The contract counts the votes and pays the oracles who voted for the result (all " +
-                "who voted, when no option wins), sends the owner's share (the deposit back and the owner fee) to " +
-                "${ownerShareTo(voting, me)}, and burns what is left."
-        VotingAction.Terminate -> "Terminate $title? " + when {
-            voting.state == VotingState.PENDING ->
-                "It never started: the contract sends the $held it holds to you, and half of its stake back to its author " +
-                    "(the other half is burned)."
-            voting.balance.signum() == 0 ->
-                "The contract removes it and sends half of its stake back to its author (the other half is burned)."
-            else ->
-                "The contract closes it: the owner's share (the deposit back and the owner fee) goes to " +
-                    "${ownerShareTo(voting, me)}, the rest of its $held to the oracles who voted (to you, when nobody " +
-                    "voted), and half of its stake back to its author (the other half is burned)."
+        VotingAction.Prolong -> t(R.string.voting_confirm_prolong, title)
+        VotingAction.Finish -> t(R.string.voting_confirm_finish, title, ownerShareTo(voting, me))
+        VotingAction.Terminate -> when {
+            voting.state == VotingState.PENDING -> t(R.string.voting_confirm_terminate_pending, title, held)
+            voting.balance.signum() == 0 -> t(R.string.voting_confirm_terminate_empty, title)
+            else -> t(R.string.voting_confirm_terminate, title, ownerShareTo(voting, me), held)
         }
         VotingAction.AddFunds -> return addFundsConfirmText(voting, amount, cost.fee)
     }
@@ -124,20 +111,19 @@ fun actionConfirmText(action: VotingAction, voting: OracleVoting, me: String, am
 
 /** What Add funds' confirmation says: a plain transfer to the voting, with the node's fee. */
 fun addFundsConfirmText(voting: OracleVoting, amount: BigDecimal, txFee: BigDecimal): String =
-    "Send ${idna(amount.toPlainString())} to “${votingTitle(voting)}”? It joins the voting's funds, paid out by its " +
-        "rules; it cannot be taken back.\n\nFee: about ${fee(txFee)} iDNA."
+    t(R.string.voting_confirm_add_funds, idna(amount.toPlainString()), votingTitle(voting), fee(txFee))
 
 /** The contract's refusals of these actions, in the screen's words; any other comes as the node gives it. [date] writes a time. */
 fun actionErrorText(error: String?, voting: OracleVoting, date: (Instant) -> String): String = when (error) {
-    "starting is locked" -> "It cannot be launched before its start" + (voting.startTime?.let { ", ${date(it)}" }.orEmpty()) + "."
+    "starting is locked" -> voting.startTime?.let { t(R.string.voting_error_start_locked_date, date(it)) } ?: t(R.string.voting_error_start_locked)
     "contract balance is less than minimal deposit", "contract balance is less than minimal oracles reward" ->
-        "The voting holds less than its owner deposit: send more."
-    "contract is not in pending state" -> "It was launched already."
-    "contract is not in running state" -> "The voting is not running."
-    "not enough votes to finish voting" -> "Not enough votes to finish it yet."
-    "voting can not be prolonged" -> "It cannot be prolonged now."
-    "voting can not be prolonged anymore" -> "It cannot be prolonged anymore: three prolongations brought no more votes."
-    "voting can not be terminated" -> "It cannot be terminated yet" + (voting.terminationTime?.let { ": from ${date(it)}" }.orEmpty()) + "."
-    null, "" -> "The node refused it."
-    else -> "The node refused it: $error."
+        t(R.string.voting_error_low_balance)
+    "contract is not in pending state" -> t(R.string.voting_error_launched_already)
+    "contract is not in running state" -> t(R.string.voting_error_not_running)
+    "not enough votes to finish voting" -> t(R.string.voting_error_not_enough_votes)
+    "voting can not be prolonged" -> t(R.string.voting_error_cannot_prolong)
+    "voting can not be prolonged anymore" -> t(R.string.voting_error_cannot_prolong_anymore)
+    "voting can not be terminated" -> voting.terminationTime?.let { t(R.string.voting_error_cannot_terminate_from, date(it)) } ?: t(R.string.voting_error_cannot_terminate)
+    null, "" -> t(R.string.voting_error_node_refused)
+    else -> t(R.string.voting_error_node_refused_reason, error.toString())
 }

@@ -134,7 +134,7 @@ class SocialPosting(private val rpc: NodeRpc) {
      */
     fun estimate(from: String, call: SocialCall): PostFee {
         val receipt = rpc.call("contract_estimateCall", callArgs(from, call, null)) as JSONObject
-        if (!receipt.optBoolean("success")) throw IOException(receipt.optString("error").ifEmpty { "the contract refused the post" })
+        if (!receipt.optBoolean("success")) throw IOException(receipt.optString("error").ifEmpty { t(R.string.social_error_contract_refused) })
         val fee = BigDecimal(receipt.optString("txFee", "0")) + BigDecimal(receipt.optString("gasCost", "0"))
         return PostFee(fee, (fee * BigDecimal(2)).setScale(6, RoundingMode.UP))
     }
@@ -228,7 +228,7 @@ object SocialStore {
         val file = cacheFile(context)
         val tmp = File(file.parentFile, file.name + ".tmp")
         tmp.writeText(cache.toJson().toString())
-        if (!tmp.renameTo(file)) throw IOException("cannot save the scan")
+        if (!tmp.renameTo(file)) throw IOException(t(R.string.social_error_save_scan))
     }
 
     /** "Scan blocks": on until unselected. */
@@ -324,7 +324,7 @@ object SocialStore {
         val file = peopleFile(context)
         val tmp = File(file.parentFile, file.name + ".tmp")
         tmp.writeText(peopleToJson(people).toString())
-        if (!tmp.renameTo(file)) throw IOException("cannot save the People list")
+        if (!tmp.renameTo(file)) throw IOException(t(R.string.social_error_save_people))
     }
 }
 

@@ -93,7 +93,7 @@ fun RoundSearchField(value: String, onChange: (String) -> Unit, placeholder: Str
                     field()
                 }
                 if (value.isNotEmpty()) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear", Modifier.size(20.dp).clickable { onChange("") }, tint = colors.onSurfaceVariant)
+                    Icon(Icons.Filled.Close, contentDescription = t(R.string.socialb_clear), Modifier.size(20.dp).clickable { onChange("") }, tint = colors.onSurfaceVariant)
                 }
             }
         },

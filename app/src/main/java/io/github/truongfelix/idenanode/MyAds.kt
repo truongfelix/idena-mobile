@@ -46,10 +46,10 @@ private val AD_LINK = Regex("^(https?://[^\\s/]+\\S*|dna:\\S+)$", RegexOption.IG
 fun adProblems(draft: AdDraft, hasPicture: Boolean): List<String> = buildList {
     val title = draft.title.trim()
     val desc = draft.desc.trim()
-    if (title.isEmpty()) add("Write a title.") else if (title.length > AD_TITLE_MAX) add("The title has at most $AD_TITLE_MAX characters.")
-    if (desc.isEmpty()) add("Write a description.") else if (desc.length > AD_DESC_MAX) add("The description has at most $AD_DESC_MAX characters.")
-    if (!AD_LINK.matches(draft.url.trim())) add("The link starts with https://, http:// or dna:.")
-    if (!hasPicture) add("Choose a picture.")
+    if (title.isEmpty()) add(t(R.string.ads_write_title)) else if (title.length > AD_TITLE_MAX) add(t(R.string.ads_title_max, AD_TITLE_MAX))
+    if (desc.isEmpty()) add(t(R.string.ads_write_description)) else if (desc.length > AD_DESC_MAX) add(t(R.string.ads_desc_max, AD_DESC_MAX))
+    if (!AD_LINK.matches(draft.url.trim())) add(t(R.string.ads_link_format))
+    if (!hasPicture) add(t(R.string.ads_choose_picture_problem))
 }
 
 /**
@@ -84,21 +84,21 @@ data class AdStage(val kind: AdStageKind, val text: String)
  * review ([voting], its state and dates).
  */
 fun adStage(contract: String, voting: OracleVoting?, review: AdReview?, inProfile: Boolean, burnt: BigDecimal, now: Instant): AdStage = when {
-    inProfile && burnt.signum() > 0 -> AdStage(AdStageKind.Showing, "Showing · ${idna(burnt.toPlainString())} burnt in 24 h")
-    inProfile -> AdStage(AdStageKind.NotShowing, "Not showing: no burn in 24 h")
-    contract.isEmpty() -> AdStage(AdStageKind.Draft, "Draft")
-    review?.approved == true -> AdStage(AdStageKind.Approved, "Approved: ready to show")
-    review?.over == true -> AdStage(AdStageKind.Rejected, "Not approved by the review")
-    voting == null -> AdStage(AdStageKind.InReview, "In review")
-    voting.state == VotingState.PENDING -> AdStage(AdStageKind.ReviewNotStarted, "Review not started")
-    else -> AdStage(AdStageKind.InReview, "In review · " + reviewProgress(voting, now))
+    inProfile && burnt.signum() > 0 -> AdStage(AdStageKind.Showing, t(R.string.ads_stage_showing, idna(burnt.toPlainString())))
+    inProfile -> AdStage(AdStageKind.NotShowing, t(R.string.ads_stage_not_showing))
+    contract.isEmpty() -> AdStage(AdStageKind.Draft, t(R.string.ads_stage_draft))
+    review?.approved == true -> AdStage(AdStageKind.Approved, t(R.string.ads_stage_approved))
+    review?.over == true -> AdStage(AdStageKind.Rejected, t(R.string.ads_stage_rejected))
+    voting == null -> AdStage(AdStageKind.InReview, t(R.string.ads_stage_in_review))
+    voting.state == VotingState.PENDING -> AdStage(AdStageKind.ReviewNotStarted, t(R.string.ads_stage_not_started))
+    else -> AdStage(AdStageKind.InReview, t(R.string.ads_stage_in_review_progress, reviewProgress(voting, now)))
 }
 
 /** What an ad's running review waits for, and when. */
 private fun reviewProgress(voting: OracleVoting, now: Instant): String = when (voting.state) {
-    VotingState.OPEN, VotingState.VOTED -> voting.votingEnd?.let { "secret voting ends ${timeUntil(now, it)}" } ?: "secret voting"
-    VotingState.COUNTING -> voting.countingEnd?.let { "counting ends ${timeUntil(now, it)}" } ?: "counting"
-    VotingState.CAN_BE_PROLONGED -> "too few votes: prolong it on its page"
+    VotingState.OPEN, VotingState.VOTED -> voting.votingEnd?.let { t(R.string.ads_secret_voting_ends, timeUntil(now, it)) } ?: t(R.string.ads_secret_voting)
+    VotingState.COUNTING -> voting.countingEnd?.let { t(R.string.ads_counting_ends, timeUntil(now, it)) } ?: t(R.string.ads_counting)
+    VotingState.CAN_BE_PROLONGED -> t(R.string.ads_too_few_votes)
     else -> votingStateText(voting.state)
 }
 
@@ -125,8 +125,8 @@ fun competition(burns: List<AdBurn>, cid: String, target: AdTarget): Competition
 
 /** "2 competitors · top burn 300 iDNA", or that no other ad competes. */
 fun competitionText(c: Competition): String =
-    if (c.ads == 0) "No other ad competes for this audience." else
-        "${c.ads} competitor${if (c.ads == 1) "" else "s"} · top burn ${idna(c.topBurn!!.toPlainString())} in 24 h"
+    if (c.ads == 0) t(R.string.ads_no_competition) else
+        tp(R.plurals.ads_competitors, c.ads, c.ads, idna(c.topBurn!!.toPlainString()))
 
 /** The iDNA [address] burnt for [cid] over the last day, from bcn_burntCoins' items. */
 fun burntFor(burns: List<AdBurn>, address: String, cid: String): BigDecimal =
@@ -143,29 +143,33 @@ fun withProfileEntry(entries: List<ProfileEntry>, entry: ProfileEntry): List<Pro
 fun audienceText(target: AdTarget): String = listOfNotNull(
     target.language.takeIf { it.isNotEmpty() }?.let { languageName(it) },
     target.os.takeIf { it.isNotEmpty() }?.let { os -> AD_OSES.firstOrNull { it.first == os }?.second ?: os },
-    target.age.takeIf { it > 0 }?.let { "age $it+" },
-    target.stake.takeIf { it > 0 }?.let { "stake $it+ iDNA" },
-).joinToString(" · ").ifEmpty { "Anyone" }
+    target.age.takeIf { it > 0 }?.let { t(R.string.ads_audience_age, it) },
+    target.stake.takeIf { it > 0 }?.let { t(R.string.ads_audience_stake, it) },
+).joinToString(" · ").ifEmpty { t(R.string.ads_audience_anyone) }
 
 /** "anyone", or "its audience (French · Android)". */
-fun audiencePhrase(target: AdTarget): String = if (target == AdTarget()) "anyone" else "its audience (${audienceText(target)})"
+fun audiencePhrase(target: AdTarget): String =
+    if (target == AdTarget()) t(R.string.ads_audience_anyone_lower) else t(R.string.ads_audience_its, audienceText(target))
 
-/** The language [code] named in English ("French"), else the code. */
-fun languageName(code: String): String =
-    java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH).ifEmpty { code }
+/** The language [code] named in the app's language ("French", "Français"), else the code. */
+fun languageName(code: String): String {
+    val inLanguage = java.util.Locale.forLanguageTag(t(R.string.ads_language_names_in))
+    return java.util.Locale.forLanguageTag(code).getDisplayLanguage(inLanguage)
+        .replaceFirstChar { it.titlecase(inLanguage) }.ifEmpty { code }
+}
 
 /** What can be done with an ad from the list. */
 enum class AdAction { Preview, Edit, Delete, SendToReview, StartReview, SeeVoting, Show, BurnMore, CopyAsDraft, RemoveFromProfile }
 
 /** The one next step an ad's card offers, as its button. */
 fun mainAction(stage: AdStageKind): Pair<String, AdAction> = when (stage) {
-    AdStageKind.Draft -> "Send to review…" to AdAction.SendToReview
-    AdStageKind.ReviewNotStarted -> "Start the review…" to AdAction.StartReview
-    AdStageKind.InReview -> "See the voting" to AdAction.SeeVoting
-    AdStageKind.Approved -> "Show my ad…" to AdAction.Show
-    AdStageKind.Rejected -> "Edit as a new draft" to AdAction.CopyAsDraft
-    AdStageKind.Showing -> "Burn more…" to AdAction.BurnMore
-    AdStageKind.NotShowing -> "Show it again…" to AdAction.Show
+    AdStageKind.Draft -> t(R.string.ads_action_send_to_review) to AdAction.SendToReview
+    AdStageKind.ReviewNotStarted -> t(R.string.ads_action_start_review) to AdAction.StartReview
+    AdStageKind.InReview -> t(R.string.ads_action_see_voting) to AdAction.SeeVoting
+    AdStageKind.Approved -> t(R.string.ads_action_show) to AdAction.Show
+    AdStageKind.Rejected -> t(R.string.ads_action_copy_as_draft) to AdAction.CopyAsDraft
+    AdStageKind.Showing -> t(R.string.ads_action_burn_more) to AdAction.BurnMore
+    AdStageKind.NotShowing -> t(R.string.ads_action_show_again) to AdAction.Show
 }
 
 /**
@@ -174,11 +178,11 @@ fun mainAction(stage: AdStageKind): Pair<String, AdAction> = when (stage) {
  * or approved keeps its copy, which holds its voting.
  */
 fun menuActions(stage: AdStageKind, onPhone: Boolean, hasVoting: Boolean): List<Pair<String, AdAction>> = buildList {
-    add("Preview" to AdAction.Preview)
-    if (onPhone && stage == AdStageKind.Draft) add("Edit" to AdAction.Edit)
-    if (hasVoting && stage != AdStageKind.InReview) add("See the voting" to AdAction.SeeVoting)
-    if (onPhone && (stage == AdStageKind.Draft || stage == AdStageKind.Rejected)) add("Delete" to AdAction.Delete)
-    if (stage == AdStageKind.Showing || stage == AdStageKind.NotShowing) add("Remove from my profile…" to AdAction.RemoveFromProfile)
+    add(t(R.string.ads_preview) to AdAction.Preview)
+    if (onPhone && stage == AdStageKind.Draft) add(t(R.string.ads_action_edit) to AdAction.Edit)
+    if (hasVoting && stage != AdStageKind.InReview) add(t(R.string.ads_action_see_voting) to AdAction.SeeVoting)
+    if (onPhone && (stage == AdStageKind.Draft || stage == AdStageKind.Rejected)) add(t(R.string.common_delete) to AdAction.Delete)
+    if (stage == AdStageKind.Showing || stage == AdStageKind.NotShowing) add(t(R.string.ads_action_remove_from_profile) to AdAction.RemoveFromProfile)
 }
 
 /** The profile list without the campaign [entry]: its content, voting and audience name it (the author does not). */
@@ -187,8 +191,7 @@ fun withoutProfileEntry(entries: List<ProfileEntry>, entry: ProfileEntry): List<
 
 /** What the removal confirmation says: what changes for the campaign [title], and the [fees]. */
 fun removeConfirmText(title: String, fees: BigDecimal): String =
-    "Take “$title” out of your profile? No app shows it any more; the iDNA already burnt for it stays burnt." +
-        "\n\nFees: about ${fee(fees)} iDNA."
+    t(R.string.ads_remove_confirm, title) + "\n\n" + t(R.string.ads_fees_about, fee(fees))
 
 /** What sending an ad to review takes from the balance, in iDNA. */
 data class ReviewCosts(val reviewFee: BigDecimal, val deposit: BigDecimal, val stake: BigDecimal, val storeFee: BigDecimal, val deployFee: BigDecimal) {
@@ -201,16 +204,23 @@ data class ReviewCosts(val reviewFee: BigDecimal, val deposit: BigDecimal, val s
  * total, why it cannot.
  */
 fun reviewConfirmText(title: String, costs: ReviewCosts, balance: BigDecimal, form: NewVotingForm): String = buildString {
-    append("Send “${title.trim()}” to review? Oracles answer “$AD_REVIEW_TITLE” (Approve or Reject) in a secret voting of ")
-    append("${durationText(form.votingDuration)}, then the votes are counted for ${durationText(maxOf(form.countingDuration, MIN_COUNTING_BLOCKS))}. ")
-    append("The ad can no longer be changed.\n\nIt takes from your balance:")
-    append("\n• review fee: ${idna(costs.reviewFee.toPlainString())}, for the oracles who vote")
-    append("\n• deposit: ${idna(costs.deposit.toPlainString())}, back when the voting ends")
-    append("\n• stake: ${idna(costs.stake.toPlainString())}, half back when the voting is terminated, the other half burned")
-    append("\n• storing the ad on IPFS: about ${fee(costs.storeFee)} iDNA")
-    append("\n• fees: about ${fee(costs.deployFee)} iDNA, and a small one to launch the voting")
-    append("\nTotal: about ${idna(costs.total.toPlainString())} of your ${idna(balance.toPlainString())}.")
-    if (costs.total > balance) append("\n\nYour balance is too low for this review.")
+    append(
+        t(
+            R.string.ads_review_confirm,
+            title.trim(),
+            AD_REVIEW_TITLE,
+            durationText(form.votingDuration),
+            durationText(maxOf(form.countingDuration, MIN_COUNTING_BLOCKS)),
+            idna(costs.reviewFee.toPlainString()),
+            idna(costs.deposit.toPlainString()),
+            idna(costs.stake.toPlainString()),
+            fee(costs.storeFee),
+            fee(costs.deployFee),
+            idna(costs.total.toPlainString()),
+            idna(balance.toPlainString()),
+        ),
+    )
+    if (costs.total > balance) append("\n\n" + t(R.string.ads_review_balance_too_low))
 }
 
 /**
@@ -218,9 +228,7 @@ fun reviewConfirmText(title: String, costs: ReviewCosts, balance: BigDecimal, fo
  * first when it is needed ([profileFees] > 0), then the burn and the fees.
  */
 fun showConfirmText(title: String, target: AdTarget, amount: BigDecimal, profileChange: Boolean, fees: BigDecimal): String = buildString {
-    append("Show “${title.trim()}” for 24 h to ${audiencePhrase(target)}? ")
-    append("It burns ${idna(amount.toPlainString())}: the coins are destroyed. The ad then ranks against the other ads by the iDNA ")
-    append("burnt for it over the last 24 h; burn again to keep it shown.")
-    if (profileChange) append("\n\nFirst your profile gets the ad and its audience (stored on IPFS, then a profile change), as the desktop's campaigns.")
-    append("\n\nFees: about ${fee(fees)} iDNA.")
+    append(t(R.string.ads_show_confirm, title.trim(), audiencePhrase(target), idna(amount.toPlainString())))
+    if (profileChange) append("\n\n" + t(R.string.ads_show_confirm_profile))
+    append("\n\n" + t(R.string.ads_fees_about, fee(fees)))
 }

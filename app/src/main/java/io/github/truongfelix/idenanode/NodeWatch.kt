@@ -61,8 +61,8 @@ fun restartAllowed(now: Long, earlier: List<Long>): Boolean = earlier.count { no
 
 /** The line of the Node reports section on the app's last restart of the node, from its [restarts] (wall clock, ms). */
 fun lastRestartText(restarts: List<Long>, zone: ZoneId = ZoneId.systemDefault()): String {
-    val last = restarts.maxOrNull() ?: return "The app has not had to restart the node."
-    return "The app restarted the node on ${reportTime(last, zone)}: it had stopped answering."
+    val last = restarts.maxOrNull() ?: return t(R.string.node_no_restart_yet)
+    return t(R.string.node_restarted_on, reportTime(last, zone))
 }
 
 /** "16 Oct 11:44". */

@@ -12,12 +12,12 @@ import java.io.IOException
 
 /** The picture and the thumbnail made from the image at [uri]. Throws when it cannot be read. */
 fun adPictures(context: Context, uri: Uri): Pair<ByteArray, ByteArray> {
-    val source = decodeUpright(readImage(context, uri), AD_MEDIA_SIZE) ?: throw IOException("Android cannot read this image")
+    val source = decodeUpright(readImage(context, uri), AD_MEDIA_SIZE) ?: throw IOException(t(R.string.ads_image_unreadable))
     return encodeWebp(scaled(source, AD_MEDIA_SIZE)) to encodeWebp(scaled(source, AD_THUMB_SIZE))
 }
 
 /** The thumbnail made from the image at [uri] ("Other thumbnail"). Throws when it cannot be read. */
 fun adThumb(context: Context, uri: Uri): ByteArray {
-    val source = decodeUpright(readImage(context, uri), AD_THUMB_SIZE) ?: throw IOException("Android cannot read this image")
+    val source = decodeUpright(readImage(context, uri), AD_THUMB_SIZE) ?: throw IOException(t(R.string.ads_image_unreadable))
     return encodeWebp(scaled(source, AD_THUMB_SIZE))
 }

@@ -53,14 +53,14 @@ class Practice(val short: List<PracticeFlip>, val long: List<PracticeFlip>) {
 
 /** Why a flip should be reported, as the Idena web app explains it (idena-web GetReasonDesc). */
 fun reportReasonText(reason: Int): String = when (reason) {
-    1 -> "One or both keywords are not relevant"
-    2 -> "Numbers, letters or labels show the order"
-    3 -> "A sequence of enumerated objects"
-    4 -> "Text you must read to solve the flip"
-    5 -> "Inappropriate content"
-    6 -> "Several unrelated stories"
-    7 -> "The \"waking up\" template"
-    8 -> "Thumbs up or down"
-    9 -> "Images inserted into a page or a painting"
-    else -> "A good flip"
+    1 -> t(R.string.flip_reason_keywords)
+    2 -> t(R.string.flip_reason_order)
+    3 -> t(R.string.flip_reason_enumerated)
+    4 -> t(R.string.flip_reason_text)
+    5 -> t(R.string.flip_reason_inappropriate)
+    6 -> t(R.string.flip_reason_unrelated)
+    7 -> t(R.string.flip_reason_waking_up)
+    8 -> t(R.string.flip_reason_thumbs)
+    9 -> t(R.string.flip_reason_inserted)
+    else -> t(R.string.flip_reason_good)
 }

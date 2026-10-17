@@ -55,8 +55,8 @@ private const val MAX_BACKUP_FILE = 4096
 
 /** What keeps [password], typed twice ([again]), from protecting a backup, or null. */
 fun passwordProblem(password: String, again: String): String? = when {
-    password.codePointCount(0, password.length) < MIN_PASSWORD_LENGTH -> "At least $MIN_PASSWORD_LENGTH characters."
-    password != again -> "The two passwords differ."
+    password.codePointCount(0, password.length) < MIN_PASSWORD_LENGTH -> t(R.string.wallet_key_password_too_short, MIN_PASSWORD_LENGTH)
+    password != again -> t(R.string.wallet_key_passwords_differ)
     else -> null
 }
 
@@ -65,9 +65,9 @@ fun backupFileName(address: String): String = "idena-key-${address.take(10).lowe
 
 /** What the check says when the backup at hand opens as [opened], for the account [expected]; null [opened]: [error]. */
 fun backupCheckText(expected: String, opened: String?, error: String?): String = when {
-    opened == null -> "It does not open: ${error ?: "unknown error"}."
-    !opened.equals(expected, ignoreCase = true) -> "This backup is of another account (${shortAddress(opened)})."
-    else -> "✓ It opens: ${shortAddress(opened)}"
+    opened == null -> t(R.string.wallet_key_check_fails, error ?: t(R.string.wallet_key_unknown_error))
+    !opened.equals(expected, ignoreCase = true) -> t(R.string.wallet_key_check_other, shortAddress(opened))
+    else -> t(R.string.wallet_key_check_opens, shortAddress(opened))
 }
 
 private enum class BackupStep { Password, Save, Check }
@@ -105,7 +105,7 @@ fun KeyBackupDialog(
         scope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { writeBackup(context, uri, backup) } }
             saved = result.isSuccess
-            error = result.exceptionOrNull()?.let { "Not saved: ${it.message}" }
+            error = result.exceptionOrNull()?.let { t(R.string.wallet_key_not_saved, it.message.toString()) }
         }
     }
     val opener = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -113,7 +113,7 @@ fun KeyBackupDialog(
         scope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { readBackupFile(context, uri) } }
             result.onSuccess { checkText = it; checked = false; checkResult = null }
-            error = result.exceptionOrNull()?.let { "Not read: ${it.message}" }
+            error = result.exceptionOrNull()?.let { t(R.string.wallet_key_not_read, it.message.toString()) }
         }
     }
 
@@ -121,56 +121,56 @@ fun KeyBackupDialog(
     AlertDialog(
         onDismissRequest = onClose,
         properties = DialogProperties(dismissOnClickOutside = false),
-        title = { Text(if (newAccount) "New account" else "Back up my key") },
+        title = { Text(t(if (newAccount) R.string.wallet_key_new_account else R.string.wallet_key_back_up)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${step.ordinal + 1}/3 ${stepName(step)}", style = MaterialTheme.typography.titleSmall)
+                Text(t(R.string.wallet_key_step, step.ordinal + 1, stepName(step)), style = MaterialTheme.typography.titleSmall)
                 when (step) {
                     BackupStep.Password -> {
                         Text(
-                            if (newAccount) "Protects the backup of your new key." else "Protects the backup of this phone's key.",
+                            t(if (newAccount) R.string.wallet_key_protects_new else R.string.wallet_key_protects_phone),
                         )
-                        PasswordField(password, "Password", shown) { password = it; error = null }
-                        PasswordField(again, "Password again", shown) { again = it; error = null }
+                        PasswordField(password, t(R.string.wallet_key_password), shown) { password = it; error = null }
+                        PasswordField(again, t(R.string.wallet_key_password_again), shown) { again = it; error = null }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = {
                                 runCatching { Mobile.suggestPassword() }
                                     .onSuccess { password = it; again = it; shown = true; error = null }
                                     .onFailure { error = it.message }
-                            }) { Text("Suggest") }
-                            TextButton(onClick = { shown = !shown }) { Text(if (shown) "Hide" else "Show") }
+                            }) { Text(t(R.string.wallet_key_suggest)) }
+                            TextButton(onClick = { shown = !shown }) { Text(t(if (shown) R.string.wallet_key_hide else R.string.wallet_key_show)) }
                         }
                         Text(
-                            "Write it down: the app does not keep it, and nobody can open the backup without it.",
+                            t(R.string.wallet_key_write_down),
                             style = small,
                         )
                         if (password.isNotEmpty() && again.isNotEmpty()) passwordProblem(password, again)?.let { Text(it, style = small) }
                     }
                     BackupStep.Save -> {
-                        Text(if (newAccount) "Your account:" else "This phone's account:")
+                        Text(t(if (newAccount) R.string.wallet_key_your_account else R.string.wallet_key_phone_account))
                         AddressLine(address)
                         Text(
-                            "If this phone is lost or reset, only this backup and its password bring the account back.",
+                            t(R.string.wallet_key_only_backup),
                             style = small,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Pill("Save to a file", enabled = !busy) { saver.launch(backupFileName(address)) }
-                            if (saved) Text("Saved ✓", style = small)
+                            Pill(t(R.string.wallet_key_save_file), enabled = !busy) { saver.launch(backupFileName(address)) }
+                            if (saved) Text(t(R.string.wallet_key_saved), style = small)
                         }
-                        TextButton(onClick = { copyBackup(context, backup); copied = true }) { Text("Copy the text instead") }
-                        if (copied) Text("Copied: paste it somewhere safe, such as a password manager.", style = small)
+                        TextButton(onClick = { copyBackup(context, backup); copied = true }) { Text(t(R.string.wallet_key_copy_text)) }
+                        if (copied) Text(t(R.string.wallet_key_copied_hint), style = small)
                     }
                     BackupStep.Check -> {
-                        Text("Choose the saved file (or paste the text), then type the password again.")
-                        Pill("Choose the file", enabled = !busy) { opener.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
+                        Text(t(R.string.wallet_key_check_hint))
+                        Pill(t(R.string.wallet_key_choose_file), enabled = !busy) { opener.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
                         OutlinedTextField(
                             value = checkText,
                             onValueChange = { checkText = it; checked = false; checkResult = null },
-                            label = { Text("Backup") },
+                            label = { Text(t(R.string.wallet_key_backup)) },
                             textStyle = small.copy(fontFamily = FontFamily.Monospace),
                             modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 4,
                         )
-                        PasswordField(checkPassword, "Password", shown = false) { checkPassword = it; checked = false; checkResult = null }
+                        PasswordField(checkPassword, t(R.string.wallet_key_password), shown = false) { checkPassword = it; checked = false; checkResult = null }
                         checkResult?.let { Text(it) }
                     }
                 }
@@ -197,8 +197,8 @@ fun KeyBackupDialog(
                             error = made.exceptionOrNull()?.message
                         }
                     },
-                ) { Text("Next") }
-                BackupStep.Save -> TextButton(enabled = saved || copied, onClick = { step = BackupStep.Check; error = null }) { Text("Next") }
+                ) { Text(t(R.string.common_next)) }
+                BackupStep.Save -> TextButton(enabled = saved || copied, onClick = { step = BackupStep.Check; error = null }) { Text(t(R.string.common_next)) }
                 BackupStep.Check -> if (!checked) {
                     TextButton(
                         enabled = !busy && checkText.isNotBlank() && checkPassword.isNotEmpty(),
@@ -207,22 +207,22 @@ fun KeyBackupDialog(
                             checkResult = backupCheckText(address, opened.getOrNull(), opened.exceptionOrNull()?.message)
                             checked = opened.getOrNull()?.equals(address, ignoreCase = true) == true
                         },
-                    ) { Text("Check") }
+                    ) { Text(t(R.string.wallet_key_check)) }
                 } else if (newAccount) {
-                    TextButton(onClick = { onUse(backup, password) }) { Text("Use this account") }
+                    TextButton(onClick = { onUse(backup, password) }) { Text(t(R.string.wallet_key_use_account)) }
                 } else {
-                    TextButton(onClick = onClose) { Text("Done") }
+                    TextButton(onClick = onClose) { Text(t(R.string.wallet_key_done)) }
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onClose) { Text(t(R.string.common_cancel)) } },
     )
 }
 
 private fun stepName(step: BackupStep): String = when (step) {
-    BackupStep.Password -> "Password"
-    BackupStep.Save -> "Save the backup"
-    BackupStep.Check -> "Check the backup"
+    BackupStep.Password -> t(R.string.wallet_key_password)
+    BackupStep.Save -> t(R.string.wallet_key_step_save)
+    BackupStep.Check -> t(R.string.wallet_key_step_check)
 }
 
 @Composable
@@ -240,13 +240,13 @@ private fun PasswordField(value: String, label: String, shown: Boolean, onChange
 
 /** Writes [backup] to the file the user chose, as it is (no line break). */
 private fun writeBackup(context: Context, uri: Uri, backup: String) {
-    val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("the file cannot be written")
+    val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException(t(R.string.wallet_key_file_not_written))
     out.use { it.write(backup.toByteArray(Charsets.US_ASCII)) }
 }
 
 /** The text of the file the user chose (a backup, an exported key), at most [MAX_BACKUP_FILE] bytes. */
 fun readBackupFile(context: Context, uri: Uri): String {
-    val input = context.contentResolver.openInputStream(uri) ?: throw IOException("the file cannot be read")
+    val input = context.contentResolver.openInputStream(uri) ?: throw IOException(t(R.string.wallet_key_file_not_read))
     val bytes = input.use { stream ->
         // At most one byte more than allowed (InputStream.readNBytes needs Android 13).
         val out = java.io.ByteArrayOutputStream()
@@ -258,13 +258,13 @@ fun readBackupFile(context: Context, uri: Uri): String {
         }
         out.toByteArray()
     }
-    if (bytes.size > MAX_BACKUP_FILE) throw IOException("this is not a key (the file is too large)")
+    if (bytes.size > MAX_BACKUP_FILE) throw IOException(t(R.string.wallet_key_file_too_large))
     return String(bytes, Charsets.UTF_8).trim()
 }
 
 /** Copies [backup], marked sensitive: Android 13+ then hides it in its clipboard preview. */
 private fun copyBackup(context: Context, backup: String) {
-    val clip = ClipData.newPlainText("Idena key backup", backup)
+    val clip = ClipData.newPlainText(t(R.string.wallet_key_clip_label), backup)
     clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
     context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip)
 }

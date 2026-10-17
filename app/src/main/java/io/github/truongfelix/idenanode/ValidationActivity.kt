@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap
  * flips the node assigns to the identity. Answers go to the node, which sends them to the network. The
  * screen stays on while it is open.
  */
-class ValidationActivity : ComponentActivity() {
+class ValidationActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -75,7 +74,7 @@ private sealed interface CeremonyStep {
 
 private fun nextStep(context: Context, ceremony: CeremonyState, now: Instant): CeremonyStep {
     val start = parseValidationTime(ceremony.validationTime)
-        ?: return CeremonyStep.Message("No validation now", "The node did not give the validation time.")
+        ?: return CeremonyStep.Message(t(R.string.validation_none_now), t(R.string.validation_no_time))
     val times = CeremonyTimes(start, ceremony.shortSessionSeconds, ceremony.longSessionSeconds)
     val shortSent = NodeSettings.answersSentFile(context, ceremony.epoch, short = true).exists()
     val longSent = NodeSettings.answersSentFile(context, ceremony.epoch, short = false).exists()
@@ -88,7 +87,7 @@ private fun nextStep(context: Context, ceremony: CeremonyState, now: Instant): C
         "ShortSession" -> if (shortSent) CeremonyStep.LongSession(times) else CeremonyStep.ShortSession(times)
         "LongSession" -> if (longSent) CeremonyStep.Done(times) else CeremonyStep.LongSession(times)
         "AfterLongSession" -> CeremonyStep.Done(times)
-        else -> CeremonyStep.Message("No validation now", "The next validation: ${dateTime(start)} (${timeUntil(now, start)}).")
+        else -> CeremonyStep.Message(t(R.string.validation_none_now), t(R.string.validation_next_time, dateTime(start), timeUntil(now, start)))
     }
 }
 
@@ -112,8 +111,8 @@ private fun ValidationScreen(onClose: () -> Unit, modifier: Modifier = Modifier)
             } else if (!inSession) {
                 // A node busy during a session may miss a call: the session and its answers stay.
                 step = CeremonyStep.Message(
-                    "The node does not answer",
-                    "Switch sync on in the main screen, and wait until the node is synced.",
+                    t(R.string.validation_node_no_answer),
+                    t(R.string.validation_node_no_answer_text),
                 )
             }
             delay(3_000)
@@ -129,10 +128,10 @@ private fun ValidationScreen(onClose: () -> Unit, modifier: Modifier = Modifier)
     if (leaving) {
         AlertDialog(
             onDismissRequest = { leaving = false },
-            title = { Text("Leave the validation?") },
-            text = { Text("The answers of this session are not sent yet. You can come back while the session lasts.") },
-            confirmButton = { TextButton(onClick = onClose) { Text("Leave") } },
-            dismissButton = { TextButton(onClick = { leaving = false }) { Text("Stay") } },
+            title = { Text(t(R.string.validation_leave_title)) },
+            text = { Text(t(R.string.validation_leave_text)) },
+            confirmButton = { TextButton(onClick = onClose) { Text(t(R.string.ceremony_leave)) } },
+            dismissButton = { TextButton(onClick = { leaving = false }) { Text(t(R.string.ceremony_stay)) } },
         )
     }
 
@@ -153,7 +152,7 @@ private fun Info(title: String, text: String, onClose: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, style = MaterialTheme.typography.headlineSmall)
         Text(text)
-        OutlinedButton(onClick = onClose) { Text("Close") }
+        OutlinedButton(onClick = onClose) { Text(t(R.string.common_close)) }
     }
 }
 
@@ -174,18 +173,15 @@ private fun Done(times: CeremonyTimes, epoch: Int, onClose: () -> Unit) {
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Answers sent", style = MaterialTheme.typography.headlineSmall)
+        Text(t(R.string.validation_answers_sent), style = MaterialTheme.typography.headlineSmall)
         if (inBlocks) {
-            Text("Your short and long answers are in blocks: you can close the app.")
+            Text(t(R.string.validation_in_blocks))
         } else {
-            Text("The node is putting your answers in blocks. Keep the app open until this screen says it is done.")
+            Text(t(R.string.validation_putting_in_blocks))
             CircularProgressIndicator()
         }
-        Text(
-            "The validation ends at ${dateTime(times.longEnd)}. Its result shows on the main screen a few minutes " +
-                "later, as the identity status.",
-        )
-        OutlinedButton(onClick = onClose) { Text("Close") }
+        Text(t(R.string.validation_ends_at, dateTime(times.longEnd)))
+        OutlinedButton(onClick = onClose) { Text(t(R.string.common_close)) }
     }
 }
 
@@ -194,13 +190,13 @@ private fun Done(times: CeremonyTimes, epoch: Int, onClose: () -> Unit) {
 private fun Waiting(times: CeremonyTimes, flips: SessionFlips) {
     val state = flips.watch(active = true)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Validation", style = MaterialTheme.typography.headlineSmall)
-        Text("The short session starts at ${dateTime(times.start)} (${timeUntil(Instant.now(), times.start)}).")
-        Text("Keep this screen open: the session opens by itself. The flips load in the meantime.")
+        Text(t(R.string.validation_title), style = MaterialTheme.typography.headlineSmall)
+        Text(t(R.string.validation_short_starts_at, dateTime(times.start), timeUntil(Instant.now(), times.start)))
+        Text(t(R.string.validation_keep_open))
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (state.hashes.isNotEmpty()) {
             val regular = state.hashes.filter { !it.extra }
-            Text("Flips ready: ${regular.count { it.hash in state.loaded }} of ${regular.size}")
+            Text(t(R.string.validation_flips_ready, regular.count { it.hash in state.loaded }, regular.size))
         }
     }
 }
@@ -248,22 +244,22 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
     }
 
     val shown = if (short) shortSessionFlips(state.hashes, state.replaced) else state.hashes.map { it.hash }
-    val title = if (short) "Short session" else "Long session"
+    val title = if (short) t(R.string.validation_short_session) else t(R.string.validation_long_session)
     when {
         sending || pending != null && sendError == null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text("Sending the answers…")
-            sendError?.let { Text("The node did not take them yet ($it): trying again.", color = MaterialTheme.colorScheme.error) }
+            Text(t(R.string.validation_sending))
+            sendError?.let { Text(t(R.string.validation_send_retrying, it), color = MaterialTheme.colorScheme.error) }
             CircularProgressIndicator()
         }
         sendError != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text("The node did not take the answers: $sendError", color = MaterialTheme.colorScheme.error)
-            Button(onClick = { pending?.let { send(it) } }) { Text("Try again") }
+            Text(t(R.string.validation_send_failed, sendError.orEmpty()), color = MaterialTheme.colorScheme.error)
+            Button(onClick = { pending?.let { send(it) } }) { Text(t(R.string.common_try_again)) }
         }
         shown.isEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text(state.error ?: "Loading the flips…")
+            Text(state.error ?: t(R.string.validation_loading_flips))
         }
         else -> Session(
             title = title,
@@ -325,7 +321,7 @@ private class SessionFlips(private val rpc: NodeRpc, val short: Boolean, private
             rpc.flipHashes(short)
         } catch (e: Exception) {
             // Keeps the flips already listed: a session on screen must not lose them to a missed call.
-            return state(lastHashes, e.message ?: "The node did not list the flips.")
+            return state(lastHashes, e.message ?: t(R.string.validation_no_flip_list))
         }
         lastHashes = hashes
         val all = keywords

@@ -2,7 +2,6 @@ package io.github.truongfelix.idenanode
 
 import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -51,7 +50,7 @@ import java.time.Instant
  * ongoing, closed), every voting, and the identity's own (created or voted in), from the app's own node; a voting
  * opens on its own screen, where the identity votes, and + New opens the New voting form.
  */
-class OracleVotingsActivity : ComponentActivity() {
+class OracleVotingsActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -108,8 +107,8 @@ fun OracleVotingsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
     BackHandler(onBack = onClose)
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ScreenTitle("Oracle votings", onClose) {
-            TextButton(onClick = { creating = true }, enabled = me != null) { Text("+ New") }
+        ScreenTitle(t(R.string.voting_title_list), onClose) {
+            TextButton(onClick = { creating = true }, enabled = me != null) { Text(t(R.string.voting_new_button)) }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VotingTab.entries.forEach {
@@ -120,8 +119,8 @@ fun OracleVotingsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         when {
             current == null -> CircularProgressIndicator()
             me == null -> {
-                Text("The node did not answer: ${current.exceptionOrNull()?.message}")
-                Button(onClick = { reads++ }) { Text("Try again") }
+                Text(t(R.string.voting_node_no_answer, current.exceptionOrNull()?.message.toString()))
+                Button(onClick = { reads++ }) { Text(t(R.string.common_try_again)) }
             }
             else -> VotingList(tab, me, reloads, onOpen = { opened = it }, Modifier.weight(1f))
         }
@@ -132,7 +131,7 @@ fun OracleVotingsScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 internal fun ScreenTitle(title: String, onClose: () -> Unit, action: (@Composable () -> Unit)? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onClose) { Text("Close") }
+        TextButton(onClick = onClose) { Text(t(R.string.common_close)) }
         Spacer(Modifier.weight(1f))
         Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
@@ -150,11 +149,11 @@ private class LoadedVotings {
 }
 
 private val TAB_EMPTY = mapOf(
-    VotingTab.ToVote to "No voting to vote in: your identity is in no open voting's committee.",
-    VotingTab.Ongoing to "No voting you voted in or being counted.",
-    VotingTab.Closed to "No closed voting of your committees.",
-    VotingTab.All to "No voting yet.",
-    VotingTab.Mine to "No voting you created or voted in. + New makes one.",
+    VotingTab.ToVote to R.string.voting_empty_to_vote,
+    VotingTab.Ongoing to R.string.voting_empty_ongoing,
+    VotingTab.Closed to R.string.voting_empty_closed,
+    VotingTab.All to R.string.voting_empty_all,
+    VotingTab.Mine to R.string.voting_empty_mine,
 )
 
 @Composable
@@ -171,7 +170,7 @@ private fun VotingList(tab: VotingTab, oracle: String, reloads: Int, onOpen: (St
             list.votings += read.votings.filter { listed.add(it.contract) }
             list.next = read.next
         }
-        list.error = page.exceptionOrNull()?.let { "The node did not answer: ${it.message}" }
+        list.error = page.exceptionOrNull()?.let { t(R.string.voting_node_no_answer, it.message.toString()) }
         list.loading = false
     }
     val now = Instant.now()
@@ -183,10 +182,10 @@ private fun VotingList(tab: VotingTab, oracle: String, reloads: Int, onOpen: (St
                 list.error != null -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(list.error!!)
                     // The page that failed is read again.
-                    Button(onClick = { list.pages++ }) { Text("Try again") }
+                    Button(onClick = { list.pages++ }) { Text(t(R.string.common_try_again)) }
                 }
-                list.next != null -> OutlinedButton(onClick = { list.pages++ }) { Text("More") }
-                list.votings.isEmpty() -> Text(TAB_EMPTY.getValue(tab), style = MaterialTheme.typography.bodyMedium)
+                list.next != null -> OutlinedButton(onClick = { list.pages++ }) { Text(t(R.string.common_more)) }
+                list.votings.isEmpty() -> Text(t(TAB_EMPTY.getValue(tab)), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

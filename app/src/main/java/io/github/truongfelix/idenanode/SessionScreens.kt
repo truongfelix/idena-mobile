@@ -130,9 +130,9 @@ fun Session(
 
     if (confirming) {
         ConfirmDialog(
-            "Submit the answers?",
-            summary(flips, answers, withKeywords) + " You cannot change the answers afterwards.",
-            confirmLabel = "Submit",
+            t(R.string.validation_submit_title),
+            t(R.string.validation_submit_text, summary(flips, answers, withKeywords)),
+            confirmLabel = t(R.string.validation_submit),
             onConfirm = {
                 confirming = false
                 onSubmit(answers)
@@ -142,9 +142,9 @@ fun Session(
     }
     if (confirmingKeywords) {
         ConfirmDialog(
-            "Check the keywords?",
-            summary(flips, answers, withKeywords = false) + " You cannot change the stories afterwards.",
-            confirmLabel = "Check keywords",
+            t(R.string.validation_check_keywords_title),
+            t(R.string.validation_check_keywords_text, summary(flips, answers, withKeywords = false)),
+            confirmLabel = t(R.string.validation_check_keywords),
             onConfirm = {
                 confirmingKeywords = false
                 checkingKeywords = true
@@ -156,9 +156,9 @@ fun Session(
     newBest?.let { hash ->
         val previous = flips.indexOfFirst { it.hash == answers.best } + 1
         ConfirmDialog(
-            "Change the best flip?",
-            "Flip $previous is the best now. This flip becomes the best, and flip $previous stays approved.",
-            confirmLabel = "Change",
+            t(R.string.validation_change_best_title),
+            t(R.string.validation_change_best_text, previous),
+            confirmLabel = t(R.string.validation_change),
             onConfirm = {
                 newBest = null
                 answers = answers.toggleBest(hash)
@@ -174,7 +174,7 @@ fun Session(
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SessionHeader(title, endsAt - now, totalMs)
         if (!checkingKeywords) {
-            Text("Flip ${index + 1} of ${flips.size}", style = MaterialTheme.typography.bodyMedium)
+            Text(t(R.string.validation_flip_of, index + 1, flips.size), style = MaterialTheme.typography.bodyMedium)
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (side in listOf(Choice.Left, Choice.Right)) {
                     Story(
@@ -194,13 +194,13 @@ fun Session(
             PreviousNext(onPrevious = { index = (index + flips.size - 1) % flips.size }, onNext = { index = (index + 1) % flips.size })
             val solvable = answers.solvable(flips).size
             val waiting = when {
-                solvable == 0 -> "The flips are loading."
-                withKeywords -> "Check keywords comes once every flip is solved: ${answers.solvedCount(flips)} of $solvable."
-                else -> "Submit comes once every flip has an answer: ${answers.solvedCount(flips)} of $solvable."
+                solvable == 0 -> t(R.string.validation_flips_loading)
+                withKeywords -> t(R.string.validation_wait_solve, answers.solvedCount(flips), solvable)
+                else -> t(R.string.validation_wait_answer, answers.solvedCount(flips), solvable)
             }
             NextStep(
                 ready = answers.storiesDone(flips),
-                label = if (withKeywords) "Check keywords" else "Submit answers",
+                label = if (withKeywords) t(R.string.validation_check_keywords) else t(R.string.validation_submit_answers),
                 waiting = waiting,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -209,9 +209,9 @@ fun Session(
         } else {
             val relevance = answers.relevance(flip.hash)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Flip ${index + 1} of ${flips.size}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Text(t(R.string.validation_flip_of, index + 1, flips.size), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 IconButton(onClick = { showRules = true }, Modifier.size(36.dp)) {
-                    Icon(Icons.Outlined.Info, contentDescription = "The rules of the keyword check")
+                    Icon(Icons.Outlined.Info, contentDescription = t(R.string.validation_rules_description))
                 }
             }
             // The story as a column on the left, as tall as the screen allows; on the right the keywords, the
@@ -232,7 +232,7 @@ fun Session(
                         Counts(answers)
                         val buttons = Modifier.fillMaxWidth()
                         ToggleButton(
-                            "${Mark.Check.glyph} Approve",
+                            t(R.string.validation_approve, Mark.Check.glyph),
                             selected = relevance == Relevance.Approved && answers.best != flip.hash,
                             Mark.Check.color(),
                             Color.White,
@@ -243,7 +243,7 @@ fun Session(
                             advance(graded)
                         }
                         ToggleButton(
-                            "${Mark.Cross.glyph} Report",
+                            t(R.string.validation_report, Mark.Cross.glyph),
                             selected = relevance == Relevance.Reported,
                             Mark.Cross.color(),
                             Color.White,
@@ -255,7 +255,7 @@ fun Session(
                         }
                         // Best also approves the flip; one flip at most carries it.
                         ToggleButton(
-                            "${Mark.Star.glyph} Best",
+                            t(R.string.validation_best, Mark.Star.glyph),
                             selected = answers.best == flip.hash,
                             Mark.Star.color(),
                             onGold(),
@@ -284,11 +284,11 @@ fun Session(
             PreviousNext(onPrevious = { index = (index + flips.size - 1) % flips.size }, onNext = { index = (index + 1) % flips.size })
             NextStep(
                 ready = answers.keywordCheckDone(flips),
-                label = "Submit answers",
+                label = t(R.string.validation_submit_answers),
                 waiting = if (!answers.gradesDone(flips)) {
-                    "Approve or report every flip: ${answers.gradedCount(flips)} of ${answers.gradable(flips).size}."
+                    t(R.string.validation_wait_grades, answers.gradedCount(flips), answers.gradable(flips).size)
                 } else {
-                    "Mark the best flip with ★ to submit."
+                    t(R.string.validation_wait_best)
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { confirming = true }
@@ -299,8 +299,8 @@ fun Session(
 @Composable
 private fun PreviousNext(onPrevious: () -> Unit, onNext: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onPrevious, Modifier.weight(1f)) { Text("‹ Previous") }
-        OutlinedButton(onClick = onNext, Modifier.weight(1f)) { Text("Next ›") }
+        OutlinedButton(onClick = onPrevious, Modifier.weight(1f)) { Text(t(R.string.validation_previous)) }
+        OutlinedButton(onClick = onNext, Modifier.weight(1f)) { Text(t(R.string.validation_next)) }
     }
 }
 
@@ -309,10 +309,10 @@ private fun PreviousNext(onPrevious: () -> Unit, onNext: () -> Unit) {
 private fun Counts(answers: Answers) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column {
-        CountLine("Reported ${answers.reportsUsed} of ${answers.reportsAllowed}", done = answers.reportsLeft == 0)
-        Text("${answers.reportsLeft} left", style = MaterialTheme.typography.bodySmall, color = muted)
-        CountLine("Approved ${answers.relevanceByHash.count { it.value == Relevance.Approved }}", done = false)
-        CountLine("Best ${if (answers.best != null) 1 else 0} of 1", done = answers.best != null)
+        CountLine(t(R.string.validation_count_reported, answers.reportsUsed, answers.reportsAllowed), done = answers.reportsLeft == 0)
+        Text(tp(R.plurals.validation_count_left, answers.reportsLeft, answers.reportsLeft), style = MaterialTheme.typography.bodySmall, color = muted)
+        CountLine(t(R.string.validation_count_approved, answers.relevanceByHash.count { it.value == Relevance.Approved }), done = false)
+        CountLine(t(R.string.validation_count_best, if (answers.best != null) 1 else 0), done = answers.best != null)
     }
 }
 
@@ -326,17 +326,17 @@ private fun CountLine(text: String, done: Boolean) {
 
 /** What the confirmation says about the answers about to go. */
 private fun summary(flips: List<Flip>, answers: Answers, withKeywords: Boolean): String {
-    val solved = "${answers.solvedCount(flips)} of ${flips.size} flips"
+    val solved = answers.solvedCount(flips)
     val text = if (!withKeywords) {
-        "$solved answered."
+        t(R.string.validation_summary_answered, solved, flips.size)
     } else {
         val approved = flips.count { answers.relevance(it.hash) == Relevance.Approved }
-        val best = if (answers.best != null) ", the best marked" else ""
-        "$solved solved; $approved approved, ${answers.reportsUsed} reported$best." +
-            if (answers.hasApproved) "" else " No flip is approved: the node will ignore your grades."
+        val sentence = if (answers.best != null) R.string.validation_summary_solved_best else R.string.validation_summary_solved
+        t(sentence, solved, flips.size, approved, answers.reportsUsed) +
+            if (answers.hasApproved) "" else " " + t(R.string.validation_summary_none_approved)
     }
     val loading = flips.size - answers.solvable(flips).size
-    return if (loading > 0) "$text $loading not loaded." else text
+    return if (loading > 0) tp(R.plurals.validation_summary_not_loaded, loading, text, loading) else text
 }
 
 @Composable
@@ -346,7 +346,7 @@ private fun ConfirmDialog(title: String, text: String, confirmLabel: String, onC
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Back") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_back)) } },
     )
 }
 
@@ -354,18 +354,11 @@ private fun ConfirmDialog(title: String, text: String, confirmLabel: String, onC
 private fun KeywordRules(reportsAllowed: Int, flipCount: Int, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Keyword check") },
+        title = { Text(t(R.string.validation_keyword_check)) },
         text = {
-            Text(
-                "Approve a flip when its story shows both keywords. Report it when a keyword is not in the story, " +
-                    "numbers or letters show the order, it needs reading text, or it lists objects instead of telling " +
-                    "a story. Report at most $reportsAllowed of these $flipCount flips and mark one approved flip as the " +
-                    "best (★): more makes the node ignore all your grades. Submit comes once every flip with keywords " +
-                    "is approved or reported and the best is marked. Tap a picture to see it full screen. The stories " +
-                    "cannot be changed any more.",
-            )
+            Text(t(R.string.validation_keyword_rules, reportsAllowed, flipCount))
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
+        confirmButton = { TextButton(onClick = onClose) { Text(t(R.string.common_ok)) } },
     )
 }
 
@@ -374,7 +367,7 @@ private fun KeywordRules(reportsAllowed: Int, flipCount: Int, onClose: () -> Uni
 private fun Keywords(flip: Flip, modifier: Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (flip.loaded && flip.keywords.isEmpty()) {
-            Text("The keywords of this flip are not available yet.", style = MaterialTheme.typography.bodyMedium)
+            Text(t(R.string.validation_keywords_not_available), style = MaterialTheme.typography.bodyMedium)
         }
         flip.keywords.forEach { keyword ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -456,7 +449,7 @@ internal fun Story(
     ) {
         if (!flip.loaded) {
             Box(Modifier.fillMaxSize().background(colors.surfaceVariant), contentAlignment = Alignment.Center) {
-                Text("Loading…", style = MaterialTheme.typography.bodyMedium)
+                Text(t(R.string.validation_loading), style = MaterialTheme.typography.bodyMedium)
             }
         } else {
             order.forEach { image ->

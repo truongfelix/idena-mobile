@@ -31,7 +31,7 @@ private const val WEBP_QUALITY = 75
  */
 fun encodeImageSizes(context: Context, uri: Uri): Map<Int, ByteArray> {
     val bytes = readImage(context, uri)
-    val source = decodeUpright(bytes, IMAGE_SIZES.last()) ?: throw IOException("Android cannot read this image")
+    val source = decodeUpright(bytes, IMAGE_SIZES.last()) ?: throw IOException(t(R.string.social_error_image_unreadable))
     val longer = maxOf(source.width, source.height)
     val sizes = IMAGE_SIZES.filter { it <= longer }.ifEmpty { listOf(longer) }
     return sizes.associateWith { encodeWebp(scaled(source, it)) }
@@ -45,10 +45,10 @@ fun readImage(context: Context, uri: Uri): ByteArray = context.contentResolver.o
         val n = input.read(buffer)
         if (n < 0) break
         out.write(buffer, 0, n)
-        if (out.size() > MAX_SOURCE_BYTES) throw IOException("the image is larger than ${MAX_SOURCE_BYTES / 1_000_000} MB")
+        if (out.size() > MAX_SOURCE_BYTES) throw IOException(t(R.string.social_error_image_too_large, MAX_SOURCE_BYTES / 1_000_000))
     }
     out.toByteArray()
-} ?: throw IOException("the image cannot be opened")
+} ?: throw IOException(t(R.string.social_error_image_cannot_open))
 
 /**
  * [bytes] decoded with a sample size that keeps its longer side at least [minSide] (the phone has

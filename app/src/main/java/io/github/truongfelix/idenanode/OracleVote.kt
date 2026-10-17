@@ -80,18 +80,19 @@ fun withSentVote(votes: List<SentVote>, vote: SentVote): List<SentVote> =
  * itself at the end of the secret voting, so the phone's node must sync then. [date] writes a time.
  */
 fun voteConfirmText(voting: OracleVoting, plan: VotePlan, date: (Instant) -> String): String = buildString {
-    append("Vote “${optionText(voting, plan.option)}”? The app cannot change it once sent.")
+    append(t(R.string.voting_confirm_vote, optionText(voting, plan.option)))
+    append("\n\n")
     if (plan.payment.signum() > 0) {
-        append("\n\nThe secret vote sends ${idna(plan.payment.toPlainString())} to the voting, plus a fee of about ")
+        append(t(R.string.voting_confirm_paid, idna(plan.payment.toPlainString()), fee(plan.fee), fee(plan.maxFee)))
     } else {
-        append("\n\nThe secret vote costs only its fee: about ")
+        append(t(R.string.voting_confirm_free, fee(plan.fee), fee(plan.maxFee)))
     }
-    append("${fee(plan.fee)} iDNA (at most ${fee(plan.maxFee)}).")
-    append("\n\nYour node then opens the vote itself at block ${plan.voteBlock}")
-    voting.votingEnd?.let { append(", ${date(it)}") }
-    append(". Keep sync on from then")
-    voting.countingEnd?.let { append(" until ${date(it)}") }
-    append(": a vote that is not opened does not count.")
+    append("\n\n")
+    val end = voting.votingEnd
+    append(if (end != null) t(R.string.voting_confirm_opens_at_date, plan.voteBlock, date(end)) else t(R.string.voting_confirm_opens_at, plan.voteBlock))
+    append(" ")
+    val counting = voting.countingEnd
+    append(if (counting != null) t(R.string.voting_confirm_keep_sync_until, date(counting)) else t(R.string.voting_confirm_keep_sync))
 }
 
 /**
@@ -99,20 +100,23 @@ fun voteConfirmText(voting: OracleVoting, plan: VotePlan, date: (Instant) -> Str
  * from another app), [opened] the option of its opened vote (null while secret). Null when there is nothing to say.
  */
 fun yourVoteText(voting: OracleVoting, sent: SentVote?, opened: Int?, date: (Instant) -> String): String? = when {
-    opened != null -> "You voted “${optionText(voting, opened)}”: your vote is open ✓"
-    sent != null && voting.state == VotingState.OPEN -> "Your secret vote for “${optionText(voting, sent.option)}” is waiting for a block…"
+    opened != null -> t(R.string.voting_you_voted_open, optionText(voting, opened))
+    sent != null && voting.state == VotingState.OPEN -> t(R.string.voting_secret_vote_waiting, optionText(voting, sent.option))
     sent != null && voting.state == VotingState.VOTED -> buildString {
-        append("You voted “${optionText(voting, sent.option)}”. It stays secret until block ${sent.voteBlock}")
-        voting.votingEnd?.let { append(", ${date(it)}") }
-        append("; then your node opens it. Keep sync on from then")
-        voting.countingEnd?.let { append(" until ${date(it)}") }
-        append(".")
+        append(t(R.string.voting_you_voted, optionText(voting, sent.option)))
+        append(" ")
+        val end = voting.votingEnd
+        append(if (end != null) t(R.string.voting_secret_until_block_date, sent.voteBlock, date(end)) else t(R.string.voting_secret_until_block, sent.voteBlock))
+        append(" ")
+        val counting = voting.countingEnd
+        append(if (counting != null) t(R.string.voting_keep_sync_until, date(counting)) else t(R.string.voting_keep_sync))
     }
     sent != null && voting.state in listOf(VotingState.COUNTING, VotingState.CAN_BE_PROLONGED) -> buildString {
-        append("You voted “${optionText(voting, sent.option)}”. Your node opens the vote now")
-        voting.countingEnd?.let { append(" (it can until ${date(it)})") }
-        append(": keep sync on.")
+        append(t(R.string.voting_you_voted, optionText(voting, sent.option)))
+        append(" ")
+        val counting = voting.countingEnd
+        append(if (counting != null) t(R.string.voting_node_opens_now_until, date(counting)) else t(R.string.voting_node_opens_now))
     }
-    voting.state == VotingState.VOTED -> "You voted from another app: the node that sent the vote opens it."
+    voting.state == VotingState.VOTED -> t(R.string.voting_voted_from_another_app)
     else -> null
 }

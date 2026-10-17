@@ -61,9 +61,9 @@ data class FeedFilter(
             if (isDefault) return null
             val parts = listOfNotNull(
                 when {
-                    people && topics -> "People and topics I follow"
-                    people -> "People I follow"
-                    topics -> "Topics I follow"
+                    people && topics -> t(R.string.social_people_and_topics_i_follow)
+                    people -> t(R.string.social_people_i_follow)
+                    topics -> t(R.string.social_topics_i_follow)
                     else -> null
                 },
                 sort.title.takeIf { sort != FeedSort.Activity },
@@ -102,7 +102,7 @@ fun FeedFilterButton(filter: FeedFilter, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     IconButton(onClick = onClick, Modifier.size(40.dp)) {
         Box {
-            Icon(FilterIcon, contentDescription = "Filter the feed", tint = if (filter.isDefault) colors.onSurfaceVariant else colors.primary)
+            Icon(FilterIcon, contentDescription = t(R.string.social_filter_feed), tint = if (filter.isDefault) colors.onSurfaceVariant else colors.primary)
             if (!filter.isDefault) Box(Modifier.size(8.dp).align(Alignment.TopEnd).clip(CircleShape).background(colors.primary))
         }
     }
@@ -121,7 +121,7 @@ fun FeedFilterLine(filter: FeedFilter, onOpen: () -> Unit, onReset: () -> Unit) 
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        IconButton(onClick = onReset, Modifier.size(32.dp)) { Icon(Icons.Filled.Close, contentDescription = "Show all posts", Modifier.size(18.dp)) }
+        IconButton(onClick = onReset, Modifier.size(32.dp)) { Icon(Icons.Filled.Close, contentDescription = t(R.string.social_show_all_posts), Modifier.size(18.dp)) }
     }
 }
 
@@ -141,20 +141,20 @@ fun FeedFilterSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SheetTitle("Show")
+            SheetTitle(t(R.string.social_filter_show))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !filter.followed, onClick = { onChange(filter.copy(people = false, topics = false)) }, label = { Text("All") })
-                FollowChip("People I follow $peopleCount", filter.people, { onChange(filter.copy(people = !filter.people)) }) { onList(false) }
-                FollowChip("Topics I follow $topicsCount", filter.topics, { onChange(filter.copy(topics = !filter.topics)) }) { onList(true) }
+                FilterChip(selected = !filter.followed, onClick = { onChange(filter.copy(people = false, topics = false)) }, label = { Text(t(R.string.social_filter_all)) })
+                FollowChip(t(R.string.social_people_i_follow_count, peopleCount), filter.people, { onChange(filter.copy(people = !filter.people)) }) { onList(false) }
+                FollowChip(t(R.string.social_topics_i_follow_count, topicsCount), filter.topics, { onChange(filter.copy(topics = !filter.topics)) }) { onList(true) }
             }
-            SheetTitle("Sort")
+            SheetTitle(t(R.string.social_filter_sort))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FeedSort.entries.forEach { sort ->
                     FilterChip(selected = filter.sort == sort, onClick = { onChange(filter.copy(sort = sort)) }, label = { Text(sort.title) })
                 }
             }
             if (filter.sort.ranked) {
-                SheetTitle("Period")
+                SheetTitle(t(R.string.social_filter_period))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FeedPeriod.entries.forEach { period ->
                         FilterChip(selected = filter.period == period, onClick = { onChange(filter.copy(period = period)) }, label = { Text(period.title) })
@@ -177,7 +177,7 @@ private fun FollowChip(label: String, selected: Boolean, onToggle: () -> Unit, o
     Row(verticalAlignment = Alignment.CenterVertically) {
         FilterChip(selected = selected, onClick = onToggle, label = { Text(label) })
         IconButton(onClick = onList, Modifier.size(36.dp)) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open the list")
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = t(R.string.social_open_list))
         }
     }
 }
@@ -185,13 +185,13 @@ private fun FollowChip(label: String, selected: Boolean, onToggle: () -> Unit, o
 /** Why the feed shows nothing although posts were read. */
 fun emptyFeedText(model: SocialModel): String {
     val filter = model.feedFilter
-    val from = if (filter.followed) " from what you follow" else ""
+    val followed = filter.followed
     return when {
-        filter.followed && (!filter.people || model.people.values.none { it.following }) && (!filter.topics || model.followedTopics.isEmpty()) ->
-            "You follow nobody and no topic yet: open a profile, or a topic (type r/ in the search), and select Follow."
-        filter.sort == FeedSort.Likes -> "No liked post in this period$from."
-        filter.sort == FeedSort.Comments -> "No post with answers in this period$from."
-        filter.sort == FeedSort.Tips -> "No tipped post in this period$from."
-        else -> "No posts$from in the posts read so far."
+        followed && (!filter.people || model.people.values.none { it.following }) && (!filter.topics || model.followedTopics.isEmpty()) ->
+            t(R.string.social_empty_follow_nobody)
+        filter.sort == FeedSort.Likes -> t(if (followed) R.string.social_empty_liked_followed else R.string.social_empty_liked)
+        filter.sort == FeedSort.Comments -> t(if (followed) R.string.social_empty_answers_followed else R.string.social_empty_answers)
+        filter.sort == FeedSort.Tips -> t(if (followed) R.string.social_empty_tipped_followed else R.string.social_empty_tipped)
+        else -> t(if (followed) R.string.social_empty_posts_followed else R.string.social_empty_posts)
     }
 }

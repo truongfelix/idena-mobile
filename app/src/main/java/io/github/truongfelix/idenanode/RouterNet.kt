@@ -250,7 +250,8 @@ object RouterNet {
 
 /** A UPnP error answered by the router. */
 class RouterError(val answer: SoapAnswer) : Exception(
-    if (answer.errorCode == -1) "the router answered ${answer.errorText}" else "the router refused (${answer.errorCode} ${answer.errorText.orEmpty()})",
+    if (answer.errorCode == -1) t(R.string.router_error_answered, "${answer.errorText}")
+    else t(R.string.router_error_refused, "${answer.errorCode}", answer.errorText.orEmpty()),
 )
 
 /**
