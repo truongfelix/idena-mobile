@@ -123,7 +123,7 @@ fun ProfileList(
     val people: @Composable () -> Unit = { PeopleCounts(trust?.getOrNull(), circle?.getOrNull(), onPeople) }
     val trustChip: @Composable () -> Unit = { TrustChip(address, trust?.getOrNull(), myAddress, canAct, onProfileCall) }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
-        item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, onProfile, contractExtras, people, trustChip) }
+        item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustChip) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileTab.entries.forEach {
@@ -181,17 +181,19 @@ private fun ProfileHeader(
     contract: ContractProfile?,
     myAddress: String?,
     onEditProfile: (() -> Unit)?,
-    onProfile: (String) -> Unit,
     contractExtras: @Composable () -> Unit,
     people: @Composable () -> Unit,
     trustChip: @Composable () -> Unit,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // The picture (or the robot), and on its right ⚙ on the identity's own profile, ⋮ (or Unblock) on another's.
+        // The picture (or the robot), the address with copy beside it (B-91), then ⚙ on the identity's own profile, ⋮
+        // (or Unblock) on another's.
         Row(verticalAlignment = Alignment.CenterVertically) {
             ProfilePicture(address, contract?.shownPicture, 72.dp)
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(10.dp))
+            Text(address, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = muted)
+            CopyAddressButton(address)
             // The account's own edits and settings are in ⚙ (B-79, user 2026-10-17).
             mine?.let { OwnProfileMenu(onEdit = onEditProfile, onName = { onName(person) }, onSettings = it.onSettings) }
             if (!isMe && person.blocked) OutlinedButton(onClick = { onBlock(person.copy(blocked = false)) }) { Text("Unblock") }
@@ -230,10 +232,6 @@ private fun ProfileHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(address, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = muted)
-            CopyAddressButton(address)
-        }
         ContractProfileLines(contract, LocalNames.current, myAddress, isMe, localName = person.name.isNotEmpty())
         contractExtras()
         if (!isMe && person.blocked) Text(BLOCKED_TEXT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
@@ -251,25 +249,19 @@ private fun ProfileHeader(
             ) ?: AnnotatedString("Identity: asking the node…"),
             style = MaterialTheme.typography.bodyMedium,
         )
-        identity?.getOrNull()?.inviter?.let { inviter ->
-            Text(
-                "Invited by ${displayName(inviter, LocalNames.current)}",
-                Modifier.clickable { onProfile(inviter) },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        // In this order (B-91, user 2026-10-17): Trust, members and invitees, likes, tips, then what one follows.
         people()
         val counts = MaterialTheme.typography.bodyMedium
+        Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
+        Text("🪙 ${tipText(profile.tipsReceived)} received · ${tipText(profile.tipsGiven)} given iDNA", style = counts)
         mine?.let {
             Row {
+                Text("⭐ ", style = counts)
                 Text("${blockNumber.format(it.people)} following", Modifier.clickable { it.onFollowing(false) }, style = counts, fontWeight = FontWeight.Medium)
                 Text(" · ", style = counts)
                 Text("${count(it.topics, "topic", "topics")}", Modifier.clickable { it.onFollowing(true) }, style = counts, fontWeight = FontWeight.Medium)
             }
         }
-        Text("$LIKE ${blockNumber.format(profile.likesReceived)} received · ${blockNumber.format(profile.likes.size)} given", style = counts)
-        Text("🪙 ${tipText(profile.tipsReceived)} received · ${tipText(profile.tipsGiven)} given iDNA", style = counts)
         if (!historyDone) {
             Text(
                 "From the blocks scanned so far: older posts appear as the history scan goes on.",
