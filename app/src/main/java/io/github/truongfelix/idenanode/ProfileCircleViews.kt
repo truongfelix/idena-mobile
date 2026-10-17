@@ -14,6 +14,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,7 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 // A profile's people (B-79, B-89, user 2026-10-17): who trusts it and whom it trusts, the members it vouches for in
 // the profiles contract, and whom it invited and the node still links to it (until each is Verified or Human, or
@@ -138,8 +147,11 @@ fun emptyPeopleText(list: PeopleList, isMe: Boolean): String = when (list) {
     PeopleList.Invitees -> "No invitee on the way: an invitee shows here from its invitation until it is Verified."
 }
 
-/** What a people page reads: the profile's circle, and for "Trusted by" its Trust. */
-private class PeoplePage(val circle: ProfileCircle, val trust: TrustCount?)
+/**
+ * What a people page reads: the profile's circle, and for "Trusted by" its Trust; its [identity] (the cap of its
+ * members, its inviter) and the epoch's [period] (an invitation is terminated outside the validation only).
+ */
+private class PeoplePage(val circle: ProfileCircle, val trust: TrustCount?, val identity: ProfileIdentity, val period: String)
 
 /**
  * One people list of [address]'s profile ([list]), on a page of its own: "Trusted by" with its split, then the
@@ -151,13 +163,16 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
     val context = LocalContext.current
     val isMe = address.equals(myAddress, ignoreCase = true)
     var page by remember(address, list) { mutableStateOf<Result<PeoplePage>?>(null) }
-    LaunchedEffect(address, list, reload) {
+    // Read again after a termination sent from this page is in a block.
+    var terminated by remember { mutableIntStateOf(0) }
+    LaunchedEffect(address, list, reload, terminated) {
         page = withContext(Dispatchers.IO) {
             runCatching {
                 val identity = NodeSocialSource(rpc(context)).identity(address)
                 val trust = if (list == PeopleList.TrustedBy) NodeProfilesSource(rpc(context)).trust(address) else null
-                val givers = trust?.let { it.counted.map { g -> g.address } + it.vouchers.values }.orEmpty()
-                PeoplePage(loadCircle(context, address, identity, isMe, givers), trust)
+                val givers = trust?.let { it.counted.map { g -> g.address } + it.vouchers.values }.orEmpty() + listOfNotNull(identity.inviter)
+                val period = (rpc(context).call("dna_epoch") as JSONObject).optString("currentPeriod")
+                PeoplePage(loadCircle(context, address, identity, isMe, givers), trust, identity, period)
             }
         }
     }
@@ -192,18 +207,106 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
                         items(c.trustsGiven, key = { "trust:${it.address}" }) { TrustGivenRow(it.address, c.identities[it.address], onProfile, mine = isMe) }
                     }
                     PeopleList.Members -> {
+                        // One's own: the cap, and End for each (B-91); the contract ends a member's vouch at its next
+                        // call once it has an identity, End frees the slot now.
+                        if (isMe && c.members.isNotEmpty()) {
+                            item { Text("You vouch for ${c.members.size} of at most ${vouchCap(p.identity.state)}", style = body, fontWeight = FontWeight.Medium) }
+                        }
                         if (c.members.isEmpty()) item { Text(emptyPeopleText(list, isMe), style = body) }
-                        items(c.members, key = { "member:$it" }) { CirclePersonRow(it, c.identities[it], onProfile) }
+                        items(c.members, key = { "member:$it" }) { member ->
+                            val identity = c.identities[member]
+                            val note = if (isMe && identity != null && !isVouchable(identity.state)) "has an identity now: End frees your slot" else null
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { CirclePersonRow(member, identity, onProfile, note) }
+                                val access = LocalProfileAccess.current
+                                if (isMe && access != null) {
+                                    ActionButton("End", "End the vouch", "You no longer vouch for them", ProfileCalls.endVouch(member), access.canAct, access.onCall)
+                                }
+                            }
+                        }
                         // On one's own profile, the offers made that wait for an answer (B-81).
                         item(key = "offers") { Column { OffersSentSection(c.offersSent, c.identities, onProfile) } }
                     }
                     PeopleList.Invitees -> {
+                        // Who invited this profile first, while the node keeps the link (B-91).
+                        p.identity.inviter?.let { inviter ->
+                            item {
+                                Heading("Invited by")
+                                CirclePersonRow(inviter, c.identities[inviter], onProfile)
+                            }
+                            item { Heading("Invitees") }
+                        }
                         if (c.invitees.isEmpty()) item { Text(emptyPeopleText(list, isMe), style = body) }
-                        items(c.invitees, key = { "invitee:$it" }) { CirclePersonRow(it, c.identities[it], onProfile) }
+                        items(c.invitees, key = { "invitee:$it" }) { invitee ->
+                            val identity = c.identities[invitee]
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { CirclePersonRow(invitee, identity, onProfile) }
+                                // One's own invitee not validated yet can be terminated, outside the validation.
+                                if (isMe && canCancelInvite(identity?.state, p.period)) {
+                                    TerminateButton(myAddress!!, invitee, displayName(invitee, names)) { terminated++ }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Terminate an invitation ([invitee], invited by [me]): KillInviteeTx, its fee asked of the node and shown first, then
+ * sent; "· waiting for a block" until it is in one, then [onDone]. The invite is used up either way.
+ */
+@Composable
+private fun TerminateButton(me: String, invitee: String, name: String, onDone: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var fee by remember(invitee) { mutableStateOf<BigDecimal?>(null) }
+    var busy by remember(invitee) { mutableStateOf(false) }
+    var waiting by remember(invitee) { mutableStateOf(false) }
+    var note by remember(invitee) { mutableStateOf<String?>(null) }
+    Column {
+        OutlinedButton(
+            onClick = {
+                busy = true
+                note = null
+                scope.launch {
+                    withContext(Dispatchers.IO) { runCatching { rpc(context).estimateTx(KILL_INVITEE_TX, me, invitee, BigDecimal.ZERO) } }
+                        .onSuccess { fee = it }
+                        .onFailure { note = "The node refuses: ${it.message}" }
+                    busy = false
+                }
+            },
+            enabled = !busy && !waiting,
+        ) { Text(if (waiting) "Terminate · waiting for a block" else "Terminate") }
+        note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    }
+    fee?.let { f ->
+        AlertDialog(
+            onDismissRequest = { fee = null },
+            title = { Text("Terminate the invitation of $name?") },
+            text = {
+                Text(
+                    "They can no longer validate with this invitation, and your invitation is not given back. " +
+                        "Fee: about ${f.setScale(4, RoundingMode.UP).stripTrailingZeros().toPlainString()} iDNA.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    fee = null
+                    waiting = true
+                    scope.launch {
+                        val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).sendTx(KILL_INVITEE_TX, me, invitee, BigDecimal.ZERO) } }
+                            .getOrElse { waiting = false; note = "The node refused: ${it.message}"; return@launch }
+                        val mined = waitUntilMined(context, hash)
+                        waiting = false
+                        if (mined) onDone() else note = "Not terminated: $NOT_SENT"
+                    }
+                }) { Text("Terminate") }
+            },
+            dismissButton = { TextButton(onClick = { fee = null }) { Text("Cancel") } },
+        )
     }
 }
 

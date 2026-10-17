@@ -15,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -104,12 +103,12 @@ private fun ChallengeRow(name: String, step: ChallengeStep, mayClaim: Boolean, c
     if (!mayClaim) Text("Only a validated or vouched account can take a name.", style = small, color = muted)
 }
 
-/** What the account's own profile reads for its vouching: the offers to it, the members it vouches for and theirs. */
-private class MyVouches(val offers: List<VouchEntry>, val members: List<VouchEntry>, val memberProfiles: Map<String, ContractProfile>)
+/** What the account's own profile reads for its vouching: the offers to it. */
+private class MyVouches(val offers: List<VouchEntry>)
 
 /**
- * On the account's own profile ([profile], from the contract), as the desktop's: its voucher (End), the offers to it
- * (Accept, Decline), and the members it vouches for (End each), with how many it may have.
+ * On the account's own profile ([profile], from the contract): its voucher (End) and the offers to it (Accept,
+ * Decline). The members it vouches for, with End and the cap, are on its Members page (B-91).
  */
 @Composable
 fun MyVouching(me: String, profile: ContractProfile?, canAct: Boolean, reload: Int, onCall: ProfileAction) {
@@ -118,9 +117,7 @@ fun MyVouching(me: String, profile: ContractProfile?, canAct: Boolean, reload: I
     LaunchedEffect(me, reload) {
         vouches = withContext(Dispatchers.IO) {
             runCatching {
-                val source = NodeProfilesSource(rpc(context))
-                val members = source.members(me)
-                MyVouches(source.offersTo(me), members, source.profiles(members.map { it.address }))
+                MyVouches(NodeProfilesSource(rpc(context)).offersTo(me))
             }.getOrNull()
         }
     }
@@ -143,20 +140,6 @@ fun MyVouching(me: String, profile: ContractProfile?, canAct: Boolean, reload: I
             val name = displayName(offer.address, names)
             Text("$name offers to vouch for you.", style = body)
             OfferAnswerButtons(offer.address, name, canAct, onCall)
-        }
-        val members = vouches?.members.orEmpty()
-        if (isValidated(profile?.state) && members.isNotEmpty()) {
-            Text("You vouch for ${members.size} of at most ${vouchCap(profile?.state)}", style = body, fontWeight = FontWeight.Medium)
-            members.forEach { member ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(displayName(member.address, names), style = body)
-                    // The contract ends the vouch at the member's next call; End frees the slot now.
-                    vouches?.memberProfiles?.get(member.address)?.takeIf { !isVouchable(it.state) }?.let {
-                        Text("has an identity now: End frees your slot", style = small, color = muted)
-                    }
-                    ActionButton("End", "End the vouch", "You no longer vouch for them", ProfileCalls.endVouch(member.address), canAct, onCall)
-                }
-            }
         }
     }
 }
