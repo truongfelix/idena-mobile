@@ -59,6 +59,12 @@ class NodeProfilesSource(private val rpc: NodeRpc, private val contract: String 
     fun members(voucher: String): List<VouchEntry> =
         entries("m:${voucher.lowercase()}:").map { (key, value) -> VouchEntry(key.lowercase(), value.toIntOrNull() ?: 0) }
 
+    /** The vouch offers [voucher] made and that wait (all open offers read, [offerBy]): each member and the epoch offered. */
+    fun offersBy(voucher: String): List<VouchEntry> = entries("o:").mapNotNull { (key, value) -> offerBy(key, value, voucher) }
+
+    /** The targets [giver] gives Trust to (all Trusts read, [trustGivenBy]): addresses and "r/<topic>", with the epoch. */
+    fun trustsBy(giver: String): List<VouchEntry> = entries("t:").mapNotNull { (key, value) -> trustGivenBy(key, value, giver) }
+
     /** The epoch [voucher] offered to vouch for [member], or null without such an offer. */
     fun offer(member: String, voucher: String): Int? =
         readValues(listOf("o:" to "${member.lowercase()}:${voucher.lowercase()}")).first()?.toIntOrNull()

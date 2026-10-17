@@ -88,3 +88,17 @@ fun recipientAddress(recipient: Recipient, resolved: ResolvedName?): String? = w
     is Recipient.Name -> resolved?.holder?.takeIf { resolved.profile?.inStanding == true }
     else -> null
 }
+
+/** An open offer's entry ("o:" map: key "<member>:<voucher>", value the epoch) when [voucher] made it: the member and the epoch. */
+fun offerBy(key: String, value: String, voucher: String): VouchEntry? {
+    val parts = key.lowercase().split(":")
+    if (parts.size != 2 || parts[1] != voucher.lowercase()) return null
+    return VouchEntry(parts[0], value.toIntOrNull() ?: 0)
+}
+
+/** A Trust's entry ("t:" map: key "<target>:<giver>", value "<epoch>" or "<epoch>:v") when [giver] gave it: the target and the epoch. */
+fun trustGivenBy(key: String, value: String, giver: String): VouchEntry? {
+    val at = key.lastIndexOf(':')
+    if (at <= 0 || key.substring(at + 1).lowercase() != giver.lowercase()) return null
+    return VouchEntry(key.substring(0, at).lowercase(), value.substringBefore(':').toIntOrNull() ?: 0)
+}

@@ -103,6 +103,19 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     /** The actions sent and not read by the scan yet: a like's pill stays off until the scan reads it. */
     val sent = SentList()
 
+    /**
+     * The paid actions sent and waiting for their block (B-81): the same action cannot be sent again meanwhile (its dry
+     * run does not see the first, and the contract would refuse the second in the block, its fee lost).
+     */
+    var inFlight by mutableStateOf<List<InFlight>>(emptyList())
+        private set
+
+    /** Whether [call] (the same action, [actionKey]) waits for its block. */
+    fun waiting(call: SocialCall): Boolean = actionKey(call).let { key -> inFlight.any { actionKey(it.call) == key } }
+
+    /** Whether any call of [method] to the profiles contract waits for its block. */
+    fun waitingMethod(method: String): Boolean = inFlight.any { it.call.contract == PROFILE_CONTRACT && it.call.method == method }
+
     /** The CIDs of the files this app stored on IPFS since it started: a retry does not store and pay them again. */
     private val stored: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -258,6 +271,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
                 return@launch
             }
             busy = false
+            inFlight = inFlight + InFlight(pending.what, pending.call, hash)
             val sentContent = if (pending.fromEditor) EditorContent(draftText, draftImage, textOnIpfs, draftTopic) else null
             if (pending.fromEditor) {
                 draft = null
@@ -269,6 +283,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             sent.add(hash, pending.likeOf)
             report("${pending.what} sent, waiting for a block (${hash.take(10)}…)")
             val block = withContext(Dispatchers.IO) { waitForBlock(NodeTxLookup(rpc(context)), hash) }
+            inFlight = inFlight.filter { it.hash != hash }
             val note = if (block == null || block.error != null) putBack(sentContent) else null
             when {
                 block == null -> {
@@ -310,6 +325,9 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
         private const val DONE_KEEP_MS = 30_000L
     }
 }
+
+/** A paid action sent and waiting for its block: what it is (the confirmation's title), its call, its transaction. */
+data class InFlight(val what: String, val call: SocialCall, val hash: String)
 
 /** A sent action: its transaction, and for a like the post it likes; [height] is its block once known. */
 data class Sent(val hash: String, val likeOf: Long?, val height: Long? = null)

@@ -79,8 +79,11 @@ fun BlockMenu(person: Person, onBlock: (Person) -> Unit, onName: (() -> Unit)? =
     if (asking) BlockDialog(person, onBlock) { asking = false }
 }
 
-/** Who sends calls to the profiles contract in the Social tab: the account, whether it can act now, and the call. */
-class ProfileAccess(val me: String?, val canAct: Boolean, val onCall: ProfileAction)
+/**
+ * Who sends calls to the profiles contract in the Social tab: the account, whether it can act now, the call, and
+ * whether the same call waits for its block ([SocialSending.waiting]).
+ */
+class ProfileAccess(val me: String?, val canAct: Boolean, val onCall: ProfileAction, val waiting: (SocialCall) -> Boolean = { false })
 
 /** The Social tab's [ProfileAccess]; none outside it. */
 val LocalProfileAccess = staticCompositionLocalOf<ProfileAccess?> { null }

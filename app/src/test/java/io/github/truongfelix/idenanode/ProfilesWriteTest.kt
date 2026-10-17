@@ -164,4 +164,18 @@ class ProfilesWriteTest {
         assertTrue("Ending the vouch first avoids it" in confirmText(lapsed))
         assertEquals("on idena.social", placeOf(PendingPost("Post", SocialPosting.post("{}"), pending.from, pending.fee, null)))
     }
+
+    @Test
+    fun anActionIsTheSameWhateverGasItAsks() {
+        val bob = "0xbbbb000000000000000000000000000000000002"
+        val trust = ProfileCalls.trust(bob)
+        assertEquals(actionKey(trust), actionKey(withCallbackGas(trust, 1_000_000, 2_000_000)))
+        assertEquals(actionKey(trust), actionKey(withCallbackGas(trust, 3_000_000, null)))
+        assertTrue(actionKey(trust) != actionKey(ProfileCalls.untrust(bob)))
+        assertTrue(actionKey(trust) != actionKey(ProfileCalls.trust("r/idena")))
+        // A call without argument, or whose argument held only the gas.
+        assertEquals(actionKey(ProfileCalls.dropName()), actionKey(ProfileCalls.dropName()))
+        val empty = SocialCall("x", "{}", "0", PROFILE_CONTRACT)
+        assertEquals(actionKey(empty), actionKey(withCallbackGas(empty, 1_000_000, 1_000_000)))
+    }
 }

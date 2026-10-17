@@ -88,4 +88,19 @@ class ProfileVouchingTest {
         assertNull(recipientAddress(name, null))
         assertNull(recipientAddress(Recipient.Invalid, null))
     }
+
+    @Test
+    fun theOffersAccountMadeAreReadFromAllOpenOffers() {
+        assertEquals(VouchEntry(alice, 230), offerBy("$alice:$bob", "230", bob.uppercase().replace("0X", "0x")))
+        assertNull("another voucher's", offerBy("$alice:$holder", "230", bob))
+        assertNull("not an offer's key", offerBy(alice, "230", bob))
+    }
+
+    @Test
+    fun theTrustsAnAccountGivesAreReadFromAllTrusts() {
+        assertEquals(VouchEntry(alice, 231), trustGivenBy("$alice:$bob", "231", bob))
+        assertEquals("a topic, given as a member", VouchEntry("r/idena", 232), trustGivenBy("r/idena:$bob", "232:v", bob))
+        assertNull("another giver's", trustGivenBy("$alice:$holder", "231", bob))
+        assertNull(trustGivenBy("nothing", "1", bob))
+    }
 }

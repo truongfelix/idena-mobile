@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,8 @@ fun ActivityList(model: SocialModel, modifier: Modifier, onOpen: (ActivityItem) 
                 )
             }
         }
+        // The vouch offers made to the account wait here for its answer (B-81).
+        items(model.offersToMe, key = { "offer:${it.address}" }) { offer -> OfferCard(offer.address, onProfile = model::openProfile) }
         if (items.isEmpty()) item { Text("No likes, answers or tips on your posts yet.", style = MaterialTheme.typography.bodyMedium) }
         items(items, key = { "${it.kind}:${it.height}:${it.index}:${it.what.hash}" }) { item ->
             ActivityCard(item, isNew = newAfter != null && item.height > newAfter, onProfile = model::openProfile) { onOpen(item) }
@@ -99,6 +102,27 @@ private fun ActivityCard(item: ActivityItem, isNew: Boolean, onProfile: (String)
                 HorizontalDivider()
                 PostContent(it, MaterialTheme.typography.bodyLarge, maxLines = 4, showMedia = false)
             }
+        }
+    }
+}
+
+/** A vouch offer to the account: who offers, what it means, Accept and Decline (each with its fee shown first). */
+@Composable
+private fun OfferCard(voucher: String, onProfile: (String) -> Unit) {
+    val name = displayName(voucher, LocalNames.current)
+    val access = LocalProfileAccess.current
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.clickable { onProfile(voucher) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PersonAvatar(voucher, 32.dp)
+                Text("$name offers to vouch for you.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            }
+            Text(
+                "Once you accept, you may hold a name, write a profile and give Trust while they are validated.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (access != null) OfferAnswerButtons(voucher, name, access.canAct, access.onCall)
         }
     }
 }

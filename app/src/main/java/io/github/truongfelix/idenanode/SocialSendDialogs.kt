@@ -1,7 +1,11 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
@@ -92,4 +96,30 @@ fun TipDialog(post: SocialPost, onDismiss: () -> Unit, onTip: (Long) -> Unit) {
         confirmButton = { TextButton(onClick = { value?.let(onTip) }, enabled = value != null) { Text("Next") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/** "2 actions waiting for a block" while any paid action of Social waits ([SocialSending.inFlight]); a tap lists them. */
+@Composable
+fun InFlightLine(inFlight: List<InFlight>) {
+    if (inFlight.isEmpty()) return
+    var open by remember { mutableStateOf(false) }
+    Text(
+        "${count(inFlight.size, "action", "actions")} waiting for a block",
+        Modifier.fillMaxWidth().clickable { open = true }.padding(horizontal = 16.dp, vertical = 2.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text("Waiting for a block") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    inFlight.forEach { Text("${it.what} · sent, waiting for its block (${it.hash.take(10)}…)", style = MaterialTheme.typography.bodyMedium) }
+                    Text("A block comes about every 20 seconds; the same action cannot be sent again meanwhile.", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } },
+        )
+    }
 }

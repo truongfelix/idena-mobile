@@ -98,6 +98,8 @@ enum class ProfileTab(val title: String) {
     Invitees("Invitees"),
     /** The members it vouches for in the profiles contract. */
     Members("Members"),
+    /** The people and topics one's own account gives Trust (its own profile only, B-81). */
+    Trusts("Trusts given"),
 }
 
 /**
@@ -306,6 +308,19 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         // A profile call changes what the contract holds for the account: shown at once, not at the next epoch.
         refreshProfile(myAddress)
         profileWrites++
+        refreshOffers()
+    }
+
+    /** The vouch offers made to the account that wait for its answer (B-81): in Notifications, counted in its badge. */
+    var offersToMe by mutableStateOf<List<VouchEntry>>(emptyList())
+        private set
+
+    /** Reads the vouch offers to the account again (after each scan step and each action in a block). */
+    fun refreshOffers() {
+        val me = myAddress ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) { runCatching { NodeProfilesSource(rpc(context)).offersTo(me) }.getOrNull() }?.let { offersToMe = it }
+        }
     }
 
     /** Sends a call to the profiles contract, its fees shown first. */
@@ -522,6 +537,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The activity on the identity's posts after a scan, and a notice of what is new. */
     private suspend fun updateActivity() {
         val me = myAddress ?: return
+        refreshOffers()
         val current = feed
         allActivity = withContext(Dispatchers.Default) { socialActivity(current, me) }
         val through = cache?.authorsHeight ?: return

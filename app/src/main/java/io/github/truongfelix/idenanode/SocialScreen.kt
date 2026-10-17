@@ -128,7 +128,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
             onBlock = model::setPerson,
             onBlockTopic = { model.setTopicBlocked(it, true) },
         ),
-        LocalProfileAccess provides ProfileAccess(myAddress, canAct, model.profileAction),
+        LocalProfileAccess provides ProfileAccess(myAddress, canAct, model.profileAction, model.sending::waiting),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
@@ -493,6 +493,7 @@ fun SocialScreen(model: SocialModel, ads: List<ChainAd>, topBar: @Composable () 
                 profile = model.profiles[me.lowercase()],
                 onSave = { editingProfile = false; sendProfileEdit(model.sending, it) },
                 onDismiss = { editingProfile = false },
+                waitingMethod = model.sending::waitingMethod,
             )
         }
     }
@@ -583,7 +584,7 @@ private fun BottomBar(model: SocialModel) {
             BarItem("Messages", Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
                 model.showList(SocialView.Messages)
             }
-            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread) {
+            BarItem("Notifications", Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
                 model.showList(SocialView.Activity)
             }
             BarItem("Profile", Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }

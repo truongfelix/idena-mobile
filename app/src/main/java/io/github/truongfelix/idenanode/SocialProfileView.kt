@@ -59,7 +59,7 @@ private fun SocialProfile.list(tab: ProfileTab): List<ProfileItem> = when (tab) 
     ProfileTab.Tips -> tips
     ProfileTab.Media -> media
     // Read from the node and the contract ([ProfileCircle]), not from the posts.
-    ProfileTab.Invitees, ProfileTab.Members -> emptyList()
+    ProfileTab.Invitees, ProfileTab.Members, ProfileTab.Trusts -> emptyList()
 }
 
 /**
@@ -120,18 +120,21 @@ fun ProfileList(
         }
     }
     val items = profile.list(tab)
-    val circle = rememberProfileCircle(address, identity?.getOrNull(), reload)
-    val circleTab = tab == ProfileTab.Invitees || tab == ProfileTab.Members
+    val circle = rememberProfileCircle(address, identity?.getOrNull(), reload, isMe)
+    val circleTab = tab == ProfileTab.Invitees || tab == ProfileTab.Members || tab == ProfileTab.Trusts
     fun count(t: ProfileTab): String = when (t) {
         ProfileTab.Invitees -> circle?.getOrNull()?.invitees?.size?.toString() ?: "…"
         ProfileTab.Members -> circle?.getOrNull()?.members?.size?.toString() ?: "…"
+        ProfileTab.Trusts -> circle?.getOrNull()?.trustsGiven?.size?.toString() ?: "…"
         else -> profile.list(t).size.toString()
     }
+    // The Trusts given show on one's own profile only.
+    val tabs = ProfileTab.entries.filter { isMe || it != ProfileTab.Trusts }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
         item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, onProfile, contractExtras) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ProfileTab.entries.forEach {
+                tabs.forEach {
                     FilterChip(selected = tab == it, onClick = { onTab(it) }, label = { Text("${it.title} ${count(it)}") })
                 }
             }
@@ -143,9 +146,16 @@ fun ProfileList(
                 loaded.isFailure -> item { Text("The node did not answer: ${loaded.exceptionOrNull()?.message}", style = MaterialTheme.typography.bodyMedium) }
                 else -> {
                     val c = loaded.getOrThrow()
-                    val people = if (tab == ProfileTab.Invitees) c.invitees else c.members
-                    if (people.isEmpty()) item { Text(emptyCircleText(tab), style = MaterialTheme.typography.bodyMedium) }
-                    items(people, key = { "circle:$it" }) { CirclePersonRow(it, c.identities[it], onProfile) }
+                    if (tab == ProfileTab.Trusts) {
+                        if (c.trustsGiven.isEmpty()) item { Text(emptyCircleText(tab), style = MaterialTheme.typography.bodyMedium) }
+                        items(c.trustsGiven, key = { "trust:${it.address}" }) { TrustGivenRow(it.address, c.identities[it.address], onProfile) }
+                    } else {
+                        val people = if (tab == ProfileTab.Invitees) c.invitees else c.members
+                        if (people.isEmpty()) item { Text(emptyCircleText(tab), style = MaterialTheme.typography.bodyMedium) }
+                        items(people, key = { "circle:$it" }) { CirclePersonRow(it, c.identities[it], onProfile) }
+                        // On one's own Members tab, the offers made that wait for an answer (B-81).
+                        if (tab == ProfileTab.Members) item(key = "offers") { Column { OffersSentSection(c.offersSent, c.identities, onProfile) } }
+                    }
                 }
             }
         } else if (items.isEmpty()) item { Text("Nothing here yet.", style = MaterialTheme.typography.bodyMedium) }
@@ -349,7 +359,7 @@ private fun ProfileItemCard(
                     )
                     PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = 4, showMedia = false)
                 }
-                ProfileTab.Invitees, ProfileTab.Members -> {}
+                ProfileTab.Invitees, ProfileTab.Members, ProfileTab.Trusts -> {}
                 ProfileTab.Posts, ProfileTab.Media -> {
                     PostHeader(call, states, onProfile)
                     PostContent(call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES)

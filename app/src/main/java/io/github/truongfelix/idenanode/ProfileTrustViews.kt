@@ -45,14 +45,17 @@ fun TrustRow(target: String, trust: TrustCount?, failed: Boolean, me: String?, c
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (onCall != null && me != null && me.lowercase() != target.lowercase()) {
             val mine = trust?.givenBy(me) == true
+            // A Trust or its taking back waits for its block: no second one meanwhile (B-81).
+            val access = LocalProfileAccess.current
+            val waiting = access != null && (access.waiting(ProfileCalls.trust(target)) || access.waiting(ProfileCalls.untrust(target)))
             FilterChip(
                 selected = mine,
-                enabled = canAct && trust != null,
+                enabled = canAct && trust != null && !waiting,
                 onClick = {
                     if (mine) onCall("Take your Trust back", "Your Trust in ${trustName(target)} no longer counts", ProfileCalls.untrust(target))
                     else onCall("Trust", "Gives your public Trust to ${trustName(target)}: everyone sees it; you can take it back", ProfileCalls.trust(target))
                 },
-                label = { Text(if (mine) "Trusted" else "Trust") },
+                label = { Text(if (waiting) "Trust · waiting for a block" else if (mine) "Trusted" else "Trust") },
             )
         }
         when {
