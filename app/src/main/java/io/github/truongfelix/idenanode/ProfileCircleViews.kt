@@ -86,10 +86,13 @@ private fun loadCircle(context: Context, address: String, identity: ProfileIdent
 @Composable
 fun rememberProfileCircle(address: String, identity: ProfileIdentity?, reload: Int, isMe: Boolean = false): Result<ProfileCircle>? {
     val context = LocalContext.current
-    var circle by remember(address) { mutableStateOf<Result<ProfileCircle>?>(null) }
+    // The last answer while the app runs ([ProfileReads]) until the node answers again.
+    var circle by remember(address) { mutableStateOf(ProfileReads.circle(address)?.let { Result.success(it) }) }
     LaunchedEffect(address, identity, reload) {
         if (identity == null) return@LaunchedEffect
-        circle = withContext(Dispatchers.IO) { runCatching { loadCircle(context, address, identity, isMe) } }
+        val read = withContext(Dispatchers.IO) { runCatching { loadCircle(context, address, identity, isMe) } }
+        read.onSuccess { ProfileReads.keep(address, it) }
+        circle = afterRead(read, circle)
     }
     return circle
 }

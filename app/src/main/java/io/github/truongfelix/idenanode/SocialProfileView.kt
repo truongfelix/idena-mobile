@@ -99,11 +99,13 @@ fun ProfileList(
 ) {
     val context = LocalContext.current
     val profile = remember(feed, address) { socialProfile(feed, address) }
-    // Null while the node is asked.
-    var identity by remember(address) { mutableStateOf<Result<ProfileIdentity>?>(null) }
-    var trust by remember(address) { mutableStateOf<Result<TrustCount>?>(null) }
+    // The last answers while the app runs ([ProfileReads]), read again at each opening; null while first asked.
+    var identity by remember(address) { mutableStateOf(ProfileReads.identity(address)?.let { Result.success(it) }) }
+    var trust by remember(address) { mutableStateOf(ProfileReads.trust(address)?.let { Result.success(it) }) }
     LaunchedEffect(address) {
-        identity = withContext(Dispatchers.IO) { runCatching { NodeSocialSource(rpc(context)).identity(address) } }
+        val read = withContext(Dispatchers.IO) { runCatching { NodeSocialSource(rpc(context)).identity(address) } }
+        read.onSuccess { ProfileReads.keep(address, it) }
+        identity = afterRead(read, identity)
     }
     // The profile and its Trust read again at each opening and after each profile call in a block ([reload]): a name,
     // a bio, a vouch or a Trust may have changed since.
@@ -113,7 +115,9 @@ fun ProfileList(
         val read = withContext(Dispatchers.IO) { runCatching { source.profiles(listOf(address)) }.getOrNull() }
         read?.values?.firstOrNull()?.let(onContract)
         if (read != null) contractRead = true
-        trust = withContext(Dispatchers.IO) { runCatching { source.trust(address) } }
+        val trustRead = withContext(Dispatchers.IO) { runCatching { source.trust(address) } }
+        trustRead.onSuccess { ProfileReads.keep(address, it) }
+        trust = afterRead(trustRead, trust)
     }
     val isMe = address.equals(myAddress, ignoreCase = true)
     val vouch = if (isMe) null else rememberVouchState(address, contract, myAddress, reload)
