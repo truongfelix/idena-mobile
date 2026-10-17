@@ -78,6 +78,8 @@ class PendingPost(
     val likeOf: Long? = null,
     /** For a profile call from a vouched member: the extra amount it sends, burned by the contract. */
     val memberExtra: MemberExtra? = null,
+    /** Run once the node took it: a message's text then leaves its conversation. */
+    val onSent: () -> Unit = {},
 ) {
     val totalFee: BigDecimal
         get() = fee.fee + files.sumOf { it.fee }
@@ -161,7 +163,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
      * order ([findPublicKey]): the plain message in idena.social's format ([plainMessage]), encrypted by the node for the
      * account and each recipient (social_encrypt), then sendMessage with the website's 0.00002 iDNA.
      */
-    fun prepareMessage(recipients: List<String>, keys: List<String>, text: String) = prepareWith(t(R.string.social_what_message)) { posting, from ->
+    fun prepareMessage(recipients: List<String>, keys: List<String>, text: String, onSent: () -> Unit = {}) = prepareWith(t(R.string.social_what_message)) { posting, from ->
         val me = from.lowercase()
         val others = recipients.filter { it != me }.ifEmpty { listOf(me) }
         if (keys.size != others.size) throw IOException(t(R.string.social_error_no_key))
@@ -169,7 +171,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
         val parts = posting.encrypt(keys, plain)
         if (parts.size != others.size + 1) throw IOException(t(R.string.social_error_parts, parts.size, others.size + 1))
         val call = SocialPosting.message(sendMessageArgument(parts, keccak256Hex(plain)))
-        PendingPost(t(R.string.social_what_message), call, from, posting.estimate(from, call), tp(R.plurals.social_message_detail, others.size, others.size))
+        PendingPost(t(R.string.social_what_message), call, from, posting.estimate(from, call), tp(R.plurals.social_message_detail, others.size, others.size), onSent = onSent)
     }
 
     /**
@@ -290,6 +292,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             }
             busy = false
             inFlight = inFlight + InFlight(pending.what, pending.call, hash)
+            pending.onSent()
             val sentContent = if (pending.fromEditor) EditorContent(draftText, draftImage, textOnIpfs, draftTopic) else null
             if (pending.fromEditor) {
                 draft = null

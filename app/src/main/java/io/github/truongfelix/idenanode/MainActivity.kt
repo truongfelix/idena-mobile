@@ -29,7 +29,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import android.os.SystemClock
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
@@ -140,6 +141,7 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
     val node = remember { NodeModel(context.applicationContext) }
     // The Idena ads, in the Social feed.
     val ads = remember { AdsModel(context.applicationContext) }
+    val keep = remember { PanelKeep() }
     var nodeInfo by remember { mutableStateOf(false) }
     var socialInfo by remember { mutableStateOf(false) }
     val panelOpen = panel.targetValue == DrawerValue.Open
@@ -212,7 +214,7 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                             // Its body (and its reads) once the panel opens or a swipe passes half of it: a swipe let go
                             // early shows its title only.
                             val open = panelOpen || panel.currentValue == DrawerValue.Open
-                            if (panelShown) NodePanel(node, social, ads.ads, open, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
+                            if (panelShown) NodePanel(node, social, ads.ads, open, keep, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
                             // Back added each time the panel opens, so that it comes before the Social screen's.
                             if (panelOpen) BackHandler { scope.launch { panel.close() } }
                         }
@@ -311,6 +313,17 @@ private fun FlipsDueCard(quota: FlipQuota) {
     }
 }
 
+/**
+ * What the node panel keeps while it is closed (its body leaves the screen then): its place, the network's rewards
+ * read last and when, and a mining action under way.
+ */
+private class PanelKeep {
+    val scroll = ScrollState(0)
+    var network by mutableStateOf<NetworkRewards?>(null)
+    var networkAt = 0L
+    val mining = MiningActionState()
+}
+
 /** "Validation · now" and its button, under the title row while the validation runs. */
 @Composable
 private fun ValidationLine() {
@@ -323,7 +336,7 @@ private fun ValidationLine() {
 
 /** The panel from the right: its title, then, once [open], what the Node tab held and the ad banner at its foot. */
 @Composable
-private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, open: Boolean, onInfo: () -> Unit, onClose: () -> Unit) {
+private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, open: Boolean, keep: PanelKeep, onInfo: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(t(R.string.node_tab_node), style = MaterialTheme.typography.titleLarge)
@@ -338,7 +351,7 @@ private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, 
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = t(R.string.common_close)) }
         }
         if (open) {
-            NodeScreen(node, social.people, social.names, Modifier.weight(1f))
+            NodeScreen(node, social.people, social.names, keep, Modifier.weight(1f))
             AdBanner(ads)
         }
     }
@@ -366,15 +379,15 @@ fun AppTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map<String, String>, modifier: Modifier = Modifier) {
+private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map<String, String>, keep: PanelKeep, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     // The model reads the node every 3 s while this tab is shown.
     val state = model.state
-    var network by remember { mutableStateOf<NetworkRewards?>(null) }
+    val network = keep.network
     val routerPort = remember { RouterPortModel(context.applicationContext) }
-    val mining = remember { MiningActionState() }
+    val mining = keep.mining
 
     suspend fun refresh() = model.refresh()
 
@@ -390,14 +403,24 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
         }
     }
 
-    // The APY's network data reads every identity: every 10 minutes, once the node is synced.
+    // The APY's network data reads every identity: every 10 minutes, once the node is synced; the last read is kept
+    // while the panel is closed, so that opening it again does not read it before its 10 minutes. The state is read
+    // at each turn (the screen's, captured once, would stay the first one).
     LaunchedEffect(Unit) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                if (state.status?.let { !it.syncing && !it.accountPending } == true) {
+                if (model.state.status?.let { !it.syncing && !it.accountPending } == true) {
+                    val wait = keep.networkAt + 10 * 60_000L - SystemClock.elapsedRealtime()
+                    if (keep.network != null && wait > 0) {
+                        delay(wait)
+                        continue
+                    }
                     withContext(Dispatchers.IO) {
                         runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).networkRewards() }.getOrNull()
-                    }?.let { network = it }
+                    }?.let {
+                        keep.network = it
+                        keep.networkAt = SystemClock.elapsedRealtime()
+                    }
                     delay(10 * 60_000L)
                 } else {
                     delay(30_000L)
@@ -425,7 +448,7 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
     Column(
         modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(keep.scroll)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

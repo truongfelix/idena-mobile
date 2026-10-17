@@ -1,5 +1,7 @@
 package io.github.truongfelix.idenanode
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.annotation.StringRes
 import android.content.Context
 import androidx.compose.foundation.clickable
@@ -96,19 +98,21 @@ fun rememberProfileCircle(address: String, identity: ProfileIdentity?, reload: I
  * The counts in a profile's header, as followers and following on other apps: "🤝 15 trusted by · 4 trusts given" and
  * "👥 3 members · 2 invitees"; a tap on a count opens its list ([onOpen]). "…" while read.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PeopleCounts(trust: TrustCount?, circle: ProfileCircle?, onOpen: (PeopleList) -> Unit) {
     val style = MaterialTheme.typography.bodyMedium
     @Composable
     fun Count(text: String, list: PeopleList) = Text(text, Modifier.clickable { onOpen(list) }, style = style, fontWeight = FontWeight.Medium)
     fun n(value: Int?) = value?.let { blockNumber.format(it) } ?: "…"
-    Row {
+    // Each count goes on the next line when the line is full (a large font), never squeezed beside the other.
+    FlowRow {
         Text("🤝 ", style = style)
         Count(t(R.string.profile_count_trusted_by, n(trust?.total)), PeopleList.TrustedBy)
         Text(" · ", style = style)
         Count(t(R.string.profile_count_trusts_given, n(circle?.trustsGiven?.size)), PeopleList.TrustsGiven)
     }
-    Row {
+    FlowRow {
         Text("👥 ", style = style)
         Count(tp(R.plurals.profile_count_members, circle?.members?.size ?: 0, n(circle?.members?.size)), PeopleList.Members)
         Text(" · ", style = style)

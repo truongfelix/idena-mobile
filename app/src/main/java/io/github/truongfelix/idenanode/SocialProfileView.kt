@@ -1,5 +1,7 @@
 package io.github.truongfelix.idenanode
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -176,6 +178,7 @@ class MyProfileLinks(val people: Int, val topics: Int, val onFollowing: (topics:
  * state, age and stake in the state's color; then what the identity's own profile follows, the likes and the tips,
  * received and given.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProfileHeader(
     address: String,
@@ -211,7 +214,8 @@ private fun ProfileHeader(
         }
         // Another's: Message, Trust and Follow on a row of their own (B-89), the width a phone has.
         if (!isMe && !person.blocked) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // On two lines when the three do not fit (a large font, "Trust · waiting for a block").
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LocalOpenChat.current?.let { chat ->
                     LaunchedEffect(address) { chat.lookUp(address) }
                     // Greyed when no key is known: the conversation tells why.
@@ -265,7 +269,7 @@ private fun ProfileHeader(
         Text(t(R.string.socialb_likes_line, LIKE, blockNumber.format(profile.likesReceived), blockNumber.format(profile.likes.size)), style = counts)
         Text(t(R.string.socialb_tips_line, tipText(profile.tipsReceived), tipText(profile.tipsGiven)), style = counts)
         mine?.let {
-            Row {
+            FlowRow {
                 Text("⭐ ", style = counts)
                 Text(t(R.string.socialb_n_following, blockNumber.format(it.people)), Modifier.clickable { it.onFollowing(false) }, style = counts, fontWeight = FontWeight.Medium)
                 Text(" · ", style = counts)

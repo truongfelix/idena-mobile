@@ -185,12 +185,10 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     val conversation = model.conversations.firstOrNull { it.key == key }
     val others = conversation?.others ?: key.split('-').filter { it != me }.ifEmpty { listOf(me) }
     val messages = conversation?.messages.orEmpty()
-    var draft by rememberSaveable(key) { mutableStateOf("") }
-    // The text stays until the message is sent (the fee's dialog can be cancelled): sent, it waits for its block.
-    val sentMessage = model.sending.inFlight.lastOrNull { it.call.method == "sendMessage" }?.hash
-    LaunchedEffect(sentMessage) {
-        if (sentMessage != null) draft = ""
-    }
+    // The text is the model's: it stays while the conversation is closed, another tab shown or the node panel open.
+    val draft = model.chatDrafts[key].orEmpty()
+    val setDraft = { text: String -> model.chatDrafts[key] = text }
+    // The text stays until the node took the message (the fee's dialog can be cancelled): sent, it waits for its block.
     LaunchedEffect(key) { model.lookUpKeys(others) }
     val noKey = others.filter { model.messageKeys[it] == "" }
     val looking = others.any { it !in model.messageKeys }
@@ -241,7 +239,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
                     value = draft,
-                    onValueChange = { draft = it.take(MAX_MESSAGE) },
+                    onValueChange = { setDraft(it.take(MAX_MESSAGE)) },
                     modifier = Modifier.weight(1f).focusRequester(focus),
                     placeholder = { Text(t(R.string.socialb_message_placeholder)) },
                     maxLines = 5,
@@ -251,7 +249,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 // Sending does not accept a request: once the message is in a block, the conversation holds one of the
                 // account's and leaves Requests ([conversations]); a send that fails leaves it there.
                 FilledIconButton(
-                    onClick = { model.sendMessage(others, draft.trim()) },
+                    onClick = { model.sendMessage(others, draft.trim(), key) },
                     enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
                     modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.common_send)) }

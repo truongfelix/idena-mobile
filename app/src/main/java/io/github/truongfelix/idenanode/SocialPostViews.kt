@@ -82,7 +82,7 @@ fun PostHeader(
     call: PostCall,
     states: Map<String, AuthorIdentity>,
     onProfile: (String) -> Unit,
-    avatar: Dp = 36.dp,
+    avatar: Dp = 42.dp,
     compact: Boolean = false,
     op: Boolean = false,
 ) {
@@ -95,7 +95,7 @@ fun PostHeader(
         // The feed's one line, as Reddit's: avatar, name, state, time, and ⋯ on the right; the name is cut first.
         Row(verticalAlignment = Alignment.CenterVertically) {
           Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            PersonAvatar(call.author, 24.dp, Modifier.clickable { onProfile(call.author) })
+            PersonAvatar(call.author, 32.dp, Modifier.clickable { onProfile(call.author) })
             Spacer(Modifier.width(8.dp))
             Text(
                 buildAnnotatedString { appendAddress(call.author, styles, onProfile) },

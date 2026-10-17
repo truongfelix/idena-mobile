@@ -293,6 +293,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** [address]'s entry of the People list, or an empty one. */
     fun person(address: String): Person = people[address.lowercase()] ?: Person(address.lowercase())
     val pages = mutableStateListOf<SocialPage>()
+
+    /** Each conversation's text not sent yet, by its key, while the app runs (emptied once the node took it). */
+    val chatDrafts = androidx.compose.runtime.mutableStateMapOf<String, String>()
     private val pageStates = HashMap<SocialPage, PageState>()
     val profileTabs = mutableStateMapOf<String, ProfileTab>()
     val feedState = LazyListState()
@@ -510,10 +513,10 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     }
 
     /** Sends [text] to [others] (lowercase) once each one's public key is known. */
-    fun sendMessage(others: List<String>, text: String) {
+    fun sendMessage(others: List<String>, text: String, conversation: String) {
         val keys = others.map { messageKeys[it].orEmpty() }
         if (keys.any { it.isEmpty() }) return
-        sending.prepareMessage(others, keys, text)
+        sending.prepareMessage(others, keys, text) { chatDrafts.remove(conversation) }
     }
 
     /** Takes [conversation] out of Requests: its people are marked to message ([Person.message]). */
