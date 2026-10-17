@@ -589,23 +589,22 @@ val SOCIAL_BAR_HEIGHT = 60.dp
 
 /**
  * The bottom bar, as the usual social apps': the Feed, Messages, Notifications and the identity's Profile, four
- * slots of one width, the lists shown over the open pages, with what is new. A list is marked while it shows with
- * no page over it. A new post is written from [PostButton].
+ * slots of one width, with what is new. The list shown is marked, with the pages it has open or none (each list
+ * keeps its own, B-101). A new post is written from [PostButton].
  */
 @Composable
 private fun BottomBar(model: SocialModel) {
     val unread = model.unread.size
-    val onList = model.pages.isEmpty()
     Surface(Modifier.fillMaxWidth().height(SOCIAL_BAR_HEIGHT), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            BarItem(t(R.string.social_tab_feed), Icons.Filled.Home, selected = onList && model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
-            BarItem(t(R.string.social_tab_messages), Icons.Filled.Email, selected = onList && model.view == SocialView.Messages, badge = model.unreadConversations) {
+            BarItem(t(R.string.social_tab_feed), Icons.Filled.Home, selected = model.view == SocialView.Feed) { model.showList(SocialView.Feed) }
+            BarItem(t(R.string.social_tab_messages), Icons.Filled.Email, selected = model.view == SocialView.Messages, badge = model.unreadConversations) {
                 model.showList(SocialView.Messages)
             }
-            BarItem(t(R.string.social_tab_notifications), Icons.Filled.Notifications, selected = onList && model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
+            BarItem(t(R.string.social_tab_notifications), Icons.Filled.Notifications, selected = model.view == SocialView.Activity, badge = unread + model.offersToMe.size) {
                 model.showList(SocialView.Activity)
             }
-            BarItem(t(R.string.social_tab_profile), Icons.Filled.AccountCircle, selected = onList && model.view == SocialView.Me) { model.showList(SocialView.Me) }
+            BarItem(t(R.string.social_tab_profile), Icons.Filled.AccountCircle, selected = model.view == SocialView.Me) { model.showList(SocialView.Me) }
         }
     }
 }

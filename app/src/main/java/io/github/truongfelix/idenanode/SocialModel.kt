@@ -7,6 +7,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -292,7 +293,12 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     /** [address]'s entry of the People list, or an empty one. */
     fun person(address: String): Person = people[address.lowercase()] ?: Person(address.lowercase())
-    val pages = mutableStateListOf<SocialPage>()
+    // Each bottom-bar list's open pages, the last on top: a list keeps them while another is shown (B-101).
+    private val stacks = SocialView.entries.associateWith { mutableStateListOf<SocialPage>() }
+
+    /** The open pages of the list shown, the last on top. */
+    val pages: SnapshotStateList<SocialPage>
+        get() = stacks.getValue(view)
 
     /** Each conversation's text not sent yet, by its key, while the app runs (emptied once the node took it). */
     val chatDrafts = androidx.compose.runtime.mutableStateMapOf<String, String>()
@@ -359,26 +365,41 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         markSeen()
     }
 
-    /** Shows the Activity from a notice: the lists, not a page or the editor (the draft's text stays). */
+    /** Shows the Activity from a notice: its list, not a page over it nor the editor (the draft's text stays). */
     fun showActivity() {
-        pages.clear()
-        pageStates.clear()
+        stacks.getValue(SocialView.Activity).clear()
+        dropClosedPageStates()
         sending.draft = null
         openActivity()
     }
 
     /**
-     * Shows the list [list] from the bottom bar, closing the open pages; the Activity counts as seen. A tap on
-     * the list already shown, with no page over it, takes it back to its top.
+     * Shows the list [list] from the bottom bar, with the pages it had open (B-101); the Activity counts as seen.
+     * A tap on the list already shown closes its pages, a second one takes it back to its top.
      */
     fun showList(list: SocialView) {
-        if (pages.isEmpty() && view == list) {
-            scope.launch { listState(list).animateScrollToItem(0) }
+        if (view == list) {
+            if (pages.isEmpty()) scope.launch { listState(list).animateScrollToItem(0) }
+            else {
+                pages.clear()
+                dropClosedPageStates()
+            }
             return
         }
-        pages.clear()
-        pageStates.clear()
         if (list == SocialView.Activity) openActivity() else view = list
+    }
+
+    /** Shows the feed's own list, its pages closed: where the search's results show. */
+    fun showFeedList() {
+        if (view == SocialView.Feed && pages.isEmpty()) return
+        view = SocialView.Feed
+        pages.clear()
+        dropClosedPageStates()
+    }
+
+    /** Forgets the places of the pages no list has open any more. */
+    private fun dropClosedPageStates() {
+        pageStates.keys.retainAll { page -> stacks.values.any { page in it } }
     }
 
     private fun listState(list: SocialView): LazyListState = when (list) {
@@ -424,7 +445,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         // A second tap on Back may come before the page is gone.
         if (pages.isEmpty()) return
         val page = pages.removeAt(pages.lastIndex)
-        if (page !in pages) pageStates.remove(page)
+        if (stacks.values.none { page in it }) pageStates.remove(page)
         // A reply started in the thread's bar goes with it: else, with no thread left, it showed in the full editor.
         if (page is SocialPage.Thread && sending.draft?.target?.let { it != PostTarget.NEW_POST } == true) sending.draft = null
     }
