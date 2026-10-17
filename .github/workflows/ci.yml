@@ -1,0 +1,95 @@
+name: Lint, tests and build
+
+# Once per pull request, on main after a merge, and by hand.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # The NDK scripts/env.sh names; the runner's own default may be another one.
+      NDK_VERSION: 27.3.13750724
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      # The node library (app/libs/idena-node.aar) is built from go/ and the two build scripts only: kept by
+      # their content, so that a change of the app alone does not build it again.
+      - name: Restore the node library
+        id: node
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: app/libs/idena-node.aar
+          key: node-aar-${{ hashFiles('go/**', 'scripts/build-node-aar.sh', 'scripts/build-wasm-android.sh', 'scripts/env.sh') }}
+
+      - name: Install the NDK
+        if: steps.node.outputs.cache-hit != 'true'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Set up Go
+        if: steps.node.outputs.cache-hit != 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      # The Rust version is the one idena-wasm's rust-toolchain.toml names, at the commit the script builds.
+      - name: Set up Rust for Android
+        if: steps.node.outputs.cache-hit != 'true'
+        run: |
+          rev=$(sed -n 's/^WASM_REV=//p' scripts/build-wasm-android.sh)
+          channel=$(curl -fsSL "https://raw.githubusercontent.com/truongfelix/idena-wasm/$rev/rust-toolchain.toml" | sed -n 's/^channel = "\(.*\)"$/\1/p')
+          test -n "$channel"
+          rustup toolchain install "$channel" --profile minimal --component rustfmt,clippy --target aarch64-linux-android
+
+      - name: Set up gomobile
+        if: steps.node.outputs.cache-hit != 'true'
+        working-directory: go
+        run: go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+
+      - name: Build the node library
+        if: steps.node.outputs.cache-hit != 'true'
+        run: |
+          scripts/build-wasm-android.sh
+          scripts/build-node-aar.sh
+
+      # Saved at once: a failing test later must not lose an hour's build.
+      - name: Save the node library
+        if: steps.node.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: app/libs/idena-node.aar
+          key: ${{ steps.node.outputs.cache-primary-key }}
+
+      - name: Lint, unit tests and the release build
+        run: scripts/build-apk.sh lintDebug testDebugUnitTest assembleRelease
+
+      - name: Keep the reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reports
+          path: app/build/reports
+          retention-days: 14
