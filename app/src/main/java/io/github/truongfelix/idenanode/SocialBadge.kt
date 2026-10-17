@@ -1,6 +1,7 @@
 package io.github.truongfelix.idenanode
 
 import android.app.ActivityManager
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -73,7 +74,19 @@ object SocialBadge {
             .setAutoCancel(true)
             .setSilent(!update.alert)
             .build()
+        miuiCount(notification, update.count)
         runCatching { context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification) }
+    }
+
+    /**
+     * MIUI's launcher counts a notification as 1 on the icon, whatever its [Notification.number], unless its own
+     * `extraNotification.setMessageCount` says how many (Xiaomi's badge documentation); nothing elsewhere.
+     */
+    private fun miuiCount(notification: Notification, count: Int) {
+        runCatching {
+            val extra = notification.javaClass.getDeclaredField("extraNotification").get(notification) ?: return
+            extra.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType).invoke(extra, count)
+        }
     }
 
     /** Whether the app is on screen: it shows its news itself then. */
