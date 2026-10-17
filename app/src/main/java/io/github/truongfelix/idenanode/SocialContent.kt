@@ -87,6 +87,9 @@ val LocalHiding = compositionLocalOf { HiddenContent(Hiding.None, null) }
  * A post's text and first media; [showMedia] false shows a short mention instead of the media. [selectable] lets a
  * long press select the text to copy it: only where the whole text shows (the thread), since a tap on a preview
  * opens the thread. A text hidden ([LocalHiding]: by the user, or with a hidden word) shows as one line instead, a tap shows it.
+ * [inThread]: a tap on the picture opens it full screen; in a list it opens the thread, as a tap on the text (B-73),
+ * so a picture is seen with its post. With "Pictures in posts" at Tap to show, another's picture is one line, shown
+ * (and downloaded) only on a tap in its thread.
  */
 @Composable
 fun PostContent(
@@ -96,6 +99,7 @@ fun PostContent(
     showMedia: Boolean = true,
     mediaMaxHeight: Dp = 360.dp,
     selectable: Boolean = false,
+    inThread: Boolean = false,
 ) {
     val hidden = LocalHiding.current
     var shown by remember(call.hash) { mutableStateOf(false) }
@@ -117,7 +121,19 @@ fun PostContent(
         call.message.isNotEmpty() -> PostText(call.message, style, maxLines, selectable)
     }
     if (call.hasMedia && !(ipfsHidden && !shown)) {
-        if (showMedia) PostMedia(call, mediaMaxHeight) else Note("🖼 Media")
+        val tapToShow = hidden.hiding.pictures == PicturesMode.TapToShow && call.author != hidden.me
+        var mediaShown by remember(call.hash) { mutableStateOf(false) }
+        when {
+            !showMedia -> Note("🖼 Media")
+            tapToShow && !mediaShown && inThread -> Text(
+                "🖼 A picture. Tap to show it.",
+                Modifier.clickable { mediaShown = true },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            tapToShow && !mediaShown -> Note("🖼 A picture: open the post to show it.")
+            else -> PostMedia(call, mediaMaxHeight, inThread)
+        }
     }
 }
 
@@ -153,7 +169,7 @@ private fun IpfsText(
 
 /** The first media: an image (inline or on IPFS); video, audio and SVG are only mentioned. */
 @Composable
-private fun PostMedia(call: PostCall, maxHeight: Dp) {
+private fun PostMedia(call: PostCall, maxHeight: Dp, inThread: Boolean) {
     val type = call.mediaType.lowercase()
     val cid = ipfsCid(call.media)
     when {
@@ -164,7 +180,7 @@ private fun PostMedia(call: PostCall, maxHeight: Dp) {
             val (state, retry) = rememberIpfs(cid)
             when (state) {
                 Fetched.Loading -> Note("Loading the image from IPFS through the node…")
-                is Fetched.Loaded -> PostImage(cid, state.bytes, maxHeight)
+                is Fetched.Loaded -> PostImage(cid, state.bytes, maxHeight, inThread)
                 Fetched.Unavailable -> Unavailable(retry)
                 is Fetched.Failed -> Note("The node did not answer: ${state.reason}")
             }
@@ -172,14 +188,17 @@ private fun PostMedia(call: PostCall, maxHeight: Dp) {
         call.media.startsWith("ipfs://") -> Note("Media on IPFS with an invalid address.")
         else -> {
             val bytes = remember(call.hash) { runCatching { Base64.getDecoder().decode(call.media) }.getOrNull() }
-            if (bytes == null) Note("🖼 Unreadable image.") else PostImage(call.hash, bytes, maxHeight)
+            if (bytes == null) Note("🖼 Unreadable image.") else PostImage(call.hash, bytes, maxHeight, inThread)
         }
     }
 }
 
-/** An image decoded off the main thread, at most 1,080 pixels on its longer side; a tap shows it full screen. */
+/**
+ * An image decoded off the main thread, at most 1,080 pixels on its longer side; in a thread ([inThread]) a tap shows
+ * it full screen, in a list the tap goes to the post (its thread).
+ */
 @Composable
-private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp) {
+private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp, inThread: Boolean) {
     val decoded by produceState<Pair<Boolean, ImageBitmap?>>(false to images.get(key), key) {
         if (value.second == null) {
             val bitmap = withContext(Dispatchers.Default) { decodeScaled(bytes) }
@@ -193,7 +212,8 @@ private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp) {
         bitmap != null -> Image(
             bitmap = bitmap,
             contentDescription = "Image of the post",
-            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp)).clickable { open = true },
+            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp))
+                .then(if (inThread) Modifier.clickable { open = true } else Modifier),
             contentScale = ContentScale.Fit,
         )
         decoded.first -> Note("🖼 An image this phone cannot show.")

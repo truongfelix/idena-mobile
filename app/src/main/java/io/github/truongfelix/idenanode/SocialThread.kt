@@ -80,7 +80,7 @@ fun ThreadView(
                     // The topic, then its author (who shows the time).
                     post.topic?.let { TopicLine(it, time = null) }
                     PostHeader(post.call, states, onProfile)
-                    PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true)
+                    PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
                     if (post.isOlder) {
                         Text(
                             "From an earlier idena.social contract (${post.call.version}): read only.",
@@ -139,8 +139,10 @@ private const val MAX_INDENT = 6
  */
 @Composable
 private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int, replyId: Long, thread: ThreadContext) {
-    val folded = thread.collapsed[item.id] == true
-    val toggle = { if (folded) thread.collapsed.remove(item.id) else thread.collapsed[item.id] = true }
+    // A muted author's reply, or one with a picture while pictures are hidden, starts folded ([Hiding.leavesFeeds]).
+    val hiddenContent = LocalHiding.current
+    val folded = thread.collapsed[item.id] ?: hiddenContent.hiding.leavesFeeds(item, hiddenContent.me)
+    val toggle = { thread.collapsed[item.id] = !folded }
     val isReply = depth == 0
     val line = MaterialTheme.colorScheme.outlineVariant
     val railPx = with(LocalDensity.current) { RAIL.toPx() }
@@ -165,7 +167,7 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
             Box(Modifier.fillMaxWidth().clickable { toggle() }) {
                 PostHeader(item.call, thread.states, thread.onProfile, avatar = if (isReply) 36.dp else 28.dp, op = item.call.author == thread.opAuthor)
             }
-            PostContent(item.call, MaterialTheme.typography.bodyLarge, selectable = true)
+            PostContent(item.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
             val target = if (isReply) PostTarget.onReply(item.id) else PostTarget.onComment(replyId, item.id)
             ActionBar(
                 item, thread.myAddress, thread.canAct, "💬 Reply",
@@ -187,6 +189,8 @@ private fun FoldedLine(item: SocialPost, hidden: Int, onProfile: (String) -> Uni
     val content = LocalHiding.current
     val preview = when {
         content.hiding.hidesText(item.call, content.me) -> "Hidden"
+        item.call.author != content.me && item.call.author in content.hiding.muted -> "Muted"
+        content.hiding.leavesFeeds(item, content.me) -> "🖼 A picture: hidden"
         ipfsCid(item.call.message) != null -> "Text on IPFS"
         item.call.message.isEmpty() && item.call.hasMedia -> "🖼 Media"
         else -> item.call.message.replace(Regex("\\s+"), " ").trim()

@@ -64,6 +64,9 @@ sealed interface SocialPage {
     /** The accounts blocked ([BlockedView]). */
     data object Blocked : SocialPage
 
+    /** The accounts muted ([MutedView]). */
+    data object Muted : SocialPage
+
     /** The hidden words ([HiddenWordsView]). */
     data object HiddenWords : SocialPage
 
@@ -240,8 +243,20 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The hidden words, posts hidden and topics blocked. */
     val hidden = SocialHiddenLists(context, scope, peopleSave)
 
+    /** The accounts muted ([Person.muted]). */
+    val muted: Set<String> by derivedStateOf { mutedAddresses(people) }
+
+    /** The Social setting "Pictures in posts", kept on the phone. */
+    var picturesMode by mutableStateOf(SocialStore.picturesMode(context))
+        private set
+
+    fun changePicturesMode(mode: PicturesMode) {
+        picturesMode = mode
+        scope.launch(Dispatchers.IO) { runCatching { SocialStore.setPicturesMode(context, mode) } }
+    }
+
     /** Everything hidden ([Hiding]). */
-    val hiding: Hiding by derivedStateOf { Hiding(blocked, hidden.wordFilter, hidden.posts, hidden.topics) }
+    val hiding: Hiding by derivedStateOf { Hiding(blocked, hidden.wordFilter, hidden.posts, hidden.topics, muted, picturesMode) }
 
     /** The feed as shown ([visibleFeed]). */
     val shownFeed: List<SocialPost> by derivedStateOf { visibleFeed(feed, hiding, myAddress) }

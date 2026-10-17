@@ -6,7 +6,8 @@ import org.json.JSONObject
 /*
  * What Social keeps on the phone for the user alone: the names given to people, the people followed and blocked, the
  * topics followed and blocked, the hidden words and the posts hidden. Exported and imported as one file (Social's settings), to keep it or move it to another phone. Version 1
- * files (the Contacts export: names and people only) still import.
+ * files (the Contacts export: names and people only) still import; version 4 adds the people muted ("muted", read as
+ * false where it is missing, and left out by apps that read version 3).
  */
 
 /**
@@ -74,4 +75,4 @@ fun mergeLists(current: SocialLists, imported: SocialLists): ListsImport {
     )
 }
 
-private const val LISTS_VERSION = 3
+private const val LISTS_VERSION = 4
