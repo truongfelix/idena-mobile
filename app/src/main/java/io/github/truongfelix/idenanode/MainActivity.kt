@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
@@ -84,17 +85,20 @@ import java.time.Instant
 class MainActivity : AppActivity() {
     // The taps on the Social notification ([SocialBadge]): each opens the Social tab's Notifications.
     private var showActivity by mutableIntStateOf(0)
+    // The taps on the node's notification ([NodeService]): each opens the node panel.
+    private var showNode by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
         if (savedInstanceState == null && intent.getBooleanExtra(ReleaseCheck.EXTRA_SHOW_RELEASE, false)) ReleaseUi.shown = true
+        if (savedInstanceState == null && intent.getBooleanExtra(NodeService.EXTRA_SHOW_NODE, false)) showNode++
         // The setting before the first frame: the question never shows to someone who answered it.
         ReleaseUi.on = ReleaseCheck.setting(this)
         setContent {
             AppTheme {
                 Scaffold { padding ->
-                    MainScreen(showActivity, Modifier.padding(padding))
+                    MainScreen(showActivity, showNode, Modifier.padding(padding))
                 }
             }
         }
@@ -105,15 +109,17 @@ class MainActivity : AppActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
         if (intent.getBooleanExtra(ReleaseCheck.EXTRA_SHOW_RELEASE, false)) ReleaseUi.shown = true
+        if (intent.getBooleanExtra(NodeService.EXTRA_SHOW_NODE, false)) showNode++
     }
 }
 
 @Composable
-private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
+private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     // Social is the app; the node (identity, validation, wallet, settings) is a panel from the right side, open at
     // the start while the phone has no key yet (B-101).
-    val panel = rememberDrawerState(if (NodeSettings.hasKey(context)) DrawerValue.Closed else DrawerValue.Open)
+    val hasKey = remember { NodeSettings.hasKey(context) }
+    val panel = rememberDrawerState(if (hasKey) DrawerValue.Closed else DrawerValue.Open)
     // The Social state lives while the app runs, so that its notifications work while the panel is open.
     val scope = rememberCoroutineScope()
     val social = remember { SocialModel(context.applicationContext, scope) }
@@ -139,8 +145,9 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
             social.showActivity()
         }
     }
-    // Back closes the panel first (the Social screen's own Back, composed later, comes after it).
-    BackHandler(enabled = panelOpen) { scope.launch { panel.close() } }
+    LaunchedEffect(showNode) {
+        if (showNode > 0) panel.open()
+    }
     LaunchedEffect(social) {
         for (notice in social.notices) {
             val result = notices.showSnackbar(notice, actionLabel = t(R.string.node_notice_view), withDismissAction = true, duration = SnackbarDuration.Long)
@@ -170,7 +177,13 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
                 drawerContent = {
                     CompositionLocalProvider(LocalLayoutDirection provides direction) {
                         ModalDrawerSheet(Modifier.fillMaxWidth(0.9f)) {
-                            NodePanel(node, social, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
+                            // The drawer composes its content while closed too: the panel only while it shows, so
+                            // that the Node tab's reads (router port, network rewards) stop when it is closed, and its
+                            // Back, added when it opens, comes before the Social screen's.
+                            if (panel.currentValue == DrawerValue.Open || panelOpen || panel.isAnimationRunning) {
+                                BackHandler { scope.launch { panel.close() } }
+                                NodePanel(node, social, ads.ads, onInfo = { nodeInfo = true }, onClose = { scope.launch { panel.close() } })
+                            }
                         }
                     }
                 },
@@ -187,6 +200,8 @@ private fun MainScreen(showActivity: Int, modifier: Modifier = Modifier) {
                                     NodeButton(node.bar.health, node.view?.peers, node.flipsMissing > 0) { scope.launch { panel.open() } }
                                     IconButton(onClick = { socialInfo = true }) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
                                 }
+                                // The validation's screens, open from the title row while it runs (the panel has them too).
+                                if (node.validationOpen) ValidationLine()
                                 // Everything sent and waiting for its block, one line (B-81).
                                 InFlightLine(social.sending.inFlight)
                                 social.sending.sendStatus?.let {
@@ -237,9 +252,19 @@ private fun NodeButton(health: Health, peers: Int?, task: Boolean, onClick: () -
     }
 }
 
-/** The panel from the right: its title, then what the Node tab held. */
+/** "Validation · now" and its button, under the title row while the validation runs. */
 @Composable
-private fun NodePanel(node: NodeModel, social: SocialModel, onInfo: () -> Unit, onClose: () -> Unit) {
+private fun ValidationLine() {
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(t(R.string.profile_validation_now), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+        Button(onClick = { context.startActivity(Intent(context, ValidationActivity::class.java)) }) { Text(t(R.string.profile_open_validation)) }
+    }
+}
+
+/** The panel from the right: its title, then what the Node tab held, and the ad banner at its foot. */
+@Composable
+private fun NodePanel(node: NodeModel, social: SocialModel, ads: List<ChainAd>, onInfo: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(t(R.string.node_tab_node), style = MaterialTheme.typography.titleLarge)
@@ -254,6 +279,7 @@ private fun NodePanel(node: NodeModel, social: SocialModel, onInfo: () -> Unit, 
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = t(R.string.common_close)) }
         }
         NodeScreen(node, social.people, social.names, Modifier.weight(1f))
+        AdBanner(ads)
     }
 }
 

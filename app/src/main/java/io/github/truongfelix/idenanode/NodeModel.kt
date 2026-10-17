@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.PowerManager
 import android.os.SystemClock
+import java.time.Duration
+import java.time.Instant
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -67,9 +69,21 @@ class NodeModel(private val context: Context) {
     /** The speed of the sync's step: headers while they download, else blocks. */
     fun stepSpeed(step: SyncStep): Double? = if (step.phase == SyncPhase.Headers) state.headersPerSecond else state.blocksPerSecond
 
-    /** The required flips not made yet, at the last full read (0 before it). */
+    /** The required flips not made yet, at the last full read (0 before it, and once the validation started). */
     val flipsMissing: Int
-        get() = state.status?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips).missing } ?: 0
+        get() = state.status?.takeIf { it.period == "None" }
+            ?.let { FlipQuota(it.identityState, it.requiredFlips, it.availableFlips, it.madeFlips).missing } ?: 0
+
+    /** Whether the validation's screens are open now: the flip lottery and both sessions, at the last full read. */
+    val validationOpen: Boolean
+        get() = state.status?.period in VALIDATION_SCREEN_PERIODS
+
+    /** Less than 10 minutes before the validation, or during it. */
+    private val validationNear: Boolean
+        get() = state.status?.let {
+            it.period.isNotEmpty() && it.period != "None" ||
+                parseValidationTime(it.nextValidation)?.let { start -> Duration.between(Instant.now(), start) < Duration.ofMinutes(10) } == true
+        } == true
 
     /** The title row's status bar. */
     val bar: BarState
@@ -141,11 +155,12 @@ class NodeModel(private val context: Context) {
 
     suspend fun run(lifecycle: Lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            // Closed, the panel still reads everything once a minute: the title row tells of the flips to make.
+            // Closed, the panel still reads everything once a minute, every 5 s from 10 minutes before the
+            // validation to its end: the title row tells of the flips to make and opens the validation.
             var lastFull = 0L
             while (true) {
                 val now = SystemClock.elapsedRealtime()
-                if (nodeTabVisible || now - lastFull >= 60_000) {
+                if (nodeTabVisible || validationNear || now - lastFull >= 60_000) {
                     refresh()
                     lastFull = now
                     delay(if (nodeTabVisible) 3_000 else 5_000)

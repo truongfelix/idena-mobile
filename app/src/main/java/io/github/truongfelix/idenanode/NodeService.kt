@@ -293,7 +293,7 @@ class NodeService : Service() {
 
     private fun notification(text: String): Notification {
         val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
+            this, 0, Intent(this, MainActivity::class.java).putExtra(EXTRA_SHOW_NODE, true),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stop = PendingIntent.getService(
@@ -312,6 +312,8 @@ class NodeService : Service() {
     }
 
     companion object {
+        /** The extra of the notification's tap: [MainActivity] opens the node panel. */
+        const val EXTRA_SHOW_NODE = "showNode"
         private const val TAG = "IdenaNode"
         private const val CHANNEL_ID = "node_status"
         private const val OLD_CHANNEL_ID = "node"
