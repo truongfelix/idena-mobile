@@ -375,7 +375,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     /**
      * Shows the list [list] from the bottom bar, with the pages it had open (B-101); the Activity counts as seen.
-     * A tap on the list already shown closes its pages, a second one takes it back to its top.
+     * A tap on the list already shown closes its pages, a second one takes it back to its top. You ([SocialView.Me])
+     * always comes back to the account's own profile, its pages closed (owner 2026-10-17: it showed the profile opened
+     * last from it).
      */
     fun showList(list: SocialView) {
         if (view == list) {
@@ -385,6 +387,10 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                 dropClosedPageStates()
             }
             return
+        }
+        if (list == SocialView.Me && stacks.getValue(list).isNotEmpty()) {
+            stacks.getValue(list).clear()
+            dropClosedPageStates()
         }
         if (list == SocialView.Activity) openActivity() else view = list
     }
