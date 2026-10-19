@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import android.content.Intent
 import android.os.Bundle
@@ -229,12 +230,13 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                                 Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text("Idena", style = MaterialTheme.typography.headlineSmall)
+                                        // A line too long for the row scrolls by, as a shop's sign (owner 2026-10-19).
                                         Text(
                                             node.bar.label,
+                                            Modifier.basicMarquee(iterations = Int.MAX_VALUE),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     }
                                     TitleSyncSwitch(node, setSync)

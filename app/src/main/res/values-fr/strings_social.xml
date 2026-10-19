@@ -33,7 +33,7 @@
     <string name="social_age_hours">%1$d h</string>
     <string name="social_age_minutes">%1$d min</string>
     <string name="social_bar_no_answer">Le nœud ne répond pas</string>
-    <string name="social_bar_no_peers">Aucun pair</string>
+    <string name="social_bar_no_peers">Aucune connexion</string>
     <string name="social_bar_validation">En pause pendant la validation</string>
     <string name="social_bar_node_syncing">Le nœud se synchronise</string>
     <string name="social_bar_starting">Démarrage de l\'analyse</string>
@@ -75,7 +75,7 @@
     <string name="social_confirm_title">%1$s %2$s</string>
     <string name="social_tip_detail">Pourboire de %1$d iDNA à %2$s pour cette publication</string>
     <string name="social_post_wait_title">Pas encore</string>
-    <string name="social_post_wait_sync">Votre nœud n\'est pas encore synchronisé : vous pourrez publier une fois qu\'il le sera. Le panneau du nœud (en haut à droite) montre où il en est.</string>
+    <string name="social_post_wait_sync">Votre nœud n\'est pas encore synchronisé : vous pourrez publier une fois qu\'il le sera. L\'onglet du nœud (en haut à droite) montre où il en est.</string>
     <string name="social_post_wait_validation">Une validation est en cours : vous pourrez publier de nouveau une fois qu\'elle sera terminée.</string>
     <string name="social_post_wait_sending">Une transaction est en cours d\'envoi : vous pourrez publier une fois qu\'elle sera partie.</string>
     <string name="social_tab_feed">Accueil</string>
@@ -128,7 +128,7 @@
     <string name="social_info_scan_help">Activé : les nouveaux blocs, puis une fois les anciennes publications, puis chaque nouveau bloc. Désactivé : rien n\'est lu ; les publications déjà lues restent.</string>
     <string name="social_legend_good">À jour</string>
     <string name="social_legend_warn">En retard ou lecture des anciennes publications</string>
-    <string name="social_legend_bad">Pas de nœud ou aucun pair</string>
+    <string name="social_legend_bad">Pas de nœud ou aucune connexion</string>
     <string name="social_legend_off">Désactivé, ou en pause pendant une validation</string>
     <string name="social_info_node_head">nœud : %1$s</string>
     <string name="social_info_newest_none">Dernier bloc analysé : aucun pour l\'instant · %1$s</string>
@@ -214,7 +214,7 @@
     <string name="social_image_not_saved">Non enregistrée : %1$s</string>
     <string name="social_image_saving">Enregistrement…</string>
     <string name="social_image_save">Enregistrer dans la galerie</string>
-    <string name="social_search_hint">Rechercher, ou r/ pour les sujets</string>
+    <string name="social_search_hint">Rechercher</string>
     <string name="social_search_open_profile">"Ouvrir le profil de %1$s  ›"</string>
     <string name="social_topics_none">Aucune publication dans un sujet pour l\'instant. Écrivez-en une : le champ Sujet de l\'éditeur place une publication dans un sujet.</string>
     <string name="social_topics_no_match">Aucun sujet ne contient « %1$s » dans les publications lues jusqu\'ici.</string>
@@ -271,9 +271,9 @@
         <item quantity="many">%1$s blocs de retard</item>
     </plurals>
     <plurals name="social_bar_peers">
-        <item quantity="one">%1$s · %2$d pair</item>
-        <item quantity="other">%1$s · %2$d pairs</item>
-        <item quantity="many">%1$s · %2$d pairs</item>
+        <item quantity="one">%1$s · %2$d connexion</item>
+        <item quantity="other">%1$s · %2$d connexions</item>
+        <item quantity="many">%1$s · %2$d connexions</item>
     </plurals>
     <plurals name="social_message_detail">
         <item quantity="one">Un message privé à %1$d personne</item>
@@ -286,9 +286,9 @@
         <item quantity="many">%1$d actions en attente d\'un bloc</item>
     </plurals>
     <plurals name="social_info_peers">
-        <item quantity="one">%1$d pair</item>
-        <item quantity="other">%1$d pairs</item>
-        <item quantity="many">%1$d pairs</item>
+        <item quantity="one">%1$d connexion</item>
+        <item quantity="other">%1$d connexions</item>
+        <item quantity="many">%1$d connexions</item>
     </plurals>
     <plurals name="social_info_posts">
         <item quantity="one">%1$d publication</item>

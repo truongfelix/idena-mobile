@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Le chemin vers Idena Social pour un nouveau venu, là où Social n'a encore rien à montrer (SyncGuide.kt). -->
-    <string name="guide_title">Préparer Idena Social</string>
-    <string name="guide_intro">Cette appli lit Idena Social sur le réseau lui-même, par un petit nœud qui tourne sur ce téléphone : aucun serveur d\'entreprise entre les deux. Le premier démarrage prend du temps.</string>
+    <string name="guide_title">Bienvenue sur Idena Social</string>
+    <string name="guide_intro">Le réseau social le plus décentralisé au monde. Cette appli fait tourner un nœud de la blockchain Idena : chaque message y est une transaction et ne peut pas être effacé. Ce que vous écrivez sur Idena Social reste pour toujours ; pour plus d\'intimité, utilisez les discussions privées chiffrées. Le premier démarrage prend du temps.</string>
     <string name="guide_row_account">Votre compte</string>
     <string name="guide_row_connect">Connexion aux autres nœuds</string>
     <string name="guide_row_download">Téléchargement du réseau</string>
     <string name="guide_row_blocks">Rattrapage des derniers blocs</string>
     <string name="guide_download_why">Votre téléphone ne télécharge pas chaque bloc depuis le début : il télécharge les en-têtes des blocs, puis le dernier état du réseau (un instantané) depuis un autre nœud.</string>
-    <string name="guide_account">Créez votre compte, ou importez celui que vous avez, dans le panneau du nœud. Sauvegardez sa clé tout de suite : c\'est le seul moyen de retrouver ce compte.</string>
-    <string name="guide_start">La synchronisation est coupée : le nœud ne tourne pas, rien n\'est lu. Activez Sync dans le panneau du nœud.</string>
-    <string name="guide_open_panel">Ouvrir le panneau du nœud</string>
+    <string name="guide_account">Pour utiliser Idena, créez ou importez un compte dans l\'onglet du nœud. Ne perdez jamais votre clé privée : personne d\'autre que vous ne la détient, et personne ne peut la retrouver pour vous.</string>
+    <string name="guide_start">La synchronisation est coupée : le nœud ne tourne pas, rien n\'est lu. Activez Sync en haut de l\'écran.</string>
+    <string name="guide_open_panel">Ouvrir l\'onglet du nœud</string>
     <string name="guide_sync_off">Synchronisation coupée</string>
     <string name="guide_could_not_start">Le nœud n\'a pas pu démarrer : %1$s</string>
     <string name="guide_reading">À jour. Votre fil se remplit à mesure que le réseau est lu : les publications les plus récentes d\'abord.</string>
     <string name="guide_peers_take_time">Il peut falloir plusieurs minutes, jusqu\'à 15 environ, avant qu\'un premier nœud accepte le vôtre. Gardez l\'appli ouverte en attendant.</string>
-    <string name="guide_wifi_helps">En données mobiles ou en partage de connexion, les autres nœuds ne peuvent souvent pas joindre votre téléphone, qui trouve ses pairs lentement. Le Wi-Fi aide.</string>
-    <string name="guide_snapshot_waits">Votre nœud attend qu\'un autre nœud lui envoie le dernier état du réseau. Il continue tout seul dès qu\'un pair le propose.</string>
-    <string name="guide_snapshot_long">Il attend depuis %1$d minutes : vos pairs ne proposent pas encore l\'état. Il continue tout seul ; plus de pairs aident (Wi-Fi, appli ouverte).</string>
+    <string name="guide_wifi_helps">En données mobiles ou en partage de connexion, les autres nœuds ne peuvent souvent pas joindre votre téléphone, qui se connecte lentement. Le Wi-Fi aide.</string>
+    <string name="guide_snapshot_waits">Votre nœud attend qu\'un autre nœud lui envoie le dernier état du réseau. Il continue tout seul dès qu\'une connexion le propose.</string>
+    <string name="guide_snapshot_long">Il attend depuis %1$d minutes : vos connexions ne proposent pas encore l\'état. Il continue tout seul ; plus de connexions aident (Wi-Fi, appli ouverte).</string>
     <string name="guide_catches_up">Le nœud s\'arrête quand le téléphone dort ou quand Android arrête l\'appli : il rattrape les blocs faits entre-temps dès qu\'il tourne à nouveau.</string>
     <string name="guide_background">Gardez l\'appli ouverte pendant la première synchronisation : Android peut arrêter le nœud écran éteint. Ces réglages le laissent tourner en arrière-plan.</string>
-    <string name="guide_priority_peers">Pour un accès prioritaire, ajoutez des nœuds de confiance dans Pairs directs (Paramètres avancés, dans le panneau du nœud) et échangez vos codes de pair : votre propre nœud qui tourne à la maison toute la journée (l\'appli Idena pour ordinateur, son port de routeur ouvert), ou un validateur du réseau en qui vous avez confiance.</string>
+    <string name="guide_priority_peers">Pour un accès prioritaire, ajoutez des nœuds de confiance dans Connexions directes (Paramètres avancés, dans l\'onglet du nœud) et échangez vos codes de nœud : votre propre nœud qui tourne à la maison 24 h/24 (l\'appli Idena pour ordinateur, son port de routeur ouvert), ou un validateur du réseau en qui vous avez confiance.</string>
     <string name="guide_good_to_know">Bon à savoir</string>
-    <string name="guide_tip_wifi_home">Une bonne habitude : synchronisez à la maison en Wi-Fi. Dehors, le nœud n\'a alors que les derniers blocs à rattraper, vite : écrivez sur Idena Social, puis coupez Sync jusqu\'à ce que vous en ayez besoin.</string>
-    <string name="guide_tip_more_people">Idena est un réseau décentralisé : plus il y a de monde pour le faire tourner, plus chacun trouve vite des pairs pour se synchroniser. Parlez-en à vos amis.</string>
-    <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau. Plus il y a de validateurs, plus les pairs et les publications circulent vite, et plus les frais baissent : les frais minimum du réseau diminuent quand il grandit.</string>
+    <string name="guide_tip_wifi_home">Une bonne habitude : synchronisez à la maison en Wi-Fi. Dehors, le nœud n\'a alors que les derniers blocs à rattraper.</string>
+    <string name="guide_tip_more_people">Idena est décentralisé : vous pouvez faire tourner un nœud 24 h/24 chez vous sur un ordinateur, et relier votre téléphone directement à ce nœud. Ou échangez vos codes de nœud avec des amis pour vous connecter plus vite au réseau.</string>
+    <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau. Plus il y a de validateurs, plus les connexions et les publications circulent vite, et plus les frais baissent.</string>
     <string name="guide_history_line">Lecture des publications plus anciennes : %1$d %%. Elles ne sont lues que lorsqu\'Idena Social est à l\'écran : gardez-le ouvert pour tout lire.</string>
     <string name="no_idna_title">Publier demande un peu d\'iDNA</string>
     <string name="no_idna_why">Chaque publication, réponse, j\'aime ou pourboire est une transaction sur le réseau, avec de petits frais en iDNA depuis votre compte : une partie revient aux validateurs. Votre solde est de 0 iDNA. Lire Idena Social reste gratuit.</string>
@@ -32,12 +32,12 @@
     <string name="no_idna_send">Quelqu\'un vous en envoie, ou donne un pourboire à l\'une de vos publications : partagez-lui votre adresse.</string>
     <string name="no_idna_community">Demandez dans les discussions de la communauté Idena :</string>
     <string name="no_idna_validator">Ou gagnez des iDNA gratuitement en devenant validateur du réseau.</string>
-    <string name="no_idna_more_validators">Plus il y a de validateurs, mieux c\'est pour tous : plus de nœuds auxquels se connecter, donc une synchronisation et des publications plus rapides, et des frais plus bas, car les frais minimum du réseau baissent quand le nombre de ses identités validées augmente.</string>
+    <string name="no_idna_more_validators">Plus il y a de validateurs, mieux c\'est pour tous : plus de nœuds auxquels se connecter, donc une synchronisation et des publications plus rapides, et des frais plus bas.</string>
     <string name="validator_how_title">Comment devenir validateur</string>
     <string name="validator_how_open">Comment devenir validateur</string>
     <string name="validator_identity">Les validateurs ont une identité Idena : une par personne, et anonyme : ni nom réel, ni pièce d\'identité. Elle prouve seulement qu\'un humain unique la détient.</string>
     <string name="validator_step_invite">1. Obtenez une invitation d\'un membre validé : demandez à quelqu\'un que vous connaissez, ou dans les discussions de la communauté.</string>
-    <string name="validator_step_activate">2. Activez-la dans le panneau du nœud (Activer un code d\'invitation) : votre compte devient candidat.</string>
+    <string name="validator_step_activate">2. Activez-la dans l\'onglet du nœud (Activer un code d\'invitation) : votre compte devient candidat.</string>
     <string name="validator_step_validation">3. Participez à la prochaine validation : à une date fixée, tout le monde résout en même temps de courtes énigmes en images, pendant quelques minutes. La réussir valide votre identité.</string>
     <string name="validator_step_earn">4. Une identité validée gagne des iDNA à chaque validation, et tant que son nœud est en ligne (minage).</string>
     <string name="sync_switch_description">Sync</string>
