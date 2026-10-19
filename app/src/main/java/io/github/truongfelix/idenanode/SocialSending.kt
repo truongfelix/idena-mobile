@@ -103,6 +103,9 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     // Paid actions: one at a time, a confirmation, and what happened to the last one.
     var busy by mutableStateOf(false)
         private set
+
+    /** An action asked with an empty balance: the screen explains how to get iDNA ([NoIdnaDialog], B-131) until closed. */
+    var noIdna by mutableStateOf(false)
     var confirm by mutableStateOf<PendingPost?>(null)
 
     /** The last paid action while it runs, and for a while after (the status bar shows it). */
@@ -255,11 +258,33 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val rpc = rpc(context)
-                    build(SocialPosting(rpc), rpc.call("dna_getCoinbaseAddr") as String)
+                    val posting = SocialPosting(rpc)
+                    val from = rpc.call("dna_getCoinbaseAddr") as String
+                    if (noIdna(posting.balance(from))) throw NoIdnaException()
+                    build(posting, from)
                 }
             }
             busy = false
-            result.onSuccess { confirm = it }.onFailure { report(t(R.string.social_send_refused, what, "${it.message}"), ERROR_KEEP_MS) }
+            result.onSuccess { confirm = it }.onFailure {
+                if (it is NoIdnaException) noIdna = true else report(t(R.string.social_send_refused, what, "${it.message}"), ERROR_KEEP_MS)
+            }
+        }
+    }
+
+    /**
+     * Runs [action] (the editor of a new post) unless the balance is empty: then explains how to get iDNA first, so
+     * that nothing is written for nothing (B-131). A balance the node does not give lets [action] run: sending then
+     * says what went wrong.
+     */
+    fun whenFunded(action: () -> Unit) {
+        scope.launch {
+            val balance = withContext(Dispatchers.IO) {
+                runCatching {
+                    val rpc = rpc(context)
+                    SocialPosting(rpc).balance(rpc.call("dna_getCoinbaseAddr") as String)
+                }.getOrNull()
+            }
+            if (noIdna(balance)) noIdna = true else action()
         }
     }
 
@@ -389,3 +414,9 @@ class SentList {
         if (items.any { it.height != null && it.height <= height }) items = items.filter { it.height == null || it.height > height }
     }
 }
+
+/** Thrown when a paid action is asked with an empty balance: the screen explains instead of an error. */
+class NoIdnaException : IOException("no iDNA")
+
+/** Whether [balance] (iDNA; null when unknown) cannot pay any fee: the screen then explains how to get iDNA (B-131). */
+fun noIdna(balance: BigDecimal?): Boolean = balance != null && balance.signum() <= 0

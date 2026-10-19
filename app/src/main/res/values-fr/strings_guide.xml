@@ -24,6 +24,13 @@
     <string name="guide_good_to_know">Bon à savoir</string>
     <string name="guide_tip_wifi_home">Une bonne habitude : synchronisez à la maison en Wi-Fi. Dehors, le nœud n\'a alors que les derniers blocs à rattraper, vite : écrivez sur Idena Social, puis coupez Sync jusqu\'à ce que vous en ayez besoin.</string>
     <string name="guide_tip_more_people">Idena est un réseau décentralisé : plus il y a de monde pour le faire tourner, plus chacun trouve vite des pairs pour se synchroniser. Parlez-en à vos amis.</string>
-    <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau.</string>
+    <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau. Plus il y a de validateurs, plus les pairs et les publications circulent vite, et plus les frais baissent : les frais minimum du réseau diminuent quand il grandit.</string>
     <string name="guide_history_line">Lecture des publications plus anciennes : %1$d %%. Elles ne sont lues que lorsqu\'Idena Social est à l\'écran : gardez-le ouvert pour tout lire.</string>
+    <string name="no_idna_title">Publier demande un peu d\'iDNA</string>
+    <string name="no_idna_why">Chaque publication, réponse, j\'aime ou pourboire est une transaction sur le réseau, payée par de petits frais en iDNA depuis votre compte : cela tient le spam à l\'écart. Votre solde est de 0 iDNA. Lire Idena Social reste gratuit.</string>
+    <string name="no_idna_how">Comment obtenir des iDNA</string>
+    <string name="no_idna_send">Quelqu\'un vous en envoie, ou donne un pourboire à l\'une de vos publications : partagez-lui votre adresse.</string>
+    <string name="no_idna_community">Demandez dans les discussions de la communauté Idena :</string>
+    <string name="no_idna_validator">Ou gagnez des iDNA gratuitement en devenant validateur du réseau.</string>
+    <string name="no_idna_more_validators">Plus il y a de validateurs, mieux c\'est pour tous : plus de nœuds auxquels se connecter, donc une synchronisation et des publications plus rapides, et des frais plus bas, car les frais minimum du réseau baissent quand le nombre de ses identités validées augmente.</string>
 </resources>

@@ -495,8 +495,10 @@ fun SocialScreen(
         val topic = (page as? SocialPage.Topic)?.name
         val postHere = current == null && (if (page == null) model.view == SocialView.Feed || model.view == SocialView.Me else topic != null)
         androidx.compose.animation.AnimatedVisibility(postHere && barShown, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
-            PostButton(enabled = canAct, onBlocked = { postWait = postWaitText(model) }) { newPost(model, topic) }
+            PostButton(enabled = canAct, onBlocked = { postWait = postWaitText(model) }) { model.sending.whenFunded { newPost(model, topic) } }
         }
+        // An action asked with an empty balance: how to get iDNA (B-131).
+        if (model.sending.noIdna) NoIdnaDialog(myAddress) { model.sending.noIdna = false }
         // + while posting cannot go: why, instead of a tap that does nothing (owner 2026-10-17).
         postWait?.let { text ->
             AlertDialog(
