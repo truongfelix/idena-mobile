@@ -408,24 +408,20 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
     // at each turn (the screen's, captured once, would stay the first one).
     LaunchedEffect(Unit) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                if (model.state.status?.let { !it.syncing && !it.accountPending } == true) {
-                    val wait = keep.networkAt + 10 * 60_000L - SystemClock.elapsedRealtime()
-                    if (keep.network != null && wait > 0) {
-                        delay(wait)
-                        continue
-                    }
+            readEveryTenMinutes(
+                ready = { model.state.status?.let { !it.syncing && !it.accountPending } == true },
+                last = { keep.network?.let { keep.networkAt } },
+                now = SystemClock::elapsedRealtime,
+                pause = { delay(it) },
+                read = {
                     withContext(Dispatchers.IO) {
                         runCatching { NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).networkRewards() }.getOrNull()
                     }?.let {
                         keep.network = it
                         keep.networkAt = SystemClock.elapsedRealtime()
                     }
-                    delay(10 * 60_000L)
-                } else {
-                    delay(30_000L)
-                }
-            }
+                },
+            )
         }
     }
 
@@ -529,6 +525,33 @@ internal fun Field(name: String, value: String, color: Color = Color.Unspecified
     Row {
         Text(name, Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = color)
+    }
+}
+
+/**
+ * Reads every 10 minutes while [ready] (asked at each turn: a value captured once would stay the first one), else
+ * looks again after 30 s; [last] is when the kept value was read (null: none yet), so that a restart waits out its 10
+ * minutes. Runs until cancelled.
+ */
+internal suspend fun readEveryTenMinutes(
+    ready: () -> Boolean,
+    last: () -> Long?,
+    now: () -> Long,
+    pause: suspend (Long) -> Unit,
+    read: suspend () -> Unit,
+) {
+    while (true) {
+        if (ready()) {
+            val wait = (last() ?: Long.MIN_VALUE / 2) + 10 * 60_000L - now()
+            if (wait > 0) {
+                pause(wait)
+                continue
+            }
+            read()
+            pause(10 * 60_000L)
+        } else {
+            pause(30_000L)
+        }
     }
 }
 
