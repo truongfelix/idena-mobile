@@ -55,22 +55,19 @@ fun TopicAvatar(name: String, size: Dp) {
     Avatar(topicChannel(name), size, shape = CircleShape)
 }
 
-/**
- * A post's topic in the author's place: its picture, "r/name" and the post's age ([time]; null for none); a tap
- * opens the topic. [compact]: the feed's smaller line.
- */
+/** A post's topic in the author's place: its picture, "r/name" and the post's age ([time]; null for none); a tap opens the topic. */
 @Composable
-fun TopicLine(name: String, time: Long?, compact: Boolean = false) {
+fun TopicLine(name: String, time: Long?) {
     val open = LocalOpenTopic.current
     Row(
         Modifier.then(if (open != null) Modifier.clickable { open(name) } else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TopicAvatar(name, if (compact) 24.dp else 36.dp)
-        Spacer(Modifier.width(if (compact) 8.dp else 10.dp))
+        TopicAvatar(name, 36.dp)
+        Spacer(Modifier.width(10.dp))
         Text(
             topicChannel(name),
-            style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
         )
