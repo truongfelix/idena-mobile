@@ -40,4 +40,9 @@
     <string name="validator_step_activate">2. Activez-la dans le panneau du nœud (Activer un code d\'invitation) : votre compte devient candidat.</string>
     <string name="validator_step_validation">3. Participez à la prochaine validation : à une date fixée, tout le monde résout en même temps de courtes énigmes en images, pendant quelques minutes. La réussir valide votre identité.</string>
     <string name="validator_step_earn">4. Une identité validée gagne des iDNA à chaque validation, et tant que son nœud est en ligne (minage).</string>
+    <string name="sync_switch_description">Sync</string>
+    <string name="sync_off_title">Couper Sync ?</string>
+    <string name="sync_off_text">Le nœud s\'arrête : Idena Social n\'est plus lu ni mis à jour jusqu\'à ce que vous réactiviez Sync. Il rattrape alors les blocs faits entre-temps.</string>
+    <string name="sync_off_validation">Une validation est en cours : votre nœud doit rester allumé pour elle.</string>
+    <string name="sync_off_confirm">Couper</string>
 </resources>

@@ -40,4 +40,9 @@
     <string name="validator_step_activate">2. Activate it in the node panel (Activate an invitation code): your account becomes a candidate.</string>
     <string name="validator_step_validation">3. Take part in the next validation: at a set date, everyone solves short picture puzzles at the same time, for a few minutes. Passing it validates your identity.</string>
     <string name="validator_step_earn">4. A validated identity earns iDNA at each validation, and while its node is online (mining).</string>
+    <string name="sync_switch_description">Sync</string>
+    <string name="sync_off_title">Turn Sync off?</string>
+    <string name="sync_off_text">The node stops: Idena Social is no longer read or updated until you turn Sync on again. It then catches up with the blocks made meanwhile.</string>
+    <string name="sync_off_validation">A validation is running: your node must stay on for it.</string>
+    <string name="sync_off_confirm">Turn off</string>
 </resources>
