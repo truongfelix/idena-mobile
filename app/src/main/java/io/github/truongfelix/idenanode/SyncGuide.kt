@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -46,6 +48,12 @@ enum class GuideHint {
 
     /** Waiting for the snapshot for over [GUIDE_SNAPSHOT_LONG_MS]: the peers do not have it yet; more peers help. */
     SnapshotLong,
+
+    /**
+     * Peers come slowly (no peer after [GUIDE_PEERS_WAIT_MS], or a long snapshot wait): a node the person trusts in
+     * Direct peers gives priority access, their own at home or a validator's, peer codes exchanged (B-129).
+     */
+    PriorityPeers,
 
     /** The node stops while the phone sleeps or Android stops the app, and catches up when it runs again. */
     CatchesUp,
@@ -112,10 +120,16 @@ fun syncGuide(input: GuideInput, stepForMs: Long): SyncGuide {
     }
     val hints = buildList {
         val waited = (input.runningForMs ?: 0) >= GUIDE_PEERS_WAIT_MS
-        if (step == GuideStep.Peers && node != null && waited) add(if (input.onWifi) GuideHint.PeersTakeTime else GuideHint.WifiHelps)
+        if (step == GuideStep.Peers && node != null && waited) {
+            add(if (input.onWifi) GuideHint.PeersTakeTime else GuideHint.WifiHelps)
+            add(GuideHint.PriorityPeers)
+        }
         if (step == GuideStep.Network && sync?.phase == SyncPhase.Snapshot) {
             add(GuideHint.SnapshotWaits)
-            if (stepForMs >= GUIDE_SNAPSHOT_LONG_MS) add(GuideHint.SnapshotLong)
+            if (stepForMs >= GUIDE_SNAPSHOT_LONG_MS) {
+                add(GuideHint.SnapshotLong)
+                add(GuideHint.PriorityPeers)
+            }
         }
         if (step == GuideStep.Blocks) add(GuideHint.CatchesUp)
         val running = step == GuideStep.Peers || step == GuideStep.Network || step == GuideStep.Blocks
@@ -130,14 +144,16 @@ fun GuideHint.text(stepMinutes: Long): String = when (this) {
     GuideHint.WifiHelps -> t(R.string.guide_wifi_helps)
     GuideHint.SnapshotWaits -> t(R.string.guide_snapshot_waits)
     GuideHint.SnapshotLong -> t(R.string.guide_snapshot_long, stepMinutes)
+    GuideHint.PriorityPeers -> t(R.string.guide_priority_peers)
     GuideHint.CatchesUp -> t(R.string.guide_catches_up)
     GuideHint.Background -> t(R.string.guide_background)
 }
 
 /**
  * The guide as a card: its four rows (done ✓, the current one with its progress, the next ones), the explanations
- * of the current step, and the way to act: the node panel for the account and the Sync switch, the background
- * settings ([BackgroundSettings]) when Android may stop the node.
+ * of the current step, the way to act (the node panel for the account, the Sync switch and Direct peers, the
+ * background settings, [BackgroundSettings], when Android may stop the node), then what is good to know: sync at home
+ * on Wi-Fi, the network grows faster with more people, and validators earn iDNA.
  */
 @Composable
 fun SyncGuideCard(guide: SyncGuide, state: ScreenState, stepMinutes: Long, onOpenPanel: () -> Unit, modifier: Modifier = Modifier) {
@@ -178,9 +194,15 @@ fun SyncGuideCard(guide: SyncGuide, state: ScreenState, stepMinutes: Long, onOpe
             else -> Unit
         }
         guide.hints.filter { it != GuideHint.Background }.forEach { Text(it.text(stepMinutes), style = MaterialTheme.typography.bodyMedium) }
+        if (GuideHint.PriorityPeers in guide.hints) OutlinedButton(onClick = onOpenPanel) { Text(t(R.string.guide_open_panel)) }
         if (GuideHint.Background in guide.hints) {
             Text(GuideHint.Background.text(stepMinutes), style = MaterialTheme.typography.bodyMedium)
             BackgroundSettings(state)
+        }
+        HorizontalDivider()
+        Text(t(R.string.guide_good_to_know), style = MaterialTheme.typography.titleSmall)
+        for (tip in listOf(R.string.guide_tip_wifi_home, R.string.guide_tip_more_people, R.string.guide_tip_validator)) {
+            Text(t(tip), style = MaterialTheme.typography.bodyMedium, color = muted)
         }
     }
 }

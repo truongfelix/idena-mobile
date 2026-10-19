@@ -47,9 +47,9 @@ class SyncGuideTest {
     fun aStepFindingNoPeersExplainsWhy() {
         val noPeers = node(0, true, 1, 1, 0)
         assertEquals("not before 2 minutes", emptyList<GuideHint>(), syncGuide(input(noPeers, runningForMs = 60_000), 0).hints)
-        assertEquals(listOf(GuideHint.PeersTakeTime), syncGuide(input(noPeers, runningForMs = 3 * 60_000), 0).hints)
+        assertEquals(listOf(GuideHint.PeersTakeTime, GuideHint.PriorityPeers), syncGuide(input(noPeers, runningForMs = 3 * 60_000), 0).hints)
         // On mobile data (or a hotspot), other nodes cannot reach the phone: Wi-Fi helps.
-        assertEquals(listOf(GuideHint.WifiHelps), syncGuide(input(noPeers, runningForMs = 3 * 60_000, onWifi = false), 0).hints)
+        assertEquals(listOf(GuideHint.WifiHelps, GuideHint.PriorityPeers), syncGuide(input(noPeers, runningForMs = 3 * 60_000, onWifi = false), 0).hints)
     }
 
     @Test
@@ -57,7 +57,7 @@ class SyncGuideTest {
         val waiting = node(1, true, 4_873_470, 11_429_095, 11_430_011)
         assertEquals(listOf(GuideHint.SnapshotWaits), syncGuide(input(waiting), 60_000).hints)
         // 2026-10-12: a stale snapshot held a phone at 30% for hours.
-        assertEquals(listOf(GuideHint.SnapshotWaits, GuideHint.SnapshotLong), syncGuide(input(waiting), GUIDE_SNAPSHOT_LONG_MS).hints)
+        assertEquals(listOf(GuideHint.SnapshotWaits, GuideHint.SnapshotLong, GuideHint.PriorityPeers), syncGuide(input(waiting), GUIDE_SNAPSHOT_LONG_MS).hints)
         assertEquals("Waiting for the snapshot", syncGuide(input(waiting), 0).line)
         assertTrue(GuideHint.SnapshotLong.text(42).contains("42"))
     }

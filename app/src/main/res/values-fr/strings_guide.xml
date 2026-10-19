@@ -20,4 +20,9 @@
     <string name="guide_snapshot_long">Il attend depuis %1$d minutes : vos pairs ne proposent pas encore l\'état. Il continue tout seul ; plus de pairs aident (Wi-Fi, appli ouverte).</string>
     <string name="guide_catches_up">Le nœud s\'arrête quand le téléphone dort ou quand Android arrête l\'appli : il rattrape les blocs faits entre-temps dès qu\'il tourne à nouveau.</string>
     <string name="guide_background">Gardez l\'appli ouverte pendant la première synchronisation : Android peut arrêter le nœud écran éteint. Ces réglages le laissent tourner en arrière-plan.</string>
+    <string name="guide_priority_peers">Pour un accès prioritaire, ajoutez des nœuds de confiance dans Pairs directs (Paramètres avancés, dans le panneau du nœud) et échangez vos codes de pair : votre propre nœud qui tourne à la maison toute la journée (l\'appli Idena pour ordinateur, son port de routeur ouvert), ou un validateur du réseau en qui vous avez confiance.</string>
+    <string name="guide_good_to_know">Bon à savoir</string>
+    <string name="guide_tip_wifi_home">Une bonne habitude : synchronisez à la maison en Wi-Fi. Dehors, le nœud n\'a alors que les derniers blocs à rattraper, vite : écrivez sur Idena Social, puis coupez Sync jusqu\'à ce que vous en ayez besoin.</string>
+    <string name="guide_tip_more_people">Idena est un réseau décentralisé : plus il y a de monde pour le faire tourner, plus chacun trouve vite des pairs pour se synchroniser. Parlez-en à vos amis.</string>
+    <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau.</string>
 </resources>

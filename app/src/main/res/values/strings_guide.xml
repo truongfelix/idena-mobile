@@ -20,4 +20,9 @@
     <string name="guide_snapshot_long">It has waited %1$d minutes: your peers do not offer the state yet. It still goes on by itself; more peers help (Wi-Fi, keeping the app open).</string>
     <string name="guide_catches_up">The node stops while the phone sleeps or when Android stops the app: it catches up with the blocks made meanwhile when it runs again.</string>
     <string name="guide_background">Keep the app open during the first sync: Android may stop the node with the screen off. These settings let it run in the background.</string>
+    <string name="guide_priority_peers">For priority access, add nodes you trust in Direct peers (Advanced settings, in the node panel), and exchange your peer codes: your own node running at home all day (the Idena desktop app, its router port open), or a validator of the network you trust.</string>
+    <string name="guide_good_to_know">Good to know</string>
+    <string name="guide_tip_wifi_home">A good habit: sync at home on Wi-Fi. Outside, the node then only catches up with the last blocks, quickly: write on Idena Social, then turn Sync off until you need it.</string>
+    <string name="guide_tip_more_people">Idena is a decentralized network: the more people run it, the faster everyone finds peers to sync with. Tell your friends about it.</string>
+    <string name="guide_tip_validator">You can earn iDNA for free by becoming a validator of the network.</string>
 </resources>
