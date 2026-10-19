@@ -8,6 +8,15 @@ import java.math.BigDecimal
 
 class SocialSendingTest {
     @Test
+    fun anEmptyBalanceExplainsInsteadOfAnError() {
+        // B-131: a newcomer's account has no iDNA; the app explains how to get some before anything is written.
+        assertTrue(noIdna(BigDecimal.ZERO))
+        assertTrue(noIdna(BigDecimal("0.000000000000000000")))
+        assertFalse("a little is enough to try: the fee check says what is missing", noIdna(BigDecimal("0.01")))
+        assertFalse("unknown: sending says what went wrong", noIdna(null))
+    }
+
+    @Test
     fun aLikeStaysPendingUntilTheScanReadsItsBlock() {
         val sent = SentList()
         sent.add("0xlike", likeOf = 42)

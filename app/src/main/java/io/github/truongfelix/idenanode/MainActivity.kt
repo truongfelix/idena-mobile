@@ -9,15 +9,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
-import android.Manifest
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,6 +136,8 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
     val notices = remember { SnackbarHostState() }
     // The node's state, for the panel and the status in the title row.
     val node = remember { NodeModel(context.applicationContext) }
+    // The title row's Sync switch (B-132), as the panel's.
+    val setSync = rememberSetSync(node)
     // The Idena ads, in the Social feed.
     val ads = remember { AdsModel(context.applicationContext) }
     val keep = remember { PanelKeep() }
@@ -223,13 +222,25 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
             ) {
                 CompositionLocalProvider(LocalLayoutDirection provides direction) {
                     Box(modifier.fillMaxSize()) {
-                        // One row: the title, the node button (its state, the peers; opens the panel) and ⓘ (the
-                        // Social scan's details). The feed slides it away.
+                        // One row: the title and the node's state in one plain line under it, the Sync switch (B-132), the
+                        // node button (its state, the peers; opens the panel) and ⓘ (the Social scan's details). The feed
+                        // slides it away.
                         val titleBar: @Composable () -> Unit = {
                             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                                 Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Idena", style = MaterialTheme.typography.headlineSmall)
-                                    Spacer(Modifier.weight(1f))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Idena", style = MaterialTheme.typography.headlineSmall)
+                                        // A line too long for the row scrolls by, as a shop's sign (owner 2026-10-19).
+                                        Text(
+                                            node.bar.label,
+                                            Modifier.basicMarquee(iterations = Int.MAX_VALUE),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    TitleSyncSwitch(node, setSync)
+                                    Spacer(Modifier.width(8.dp))
                                     NodeButton(node.bar.health, node.view?.peers, node.flipsMissing > 0) { scope.launch { panel.open() } }
                                     IconButton(onClick = { socialInfo = true }) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.common_details)) }
                                 }
@@ -250,7 +261,17 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                             }
                         }
                         val quota = node.flipQuota?.takeIf { it.missing > 0 }
-                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize(), myTask = quota?.let { { FlipsDueCard(it) } })
+                        // The way to Idena Social while it has nothing to show (B-128); the time spent on its step.
+                        val guideInput = node.guideInput()
+                        val step = guideStep(guideInput)
+                        val stepSince = remember(step) { SystemClock.elapsedRealtime() }
+                        val stepMs = SystemClock.elapsedRealtime() - stepSince
+                        val guide = syncGuide(guideInput, stepMs)
+                        SocialScreen(
+                            social, ads.ads, titleBar, Modifier.fillMaxSize(),
+                            myTask = quota?.let { { FlipsDueCard(it) } },
+                            guide = { SyncGuideCard(guide, node.state, stepMs / 60_000, onOpenPanel = { scope.launch { panel.open() } }) },
+                        )
                     }
                 }
             }
@@ -425,21 +446,8 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
         }
     }
 
-    val notificationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { }
     // The Sync switch, and a new account once its backup is checked.
-    val setSync: (Boolean) -> Unit = { enabled ->
-        if (enabled) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            NodeService.start(context)
-        } else {
-            NodeService.stop(context)
-        }
-        model.syncChanged(enabled)
-    }
+    val setSync = rememberSetSync(model)
 
     Column(
         modifier

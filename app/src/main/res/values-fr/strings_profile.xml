@@ -167,7 +167,7 @@
     <string name="socialb_liked_line">"%1$s A aimé %2$s  ·  %3$s"</string>
     <string name="socialb_tipped_line">"🪙 Pourboire de %1$s iDNA à %2$s  ·  %3$s"</string>
     <string name="profile_title">Profil</string>
-    <string name="profile_no_key">Pas encore de clé : importez-en une ci-dessous.</string>
+    <string name="profile_no_key">Pas encore de clé : créez-en une ou importez-en une dans la carte « Clé », plus bas.</string>
     <string name="profile_switch_sync_on">Activez la synchronisation pour lire l\'identité depuis le nœud.</string>
     <string name="profile_identity_after_sync">Identité et âge : après la synchronisation</string>
     <string name="profile_identity">Identité</string>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The way to Idena Social for a newcomer, where Social has nothing to show yet (SyncGuide.kt). -->
+    <string name="guide_title">Welcome to Idena Social</string>
+    <string name="guide_intro">The most decentralized social network in the world. This app runs a node of the Idena blockchain: every message is a transaction on it and cannot be erased. What you write on Idena Social stays forever; for more privacy, use the encrypted private chats.</string>
+    <string name="guide_row_account">Your account</string>
+    <string name="guide_row_connect">Connecting to other nodes</string>
+    <string name="guide_row_download">Downloading the network</string>
+    <string name="guide_row_blocks">Catching up with the latest blocks</string>
+    <string name="guide_download_why">Your phone does not download every block since the start: it downloads the block headers, then the network\'s latest state (a snapshot) from another node.</string>
+    <string name="guide_account">To use Idena, create or import an account in the node tab. Never lose your private key: no one holds it but you, and no one can recover it for you.</string>
+    <string name="guide_start">Sync is off: the node does not run, so nothing is read. Turn Sync on at the top of the screen.</string>
+    <string name="guide_open_panel">Open the node tab</string>
+    <string name="guide_sync_off">Sync is off</string>
+    <string name="guide_could_not_start">The node could not start: %1$s</string>
+    <string name="guide_reading">Up to date. Your feed fills in as the network is read: the newest posts first.</string>
+    <string name="guide_peers_take_time">It can take several minutes, up to about 15, before a first node accepts yours. Keep the app open meanwhile.</string>
+    <string name="guide_wifi_helps">On mobile data or a hotspot, other nodes often cannot reach your phone, and it connects slowly. Wi-Fi helps.</string>
+    <string name="guide_snapshot_waits">Your node waits for another node to send it the network\'s latest state. It goes on by itself once a connection offers it.</string>
+    <string name="guide_snapshot_long">It has waited %1$d minutes: your connections do not offer the state yet. It still goes on by itself; more connections help (Wi-Fi, keeping the app open).</string>
+    <string name="guide_catches_up">The node stops while the phone sleeps or when Android stops the app: it catches up with the blocks made meanwhile when it runs again.</string>
+    <string name="guide_background">Keep the app open during the first sync: Android may stop the node with the screen off. These settings let it run in the background.</string>
+    <string name="guide_priority_peers">For priority access, add nodes you trust in Direct connections (Advanced settings, in the node tab), and exchange your node codes: your own node running at home all day and night (the Idena desktop app, its router port open), or a validator of the network you trust.</string>
+    <string name="guide_good_to_know">Good to know</string>
+    <string name="guide_tip_first_start">The first start takes a while.</string>
+    <string name="guide_tip_wifi_home">A good habit: sync at home on Wi-Fi. Outside, the node then only has the last blocks to catch up with.</string>
+    <string name="guide_tip_more_people">Idena is decentralized: you can run a node at home on a computer, all day and night, and link your phone directly to it. Or exchange node codes with friends to connect to the network faster.</string>
+    <string name="guide_tip_validator">You can earn iDNA for free by becoming a validator of the network. The more validators, the faster connections and posts travel, and the lower the fees.</string>
+    <string name="guide_history_line">Reading older posts: %1$d%%. They are read only while Idena Social is on screen: keep it open to read them all.</string>
+    <string name="no_idna_title">Posting needs a little iDNA</string>
+    <string name="no_idna_why">Each post, reply, like or tip is a transaction on the network, with a small fee in iDNA from your account: a part of it goes back to the validators. Your balance is 0 iDNA. Reading Idena Social stays free.</string>
+    <string name="no_idna_how">How to get iDNA</string>
+    <string name="no_idna_send">Someone sends you some, or tips one of your posts: share your address with them.</string>
+    <string name="no_idna_community">Ask in the Idena community chats:</string>
+    <string name="no_idna_validator">Or earn iDNA for free by becoming a validator of the network.</string>
+    <string name="no_idna_more_validators">The more validators, the better for everyone: more nodes to connect to, so faster syncing and posts, and lower fees.</string>
+    <string name="validator_how_title">How to become a validator</string>
+    <string name="validator_how_open">How to become a validator</string>
+    <string name="validator_identity">Validators hold an Idena identity: one per person, and anonymous: no real name, no ID document. It only proves that a unique human holds it.</string>
+    <string name="validator_step_invite">1. Get an invitation from a validated member: ask someone you know, or in the community chats.</string>
+    <string name="validator_step_activate">2. Activate it in the node tab (Activate an invitation code): your account becomes a candidate.</string>
+    <string name="validator_step_validation">3. Take part in the next validation: at a set date, everyone solves short picture puzzles at the same time, for a few minutes. Passing it validates your identity.</string>
+    <string name="validator_step_earn">4. A validated identity earns iDNA at each validation, and while its node is online (mining).</string>
+    <string name="sync_switch_description">Sync</string>
+    <string name="sync_off_title">Turn Sync off?</string>
+    <string name="sync_off_text">The node stops: Idena Social is no longer read or updated until you turn Sync on again. It then catches up with the blocks made meanwhile.</string>
+    <string name="sync_off_validation">A validation is running: your node must stay on for it.</string>
+    <string name="sync_off_confirm">Turn off</string>
+</resources>

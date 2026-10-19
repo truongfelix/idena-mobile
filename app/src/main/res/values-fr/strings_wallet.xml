@@ -62,7 +62,7 @@
     <string name="wallet_key_imported_validation">Clé importée. La validation est en cours : désactivez puis réactivez la synchronisation après celle-ci pour utiliser la clé.</string>
     <string name="wallet_key_imported_restart">Clé importée. Le nœud redémarre avec elle : quelques minutes pour ouvrir ses bases de données et trouver des pairs.</string>
     <string name="wallet_key_imported_restart_risk">Clé importée. Le nœud redémarre avec elle : quelques minutes pour ouvrir ses bases de données et trouver des pairs. %1$s</string>
-    <string name="wallet_key_keeps_node_note">Le code du nœud de ce téléphone et ses pairs directs restent : ils appartiennent au téléphone, pas au compte.</string>
+    <string name="wallet_key_keeps_node_note">Le code du nœud de ce téléphone et ses connexions directes restent : ils appartiennent au téléphone, pas au compte.</string>
     <string name="wallet_key_mining_warning">Cette identité mine sur ce téléphone. Désactivez d\'abord « Miner sur ce téléphone » et attendez que ce soit fait : une identité qui reste en minage sans nœud est mise hors ligne par le réseau, avec une pénalité de minage de 8 heures.</string>
     <string name="wallet_key_account_created">Compte créé : le nœud démarre avec lui. Votre adresse sera dans Portefeuille › Recevoir ; un code d\'invitation se saisit dans le Profil.</string>
     <string name="wallet_tx_contract_refused">le contrat l\'a refusée</string>

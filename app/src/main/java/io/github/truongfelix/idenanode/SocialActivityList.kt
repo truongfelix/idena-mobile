@@ -2,6 +2,8 @@ package io.github.truongfelix.idenanode
 
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.Notifications
  * The Activity: what others did on the identity's posts, newest first, the new ones marked; above it,
  * which kinds notify (a count on the Social tab and a notice while the app is open).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ActivityList(model: SocialModel, modifier: Modifier, onOpen: (ActivityItem) -> Unit) {
     val items = model.activity
@@ -47,9 +50,14 @@ fun ActivityList(model: SocialModel, modifier: Modifier, onOpen: (ActivityItem) 
         item {
             // What to be notified of; the bell says what the chips are for.
             var about by remember { mutableStateOf(false) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Each chip on one line: one that does not fit goes to the next line (French "Pourboires", owner 2026-10-19).
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.Center) {
                 NotifyKind.entries.forEach { kind ->
-                    FilterChip(selected = kind in model.notify, onClick = { model.setNotifyOn(kind, kind !in model.notify) }, label = { Text(kind.title) })
+                    FilterChip(
+                        selected = kind in model.notify,
+                        onClick = { model.setNotifyOn(kind, kind !in model.notify) },
+                        label = { Text(kind.title, maxLines = 1, softWrap = false) },
+                    )
                 }
                 IconButton(onClick = { about = true }) {
                     Icon(Icons.Filled.Notifications, contentDescription = t(R.string.socialb_notifications), tint = MaterialTheme.colorScheme.onSurfaceVariant)

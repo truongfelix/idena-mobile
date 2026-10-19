@@ -3,9 +3,9 @@
 <resources>
     <string name="node_tab_node">Nœud</string>
     <plurals name="node_button_peers">
-        <item quantity="one">%1$d pair</item>
-        <item quantity="other">%1$d pairs</item>
-        <item quantity="many">%1$d pairs</item>
+        <item quantity="one">%1$d connexion</item>
+        <item quantity="other">%1$d connexions</item>
+        <item quantity="many">%1$d connexions</item>
     </plurals>
     <string name="node_button_flips">flips à faire</string>
     <string name="node_notice_view">Voir</string>
@@ -15,7 +15,7 @@
     <string name="node_on">activée</string>
     <string name="node_off">désactivée</string>
     <string name="node_field_network">Réseau</string>
-    <string name="node_field_peers">Pairs</string>
+    <string name="node_field_peers">Connexions</string>
     <string name="node_field_block">Bloc</string>
     <string name="node_field_headers">En-têtes</string>
     <string name="node_field_last_block">Dernier bloc</string>
@@ -28,9 +28,9 @@
     <string name="node_no_answer_yet">Le nœud ne répond pas encore.</string>
     <string name="node_field_started">Démarré</string>
     <string name="node_about_prefix">"environ "</string>
-    <string name="node_legend_good">Synchronisé avec des pairs</string>
-    <string name="node_legend_warn">Démarrage, recherche de pairs (souvent plusieurs minutes après un démarrage), synchronisation, ou un réglage d\'arrière-plan à corriger</string>
-    <string name="node_legend_bad">Aucun pair après %1$d min, pas de réponse, ou une horloge qui n\'est pas à l\'heure</string>
+    <string name="node_legend_good">Synchronisé, connecté au réseau</string>
+    <string name="node_legend_warn">Démarrage, recherche de connexions (souvent plusieurs minutes après un démarrage), synchronisation, ou un réglage d\'arrière-plan à corriger</string>
+    <string name="node_legend_bad">Aucune connexion après %1$d min, pas de réponse, ou une horloge qui n\'est pas à l\'heure</string>
     <string name="node_screen_off_title">Fonctionner écran éteint</string>
     <string name="node_field_battery_optimization">Optimisation de la batterie</string>
     <string name="node_battery_optimization_off">désactivée ✓</string>
@@ -77,9 +77,9 @@
     <string name="node_notification_syncing">Synchronisation %1$s / %2$s</string>
     <string name="node_notification_block">Bloc %1$s</string>
     <plurals name="node_notification_peers">
-        <item quantity="one">%1$s · %2$d pair</item>
-        <item quantity="other">%1$s · %2$d pairs</item>
-        <item quantity="many">%1$s · %2$d pairs</item>
+        <item quantity="one">%1$s · %2$d connexion</item>
+        <item quantity="other">%1$s · %2$d connexions</item>
+        <item quantity="many">%1$s · %2$d connexions</item>
     </plurals>
     <string name="node_key_not_read">La clé du nœud n\'a pas été lue : %1$s</string>
     <string name="node_restarting_frozen">Redémarrage du nœud : il ne répondait plus</string>
@@ -147,16 +147,16 @@
     <string name="node_none">aucun</string>
     <string name="node_restart_risk_running">La validation est en cours : redémarrez le nœud après.</string>
     <string name="node_restart_risk_soon">La validation commence %1$s : le nœud cherchera peut-être encore des pairs à ce moment-là.</string>
-    <string name="node_direct_peers_title">Pairs directs</string>
-    <string name="node_direct_peers_info">Des nœuds que ce nœud garde comme pairs en plus de son niveau de pairs, jusqu\'à %1$d : l\'ordinateur d\'un ami, votre propre ordinateur. Le nœud les accepte même quand ses places sont pleines, ne les déconnecte jamais pour faire de la place, et se reconnecte quand la connexion tombe.\n\nPartagez le code de votre nœud avec l\'autre personne, et ajoutez le sien ici. Les deux côtés devraient s\'ajouter l\'un l\'autre : le côté qui ajoute l\'autre l\'accepte toujours. En données mobiles, aucun nœud ne peut joindre ce téléphone : l\'autre nœud doit alors être joignable (son port de routeur ouvert) pour que les deux se connectent.\n\nLe nœud prend la liste à son démarrage.</string>
+    <string name="node_direct_peers_title">Connexions directes</string>
+    <string name="node_direct_peers_info">Des nœuds auxquels ce nœud reste connecté en plus de son niveau de pairs, jusqu\'à %1$d : l\'ordinateur d\'un ami, votre propre ordinateur. Le nœud les accepte même quand ses places sont pleines, ne les déconnecte jamais pour faire de la place, et se reconnecte quand la connexion tombe.\n\nPartagez le code de votre nœud avec l\'autre personne, et ajoutez le sien ici. Les deux côtés devraient s\'ajouter l\'un l\'autre : le côté qui ajoute l\'autre l\'accepte toujours. En données mobiles, aucun nœud ne peut joindre ce téléphone : l\'autre nœud doit alors être joignable (son port de routeur ouvert) pour que les deux se connectent.\n\nLe nœud prend la liste à son démarrage.</string>
     <string name="node_peer_own_code">C\'est le code de votre propre nœud.</string>
     <string name="node_peer_already_listed">Ce nœud est déjà dans la liste.</string>
     <string name="node_peer_list_full">La liste contient au plus %1$d nœuds.</string>
     <string name="node_peer_your_code">Le code de votre nœud</string>
     <string name="node_peer_shown_while_running">Affiché quand le nœud est en marche.</string>
-    <string name="node_peer_add">Ajouter un pair</string>
+    <string name="node_peer_add">Ajouter une connexion</string>
     <string name="node_peer_remove_question">Retirer %1$s ?</string>
-    <string name="node_peer_remove_text">Le nœud ne le garde plus comme pair à partir de son prochain démarrage. Pour l\'ajouter à nouveau, il vous faudra son code.</string>
+    <string name="node_peer_remove_text">Le nœud ne s\'y connecte plus à partir de son prochain démarrage. Pour l\'ajouter à nouveau, il vous faudra son code.</string>
     <string name="node_copied">Copié</string>
     <string name="node_copy">Copier</string>
     <string name="node_peer_share_code">Partager le code de votre nœud</string>
@@ -173,8 +173,8 @@
     <string name="node_peer_name_text">L\'autre personne le voit dans sa liste ; il peut rester vide.</string>
     <string name="node_peer_name">Nom</string>
     <string name="node_save">Enregistrer</string>
-    <string name="node_peer_not_a_code">Ce n\'est pas un code de pair : il s\'écrit idena-peer:Qm… ou idena-peer:12D3Koo…</string>
-    <string name="node_peer_code">Code de pair</string>
+    <string name="node_peer_not_a_code">Ce n\'est pas un code de nœud : il s\'écrit idena-peer:Qm… ou idena-peer:12D3Koo…</string>
+    <string name="node_peer_code">Code du nœud</string>
     <string name="node_paste">Coller</string>
     <string name="node_add">Ajouter</string>
     <string name="router_searching">Recherche du routeur de ce Wi-Fi…</string>
@@ -187,9 +187,9 @@
     <string name="router_no_end">sans fin</string>
     <string name="router_open_on">Ouvert sur %1$s %2$s</string>
     <plurals name="router_open_inbound">
-        <item quantity="one">Ouvert sur %1$s %2$s · %3$d pair connecté depuis l\'extérieur depuis</item>
-        <item quantity="other">Ouvert sur %1$s %2$s · %3$d pairs connectés depuis l\'extérieur depuis</item>
-        <item quantity="many">Ouvert sur %1$s %2$s · %3$d pairs connectés depuis l\'extérieur depuis</item>
+        <item quantity="one">Ouvert sur %1$s %2$s · %3$d connexion depuis l\'extérieur depuis</item>
+        <item quantity="other">Ouvert sur %1$s %2$s · %3$d connexions depuis l\'extérieur depuis</item>
+        <item quantity="many">Ouvert sur %1$s %2$s · %3$d connexions depuis l\'extérieur depuis</item>
     </plurals>
     <string name="router_open_former_address">Ouvert sur %1$s pour l\'ancienne adresse du téléphone ; le nœud le déplace vers la nouvelle</string>
     <string name="router_other_device">Le port %1$d sur %2$s va vers un autre appareil (%3$s)</string>
@@ -200,7 +200,7 @@
     <string name="router_failed">Routeur : %1$s</string>
     <string name="router_open_ellipsis">Ouvrir…</string>
     <string name="router_close_question">Fermer le port du routeur ?</string>
-    <string name="router_close_text">Les nœuds extérieurs ne peuvent plus se connecter au téléphone. Les pairs connectés en ce moment se déconnectent en moins d\'une minute ; le nœud continue de chercher des pairs lui-même.</string>
+    <string name="router_close_text">Les nœuds extérieurs ne peuvent plus se connecter au téléphone. Les connexions venues de l\'extérieur se coupent en moins d\'une minute ; le nœud continue de chercher des connexions lui-même.</string>
     <string name="router_close_port">Fermer le port</string>
     <string name="router_open_question">Ouvrir le port du nœud sur %1$s ?</string>
     <string name="router_how_long">Pour combien de temps ? Le routeur le garde jusque-là, même si le téléphone quitte ce Wi-Fi.</string>

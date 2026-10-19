@@ -158,7 +158,7 @@
     <string name="socialb_liked_line">"%1$s Liked %2$s  ·  %3$s"</string>
     <string name="socialb_tipped_line">"🪙 Tipped %1$s iDNA to %2$s  ·  %3$s"</string>
     <string name="profile_title">Profile</string>
-    <string name="profile_no_key">No key yet: import one below.</string>
+    <string name="profile_no_key">No key yet: create or import one in the Key card, further down.</string>
     <string name="profile_switch_sync_on">Switch sync on to read the identity from the node.</string>
     <string name="profile_identity_after_sync">Identity and age: after sync</string>
     <string name="profile_identity">Identity</string>

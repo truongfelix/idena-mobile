@@ -258,7 +258,7 @@ private fun DevNoteDialog(onDismiss: () -> Unit) {
 }
 
 /** Where the community talks (idena.social is the Social tab). */
-private val COMMUNITY = listOf(
+internal val COMMUNITY = listOf(
     "Telegram" to "https://t.me/IdenaNetworkPublic",
     "Discord" to "https://discord.com/invite/idena-community-634481767352369162",
 )
