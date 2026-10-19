@@ -41,7 +41,7 @@ class PictureSearchTest {
 
     @Test
     fun thumbnailsComeOnlyFromTheSearchesOwnServers() {
-        assertEquals(PictureSource.DuckDuckGo, thumbnailSource(duckProxy("https://tse4.mm.bing.net/th/id/OIP.a")))
+        assertNull("no DuckDuckGo any more", thumbnailSource("https://external-content.duckduckgo.com/iu/?u=x&f=1"))
         assertEquals(PictureSource.Openverse, thumbnailSource("https://api.openverse.org/v1/images/x/thumb/"))
         assertEquals(PictureSource.Wikimedia, thumbnailSource("https://upload.wikimedia.org/wikipedia/commons/a.jpg"))
         assertNull(thumbnailSource("https://tse4.mm.bing.net/th/id/OIP.a"))
@@ -54,10 +54,10 @@ class PictureSearchTest {
     @Test
     fun theStatusNamesTheSourcesStillSearchingAndThoseThatFailed() {
         val all = PictureSource.entries.toSet()
-        assertEquals("Searching DuckDuckGo, Openverse, Wikimedia…", pictureSearchStatus(all, emptyMap(), 0))
+        assertEquals("Searching Openverse, Wikimedia…", pictureSearchStatus(all, emptyMap(), 0))
         assertEquals(
-            "Searching Openverse…\nDuckDuckGo: refuses searches from this connection for now; try again in a few minutes.",
-            pictureSearchStatus(setOf(PictureSource.Openverse), mapOf(PictureSource.DuckDuckGo to "refuses searches from this connection for now; try again in a few minutes."), 12),
+            "Searching Openverse…\nWikimedia: refuses searches from this connection for now; try again in a few minutes.",
+            pictureSearchStatus(setOf(PictureSource.Openverse), mapOf(PictureSource.Wikimedia to "refuses searches from this connection for now; try again in a few minutes."), 12),
         )
         assertNull("done with pictures", pictureSearchStatus(emptySet(), emptyMap(), 30))
         assertEquals("No pictures found.\nWikimedia: no answer in time.", pictureSearchStatus(emptySet(), mapOf(PictureSource.Wikimedia to "no answer in time."), 0))

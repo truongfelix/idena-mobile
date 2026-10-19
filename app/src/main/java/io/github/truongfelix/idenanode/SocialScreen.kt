@@ -407,7 +407,6 @@ fun SocialScreen(
                                         onLike = { likePost(post) },
                                         onTip = { tipping = post },
                                         onWho = { who = post },
-                                        topicShown = TopicShown.InsteadOfAuthor,
                                     )
                                 }
                             }

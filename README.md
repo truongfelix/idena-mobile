@@ -113,7 +113,7 @@ meant to be delegated to a pool, such as a desktop node.
   from the phone's own node. A tap shows the ad, who paid for it, and its link, opened only on request.
 
 The app talks only to its own node; the one exception is the opt-in image search for flips, which asks
-DuckDuckGo, Openverse and Wikimedia directly from the phone.
+Openverse and Wikimedia directly from the phone.
 
 Planned: importing the key from its QR code, private messages.
 

@@ -206,7 +206,12 @@ val DEV_NOTE_TITLE: String get() = t(R.string.ads_dev_note_title)
 val DEV_NOTE_LINE: String get() = t(R.string.ads_dev_note_line)
 
 /** The package this app belongs to: its GitHub repositories (their names say what each one is). */
-private val PACKAGE = listOf("truongfelix/idena-go", "truongfelix/idena-desktop", "truongfelix/idena-mobile")
+private val PACKAGE = listOf(
+    "truongfelix/idena-go",
+    "truongfelix/idena-desktop",
+    "truongfelix/idena-mobile",
+    "truongfelix/idena-profile",
+)
 
 /** The original code and the contributors, direct and indirect, with what the package owes them. */
 private val CREDITS: List<Pair<String, String>>

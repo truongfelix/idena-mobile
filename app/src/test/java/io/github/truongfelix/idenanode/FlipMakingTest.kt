@@ -85,20 +85,6 @@ class FlipMakingTest {
     }
 
     @Test
-    fun duckDuckGoTokenAndThumbnailsGoThroughItsProxy() {
-        assertEquals("4-2791170464", duckToken("""...,vqd="4-2791170464",..."""))
-        assertEquals("4-1", duckToken("""x vqd=4-1&p=1"""))
-        assertNull(duckToken("no token"))
-        val json = """{"results":[{"thumbnail":"https://tse4.mm.bing.net/th/id/OIP.a?r=0&pid=Api"},{"thumbnail":"http://plain.example/x"},
-            {"thumbnail":"https://tse4.mm.bing.net/th/id/OIP.a?r=0&pid=Api"},{"image":"https://x"}]}"""
-        val thumbs = duckThumbnails(json)
-        assertEquals(1, thumbs.size)
-        assertEquals("https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse4.mm.bing.net%2Fth%2Fid%2FOIP.a%3Fr%3D0%26pid%3DApi&f=1", thumbs[0])
-        assertTrue(duckThumbnails("not json").isEmpty())
-        assertTrue(duckResultsUrl("apple pie", "4-1").startsWith("https://duckduckgo.com/i.js?l=us-en&o=json&q=apple+pie&vqd=4-1"))
-    }
-
-    @Test
     fun refusalsAreExplained() {
         assertEquals("This identity state cannot submit flips.", flipRefusal("not a candidate"))
         assertNotEquals("x", flipRefusal("insufficient flips"))

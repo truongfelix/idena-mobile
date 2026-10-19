@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +23,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -177,22 +179,16 @@ fun PostCard(
     // Flat, as Reddit's feed: the list draws a thin line between posts.
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (topic != null && topicShown == TopicShown.InsteadOfAuthor) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { TopicLine(topic, post.call.time, compact = true) }
-                    PostMenuButton(post.call)
-                }
-            }
-            else PostHeader(post.call, states, onProfile, compact = true)
-            if (topic != null && topicShown == TopicShown.AsTag) TopicTag(topic)
+            PostHeader(post.call, states, onProfile, compact = true)
+            if (topic != null) TopicTag(topic)
             PostContent(post.call, MaterialTheme.typography.bodyLarge, maxLines = FEED_TEXT_LINES, mediaMaxHeight = 220.dp)
         }
         ActionBar(post, myAddress, canAct, "💬 ${replyCount(post)}", answerEnabled = true, onLike = onLike, onAnswer = onOpen, onTip = onTip, onWho = onWho)
     }
 }
 
-/** How a post card shows the post's topic: as a tag under the author, in the author's place (Home), or not (the topic's page). */
-enum class TopicShown { AsTag, InsteadOfAuthor, Not }
+/** How a post card shows the post's topic: as a tag under the author, or not (the topic's page). */
+enum class TopicShown { AsTag, Not }
 
 /** The color of "OP", Reddit's blue. */
 private val OP_BLUE = androidx.compose.ui.graphics.Color(0xFF0079D3)
@@ -217,10 +213,34 @@ fun Pill(text: String, enabled: Boolean, description: String? = null, onClick: (
     }
 }
 
+/** One part of a [SplitPill]: its text, and its own tap. */
+class PillPart(val text: String, val enabled: Boolean, val description: String? = null, val onClick: () -> Unit)
+
+/** A pill of parts side by side, each its own tap (the heart and the likes' count). */
+@Composable
+fun SplitPill(parts: List<PillPart>) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(50)
+    Row(Modifier.clip(shape).border(1.dp, colors.outlineVariant, shape).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+        parts.forEachIndexed { i, part ->
+            if (i > 0) VerticalDivider(color = colors.outlineVariant)
+            Box(
+                Modifier
+                    .clickable(enabled = part.enabled, onClick = part.onClick)
+                    .then(if (part.description != null) Modifier.semantics { contentDescription = part.description } else Modifier)
+                    .padding(horizontal = if (parts.size > 1) 10.dp else 12.dp, vertical = 7.dp),
+            ) {
+                Text(part.text, style = MaterialTheme.typography.labelLarge, color = if (part.enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.45f))
+            }
+        }
+    }
+}
+
 /**
  * The pills under a post, reply or comment: its likes (Like; "❤️" once the identity liked it or sent a like), the
- * answer pill ([answer]), and its tips (Tip; not on one's own posts). An older contract's post is read only: the
- * answer pill then only opens its thread ([answerEnabled] in the feed).
+ * answer pill ([answer]), and its tips (Tip; not on one's own posts, which show only their tipped total). The likes'
+ * count and the tipped total open who liked and tipped. An older contract's post is read only: the answer pill then
+ * only opens its thread ([answerEnabled] in the feed).
  */
 @Composable
 fun ActionBar(
@@ -237,13 +257,18 @@ fun ActionBar(
     val act = canAct && !post.isOlder
     // A like sent counts at once: the pill stays off until the scan reads it.
     val liked = myAddress != null && myAddress in post.likedBy || post.id in LocalPendingLikes.current
+    val who = t(R.string.social_who_description)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Pill(if (liked) "$LIKE ${post.likes}" else "♡ ${post.likes}", act && !liked, onClick = onLike)
+        SplitPill(
+            listOf(
+                PillPart(if (liked) LIKE else "♡", act && !liked, onClick = onLike),
+                PillPart("${post.likes}", post.likes > 0, who, onWho),
+            ),
+        )
         Pill(answer, answerEnabled, onClick = onAnswer)
-        Pill(if (post.tipTotal.signum() > 0) "🪙 ${tipText(post.tipTotal)}" else t(R.string.social_tip_pill), act && post.call.author != myAddress, onClick = onTip)
-        Spacer(Modifier.weight(1f))
-        // Who liked and tipped, in place of the line "Liked by · tipped by" under the pills.
-        if (post.likes > 0 || post.tips.isNotEmpty()) Pill("👁", enabled = true, description = t(R.string.social_who_description), onClick = onWho)
+        val tipped = if (post.tips.isNotEmpty()) PillPart("🪙 ${tipText(post.tipTotal)}", true, who, onWho) else null
+        val tip = if (post.call.author != myAddress) PillPart(t(R.string.social_tip_pill), act, onClick = onTip) else null
+        listOfNotNull(tip, tipped).takeIf { it.isNotEmpty() }?.let { SplitPill(it) }
     }
 }
 

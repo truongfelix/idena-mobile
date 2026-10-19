@@ -578,7 +578,7 @@ private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
 }
 
 /**
- * The search: the words (or a text) to the three sources at once ([PictureSearch]), a grid of pictures that grows as
+ * The search: the words (or a text) to the sources at once ([PictureSearch]), a grid of pictures that grows as
  * each answers; a tap takes one for the selected frame.
  */
 @Composable
