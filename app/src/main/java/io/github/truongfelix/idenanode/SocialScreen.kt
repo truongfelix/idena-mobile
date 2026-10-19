@@ -66,6 +66,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.AccountCircle
@@ -93,6 +95,7 @@ fun SocialScreen(
     topBar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     myTask: (@Composable () -> Unit)? = null,
+    guide: (@Composable () -> Unit)? = null,
 ) {
     // The post being tipped (the amount dialog), and the post whose likes and tips are listed.
     var tipping by remember { mutableStateOf<SocialPost?>(null) }
@@ -381,7 +384,8 @@ fun SocialScreen(
                             }
                             return@LazyColumn
                         }
-                        if (feed.isEmpty()) item(key = "empty") { Text(t(R.string.social_no_posts_yet), style = MaterialTheme.typography.bodySmall) }
+                        // Nothing read yet: the way there (B-128).
+                        if (feed.isEmpty()) item(key = "empty") { guide?.invoke() ?: Text(t(R.string.social_no_posts_yet), style = MaterialTheme.typography.bodySmall) }
                         else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
                         // An ad after each POSTS_PER_AD posts.
                         items(
@@ -438,7 +442,10 @@ fun SocialScreen(
                         SocialView.Activity -> ActivityList(model, Modifier.weight(1f)) { item -> openThread(item.threadId, item.focusId) }
                         SocialView.Messages -> MessagesList(model, Modifier.weight(1f))
                         SocialView.Me -> {
-                            if (myAddress == null) Text(t(R.string.social_waiting_address), style = MaterialTheme.typography.bodyMedium)
+                            if (myAddress == null) {
+                                if (guide != null) Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { guide() }
+                                else Text(t(R.string.social_waiting_address), style = MaterialTheme.typography.bodyMedium)
+                            }
                             else ProfileList(
                                 address = myAddress,
                                 feed = feed,

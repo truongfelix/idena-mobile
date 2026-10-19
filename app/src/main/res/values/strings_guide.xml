@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The way to Idena Social for a newcomer, where Social has nothing to show yet (SyncGuide.kt). -->
+    <string name="guide_title">Getting Idena Social ready</string>
+    <string name="guide_intro">This app reads Idena Social from the network itself, through a small node that runs on this phone: no company server in between. The first start takes a while.</string>
+    <string name="guide_row_account">Your account</string>
+    <string name="guide_row_connect">Connecting to other nodes</string>
+    <string name="guide_row_download">Downloading the network</string>
+    <string name="guide_row_blocks">Catching up with the latest blocks</string>
+    <string name="guide_download_why">Your phone does not download every block since the start: it downloads the block headers, then the network\'s latest state (a snapshot) from another node.</string>
+    <string name="guide_account">Create your account, or import the one you have, in the node panel. Save its key right away: it is the only way back into this account.</string>
+    <string name="guide_start">Sync is off: the node does not run, so nothing is read. Turn Sync on in the node panel.</string>
+    <string name="guide_open_panel">Open the node panel</string>
+    <string name="guide_sync_off">Sync is off</string>
+    <string name="guide_could_not_start">The node could not start: %1$s</string>
+    <string name="guide_reading">Up to date. Reading Idena Social: the newest posts come first.</string>
+    <string name="guide_peers_take_time">It can take several minutes, up to about 15, before a first node accepts yours. Keep the app open meanwhile.</string>
+    <string name="guide_wifi_helps">On mobile data or a hotspot, other nodes often cannot reach your phone, and it finds peers slowly. Wi-Fi helps.</string>
+    <string name="guide_snapshot_waits">Your node waits for another node to send it the network\'s latest state. It goes on by itself once a peer offers it.</string>
+    <string name="guide_snapshot_long">It has waited %1$d minutes: your peers do not offer the state yet. It still goes on by itself; more peers help (Wi-Fi, keeping the app open).</string>
+    <string name="guide_catches_up">The node stops while the phone sleeps or when Android stops the app: it catches up with the blocks made meanwhile when it runs again.</string>
+    <string name="guide_background">Keep the app open during the first sync: Android may stop the node with the screen off. These settings let it run in the background.</string>
+</resources>

@@ -106,6 +106,25 @@ class NodeModel(private val context: Context) {
             ),
         )
 
+    /** What the newcomer's guide in Social reads ([syncGuide]); [xiaomi]: the phone is a Xiaomi. */
+    fun guideInput(xiaomi: Boolean): GuideInput {
+        val node = view
+        return GuideInput(
+            hasKey = state.hasKey,
+            syncEnabled = state.syncEnabled,
+            startError = state.startError,
+            node = node,
+            runningForMs = state.runningForMs,
+            chainMoving = chainMoving,
+            speed = node?.let { stepSpeed(it.syncStep(chainMoving)) },
+            startPhase = state.startPhase,
+            onWifi = state.network == "Wi-Fi" || state.network == "Ethernet",
+            ignoringBatteryOptimizations = state.ignoringBatteryOptimizations,
+            xiaomi = xiaomi,
+            nowSeconds = System.currentTimeMillis() / 1000,
+        )
+    }
+
     /** Reads everything the Node tab shows. */
     suspend fun refresh() {
         val next = withContext(Dispatchers.IO) { readState(context) }

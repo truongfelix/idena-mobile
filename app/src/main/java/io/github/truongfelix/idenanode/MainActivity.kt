@@ -250,7 +250,17 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                             }
                         }
                         val quota = node.flipQuota?.takeIf { it.missing > 0 }
-                        SocialScreen(social, ads.ads, titleBar, Modifier.fillMaxSize(), myTask = quota?.let { { FlipsDueCard(it) } })
+                        // The way to Idena Social while it has nothing to show (B-128); the time spent on its step.
+                        val guideInput = node.guideInput(Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true))
+                        val step = guideStep(guideInput)
+                        val stepSince = remember(step) { SystemClock.elapsedRealtime() }
+                        val stepMs = SystemClock.elapsedRealtime() - stepSince
+                        val guide = syncGuide(guideInput, stepMs)
+                        SocialScreen(
+                            social, ads.ads, titleBar, Modifier.fillMaxSize(),
+                            myTask = quota?.let { { FlipsDueCard(it) } },
+                            guide = { SyncGuideCard(guide, node.state, stepMs / 60_000, onOpenPanel = { scope.launch { panel.open() } }) },
+                        )
                     }
                 }
             }

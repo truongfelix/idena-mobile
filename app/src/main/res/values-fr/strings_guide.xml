@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Le chemin vers Idena Social pour un nouveau venu, là où Social n'a encore rien à montrer (SyncGuide.kt). -->
+    <string name="guide_title">Préparer Idena Social</string>
+    <string name="guide_intro">Cette appli lit Idena Social sur le réseau lui-même, par un petit nœud qui tourne sur ce téléphone : aucun serveur d\'entreprise entre les deux. Le premier démarrage prend du temps.</string>
+    <string name="guide_row_account">Votre compte</string>
+    <string name="guide_row_connect">Connexion aux autres nœuds</string>
+    <string name="guide_row_download">Téléchargement du réseau</string>
+    <string name="guide_row_blocks">Rattrapage des derniers blocs</string>
+    <string name="guide_download_why">Votre téléphone ne télécharge pas chaque bloc depuis le début : il télécharge les en-têtes des blocs, puis le dernier état du réseau (un instantané) depuis un autre nœud.</string>
+    <string name="guide_account">Créez votre compte, ou importez celui que vous avez, dans le panneau du nœud. Sauvegardez sa clé tout de suite : c\'est le seul moyen de retrouver ce compte.</string>
+    <string name="guide_start">La synchronisation est coupée : le nœud ne tourne pas, rien n\'est lu. Activez Sync dans le panneau du nœud.</string>
+    <string name="guide_open_panel">Ouvrir le panneau du nœud</string>
+    <string name="guide_sync_off">Synchronisation coupée</string>
+    <string name="guide_could_not_start">Le nœud n\'a pas pu démarrer : %1$s</string>
+    <string name="guide_reading">À jour. Lecture d\'Idena Social : les publications les plus récentes d\'abord.</string>
+    <string name="guide_peers_take_time">Il peut falloir plusieurs minutes, jusqu\'à 15 environ, avant qu\'un premier nœud accepte le vôtre. Gardez l\'appli ouverte en attendant.</string>
+    <string name="guide_wifi_helps">En données mobiles ou en partage de connexion, les autres nœuds ne peuvent souvent pas joindre votre téléphone, qui trouve ses pairs lentement. Le Wi-Fi aide.</string>
+    <string name="guide_snapshot_waits">Votre nœud attend qu\'un autre nœud lui envoie le dernier état du réseau. Il continue tout seul dès qu\'un pair le propose.</string>
+    <string name="guide_snapshot_long">Il attend depuis %1$d minutes : vos pairs ne proposent pas encore l\'état. Il continue tout seul ; plus de pairs aident (Wi-Fi, appli ouverte).</string>
+    <string name="guide_catches_up">Le nœud s\'arrête quand le téléphone dort ou quand Android arrête l\'appli : il rattrape les blocs faits entre-temps dès qu\'il tourne à nouveau.</string>
+    <string name="guide_background">Gardez l\'appli ouverte pendant la première synchronisation : Android peut arrêter le nœud écran éteint. Ces réglages le laissent tourner en arrière-plan.</string>
+</resources>
