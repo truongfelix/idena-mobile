@@ -145,11 +145,11 @@
     <string name="flip_camera">Camera</string>
     <string name="flip_gallery">Gallery</string>
     <string name="flip_image_search">Image search</string>
-    <string name="flip_image_search_sources">DuckDuckGo, Openverse, Wikimedia · pictures only</string>
+    <string name="flip_image_search_sources">Openverse, Wikimedia · pictures only</string>
     <string name="flip_next_protect">Next: protect and shuffle</string>
     <string name="flip_choose_pictures">Choose the %1$d story pictures</string>
     <string name="flip_search_ask_title">Turn on image search?</string>
-    <string name="flip_search_ask_text">The search asks three services directly from this phone: DuckDuckGo, Openverse and Wikimedia Commons. Each sees the phone\'s internet address and the words searched. Only pictures are shown, never web pages, and each comes from the service that found it. Everything else in the app talks only to your own node.</string>
+    <string name="flip_search_ask_text">The search asks two services directly from this phone: Openverse and Wikimedia Commons. Each sees the phone\'s internet address and the words searched. Only pictures are shown, never web pages, and each comes from the service that found it. Everything else in the app talks only to your own node.</string>
     <string name="flip_turn_on">Turn on</string>
     <string name="flip_search_both">Both</string>
     <string name="flip_search_pictures">Search pictures</string>
@@ -175,7 +175,6 @@
     <string name="flip_search_timeout">no answer in time.</string>
     <string name="flip_search_unreachable">not reachable (is the phone online?).</string>
     <string name="flip_search_no_answer">no answer.</string>
-    <string name="flip_search_no_token">gave no search token.</string>
     <string name="flip_search_refused">refuses searches from this connection for now; try again in a few minutes.</string>
     <string name="flip_search_answered">answered %1$d.</string>
     <string name="flip_search_too_large">its answer is too large.</string>

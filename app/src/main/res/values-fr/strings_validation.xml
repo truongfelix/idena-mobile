@@ -148,11 +148,11 @@
     <string name="flip_camera">Appareil photo</string>
     <string name="flip_gallery">Galerie</string>
     <string name="flip_image_search">Recherche d\'images</string>
-    <string name="flip_image_search_sources">DuckDuckGo, Openverse, Wikimedia · images seulement</string>
+    <string name="flip_image_search_sources">Openverse, Wikimedia · images seulement</string>
     <string name="flip_next_protect">Suivant : protéger et mélanger</string>
     <string name="flip_choose_pictures">Choisissez les %1$d images de l\'histoire</string>
     <string name="flip_search_ask_title">Activer la recherche d\'images ?</string>
-    <string name="flip_search_ask_text">La recherche interroge trois services directement depuis ce téléphone : DuckDuckGo, Openverse et Wikimedia Commons. Chacun voit l\'adresse internet du téléphone et les mots recherchés. Seules des images s\'affichent, jamais de pages web, et chacune vient du service qui l\'a trouvée. Tout le reste de l\'application ne parle qu\'à votre propre nœud.</string>
+    <string name="flip_search_ask_text">La recherche interroge deux services directement depuis ce téléphone : Openverse et Wikimedia Commons. Chacun voit l\'adresse internet du téléphone et les mots recherchés. Seules des images s\'affichent, jamais de pages web, et chacune vient du service qui l\'a trouvée. Tout le reste de l\'application ne parle qu\'à votre propre nœud.</string>
     <string name="flip_turn_on">Activer</string>
     <string name="flip_search_both">Les deux</string>
     <string name="flip_search_pictures">Rechercher des images</string>
@@ -178,7 +178,6 @@
     <string name="flip_search_timeout">pas de réponse à temps.</string>
     <string name="flip_search_unreachable">injoignable (le téléphone est-il en ligne ?).</string>
     <string name="flip_search_no_answer">pas de réponse.</string>
-    <string name="flip_search_no_token">n\'a pas donné de jeton de recherche.</string>
     <string name="flip_search_refused">refuse les recherches depuis cette connexion pour le moment ; réessayez dans quelques minutes.</string>
     <string name="flip_search_answered">a répondu %1$d.</string>
     <string name="flip_search_too_large">sa réponse est trop volumineuse.</string>

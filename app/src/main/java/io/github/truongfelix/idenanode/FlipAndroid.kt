@@ -108,10 +108,10 @@ object FlipDraftStore {
 
     private const val SEARCH_ON = "picture_search_on"
 
-    // 0.1.74 and earlier: the search asked DuckDuckGo only; that agreement does not cover the three sources.
+    // 0.1.74 and earlier: the search asked DuckDuckGo only (dropped since); that agreement does not cover today's sources.
     private const val DUCK_SEARCH_ON = "search_on"
 
-    /** Whether the user agreed to the picture search ([PictureSource]: its three sources); off until then. */
+    /** Whether the user agreed to the picture search ([PictureSource]: its sources); off until then. */
     fun searchOn(context: Context): Boolean = File(context.filesDir, "flips/$SEARCH_ON").exists()
 
     fun setSearchOn(context: Context, on: Boolean) {

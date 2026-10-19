@@ -140,46 +140,6 @@ fun flipRefusal(message: String): String = when {
 }
 
 /*
- * DuckDuckGo's part of the picture search ([PictureSearch]), as idena-desktop's main/image-search.js asks it, but
- * thumbnails only and always through DuckDuckGo's own image proxy.
- */
-
-/** The page that gives the search token. */
-fun duckLandingUrl(query: String): String =
-    "https://duckduckgo.com/?q=${urlEncode(query)}&iax=images&ia=images"
-
-/** The search token (vqd) in DuckDuckGo's page; null when it has none. */
-fun duckToken(html: String): String? {
-    val patterns = listOf(Regex("vqd=[\"']([^\"']+)[\"']"), Regex("vqd=([^&\"'\\\\]+)&"), Regex("\"vqd\":\"([^\"]+)\""))
-    for (pattern in patterns) {
-        val token = pattern.find(html)?.groupValues?.get(1)?.trim() ?: continue
-        if (token.length <= 128 && Regex("^[A-Za-z0-9._-]+$").matches(token)) return token
-    }
-    return null
-}
-
-/** The image results for [query] with [token]. */
-fun duckResultsUrl(query: String, token: String): String =
-    "https://duckduckgo.com/i.js?l=us-en&o=json&q=${urlEncode(query)}&vqd=${urlEncode(token)}&f=,,,&p=1"
-
-/** The thumbnails of DuckDuckGo's results ([json], i.js), at most [limit], each through DuckDuckGo's image proxy. */
-fun duckThumbnails(json: String, limit: Int = 30): List<String> {
-    val results = runCatching { JSONObject(json).optJSONArray("results") }.getOrNull() ?: return emptyList()
-    val seen = LinkedHashSet<String>()
-    for (i in 0 until results.length()) {
-        val thumbnail = results.optJSONObject(i)?.optString("thumbnail").orEmpty()
-        if (thumbnail.startsWith("https://") && thumbnail.length <= 2048) seen += duckProxy(thumbnail)
-        if (seen.size >= limit) break
-    }
-    return seen.toList()
-}
-
-/** [url] as DuckDuckGo's image proxy serves it. */
-fun duckProxy(url: String): String = "https://external-content.duckduckgo.com/iu/?u=${urlEncode(url)}&f=1"
-
-private fun urlEncode(text: String): String = java.net.URLEncoder.encode(text, "UTF-8")
-
-/*
  * After a flip is sent, the node counts it (madeFlips, the pair "used") only once its transaction is in a
  * block, and checks a new flip only against the flips in blocks (validateSubmitFlipTx). Until then the
  * app keeps the flip sent ([SentFlip], files/flips/sent.json) and counts it itself, so that the same pair

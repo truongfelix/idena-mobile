@@ -10,22 +10,19 @@ import java.net.URLEncoder
 import java.net.UnknownHostException
 
 /*
- * The picture search of the flip editor, asked only once the user agreed to it: DuckDuckGo, Openverse and Wikimedia
- * Commons, as idena-desktop's main/image-search.js asks them. Only thumbnails are fetched, each from its search's
- * own servers (DuckDuckGo's image proxy, Openverse's API, Wikimedia's thumbnail servers), never from the sites the
- * pictures come from. Each source sees the phone's address and the words searched.
+ * The picture search of the flip editor, asked only once the user agreed to it: Openverse and Wikimedia Commons, as
+ * idena-desktop's main/image-search.js asks them. Only thumbnails are fetched, each from its search's own servers
+ * (Openverse's API, Wikimedia's thumbnail servers), never from the sites the pictures come from. Each source sees the phone's address and the words searched.
  */
 
 /** A source of the picture search. */
 enum class PictureSource(val label: String) {
-    DuckDuckGo("DuckDuckGo"),
     Openverse("Openverse"),
     Wikimedia("Wikimedia"),
 }
 
 /** The hosts each source's thumbnails come from. */
 private val THUMBNAIL_HOSTS = mapOf(
-    PictureSource.DuckDuckGo to setOf("external-content.duckduckgo.com"),
     PictureSource.Openverse to setOf("api.openverse.org"),
     PictureSource.Wikimedia to setOf("thumb.wikimedia.org", "upload.wikimedia.org"),
 )
@@ -88,11 +85,8 @@ fun pictureSearchError(error: Throwable): String = when (error) {
 
 /** The requests of the picture search (see the top of this file). */
 object PictureSearch {
-    private const val BROWSER_AGENT = "Mozilla/5.0 (Idena image search)"
-    private const val MAX_PAGE = 512 * 1024
     private const val MAX_RESULTS = 2 * 1024 * 1024
     private const val MAX_THUMBNAIL = 1024 * 1024
-    private val DUCK_HOSTS = setOf("duckduckgo.com")
     private val OPENVERSE_HOSTS = setOf("api.openverse.org")
     private val WIKIMEDIA_HOSTS = setOf("commons.wikimedia.org")
 
@@ -104,12 +98,6 @@ object PictureSearch {
         val q = query.trim().take(160)
         if (q.isEmpty()) return emptyList()
         return when (source) {
-            PictureSource.DuckDuckGo -> {
-                val landing = duckLandingUrl(q)
-                val page = String(get(landing, DUCK_HOSTS, MAX_PAGE, BROWSER_AGENT), Charsets.UTF_8)
-                val token = duckToken(page) ?: throw IOException(t(R.string.flip_search_no_token))
-                duckThumbnails(String(get(duckResultsUrl(q, token), DUCK_HOSTS, MAX_RESULTS, BROWSER_AGENT, referer = landing), Charsets.UTF_8))
-            }
             // A query Openverse has not seen takes it 12 to 16 s.
             PictureSource.Openverse ->
                 openverseThumbnails(String(get(openverseUrl(q), OPENVERSE_HOSTS, MAX_RESULTS, appAgent(appVersion), readTimeoutMs = 25_000), Charsets.UTF_8))
@@ -121,12 +109,11 @@ object PictureSearch {
     /** A thumbnail found by [search], from its source's servers only. */
     fun thumbnail(url: String, appVersion: String): ByteArray {
         val source = thumbnailSource(url) ?: throw IOException("not a thumbnail of the picture search")
-        val agent = if (source == PictureSource.DuckDuckGo) BROWSER_AGENT else appAgent(appVersion)
-        return get(url, THUMBNAIL_HOSTS.getValue(source), MAX_THUMBNAIL, agent)
+        return get(url, THUMBNAIL_HOSTS.getValue(source), MAX_THUMBNAIL, appAgent(appVersion))
     }
 
     /** GET [url], only over HTTPS and only from [hosts], at most [max] bytes; no redirect is followed. */
-    private fun get(url: String, hosts: Set<String>, max: Int, agent: String, referer: String? = null, readTimeoutMs: Int = 10_000): ByteArray {
+    private fun get(url: String, hosts: Set<String>, max: Int, agent: String, readTimeoutMs: Int = 10_000): ByteArray {
         val parsed = URL(url)
         if (parsed.protocol != "https" || parsed.host !in hosts) throw IOException("not an address of the picture search")
         val connection = parsed.openConnection() as HttpURLConnection
@@ -135,10 +122,9 @@ object PictureSearch {
         connection.readTimeout = readTimeoutMs
         connection.setRequestProperty("User-Agent", agent)
         connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-        referer?.let { connection.setRequestProperty("Referer", it) }
         try {
             val code = connection.responseCode
-            // DuckDuckGo refuses an address for a while after a few quick searches.
+            // A source refuses an address for a while after many quick searches (Openverse: 429).
             if (code == 403 || code == 429) throw IOException(t(R.string.flip_search_refused))
             if (code !in 200..299) throw IOException(t(R.string.flip_search_answered, code))
             return connection.inputStream.use { input ->
