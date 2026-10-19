@@ -11,7 +11,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -211,5 +216,8 @@ fun SyncGuideCard(guide: SyncGuide, state: ScreenState, stepMinutes: Long, onOpe
         for (tip in listOf(R.string.guide_tip_wifi_home, R.string.guide_tip_more_people, R.string.guide_tip_validator)) {
             Text(t(tip), style = MaterialTheme.typography.bodyMedium, color = muted)
         }
+        var how by remember { mutableStateOf(false) }
+        TextButton(onClick = { how = true }) { Text(t(R.string.validator_how_open)) }
+        if (how) ValidatorHowDialog { how = false }
     }
 }

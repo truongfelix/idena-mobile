@@ -27,10 +27,17 @@
     <string name="guide_tip_validator">You can earn iDNA for free by becoming a validator of the network. The more validators, the faster peers and posts travel, and the lower the fees: the network\'s minimum fee goes down as it grows.</string>
     <string name="guide_history_line">Reading older posts: %1$d%%. They are read only while Idena Social is on screen: keep it open to read them all.</string>
     <string name="no_idna_title">Posting needs a little iDNA</string>
-    <string name="no_idna_why">Each post, reply, like or tip is a transaction on the network, paid with a small fee in iDNA from your account: it keeps spam off the network. Your balance is 0 iDNA. Reading Idena Social stays free.</string>
+    <string name="no_idna_why">Each post, reply, like or tip is a transaction on the network, with a small fee in iDNA from your account: a part of it goes back to the validators. Your balance is 0 iDNA. Reading Idena Social stays free.</string>
     <string name="no_idna_how">How to get iDNA</string>
     <string name="no_idna_send">Someone sends you some, or tips one of your posts: share your address with them.</string>
     <string name="no_idna_community">Ask in the Idena community chats:</string>
     <string name="no_idna_validator">Or earn iDNA for free by becoming a validator of the network.</string>
     <string name="no_idna_more_validators">The more validators, the better for everyone: more nodes to connect to, so syncing and posts go faster, and lower fees, since the network\'s minimum fee goes down as the number of its validated identities goes up.</string>
+    <string name="validator_how_title">How to become a validator</string>
+    <string name="validator_how_open">How to become a validator</string>
+    <string name="validator_identity">Validators hold an Idena identity: one per person, and anonymous: no real name, no ID document. It only proves that a unique human holds it.</string>
+    <string name="validator_step_invite">1. Get an invitation from a validated member: ask someone you know, or in the community chats.</string>
+    <string name="validator_step_activate">2. Activate it in the node panel (Activate an invitation code): your account becomes a candidate.</string>
+    <string name="validator_step_validation">3. Take part in the next validation: at a set date, everyone solves short picture puzzles at the same time, for a few minutes. Passing it validates your identity.</string>
+    <string name="validator_step_earn">4. A validated identity earns iDNA at each validation, and while its node is online (mining).</string>
 </resources>
