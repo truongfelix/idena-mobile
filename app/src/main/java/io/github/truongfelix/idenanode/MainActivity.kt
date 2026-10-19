@@ -11,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -261,7 +260,7 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
                         }
                         val quota = node.flipQuota?.takeIf { it.missing > 0 }
                         // The way to Idena Social while it has nothing to show (B-128); the time spent on its step.
-                        val guideInput = node.guideInput(Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true))
+                        val guideInput = node.guideInput()
                         val step = guideStep(guideInput)
                         val stepSince = remember(step) { SystemClock.elapsedRealtime() }
                         val stepMs = SystemClock.elapsedRealtime() - stepSince

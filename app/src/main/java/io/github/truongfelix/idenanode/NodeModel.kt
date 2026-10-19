@@ -106,8 +106,8 @@ class NodeModel(private val context: Context) {
             ),
         )
 
-    /** What the newcomer's guide in Social reads ([syncGuide]); [xiaomi]: the phone is a Xiaomi. */
-    fun guideInput(xiaomi: Boolean): GuideInput {
+    /** What the newcomer's guide in Social reads ([syncGuide]). */
+    fun guideInput(): GuideInput {
         val node = view
         return GuideInput(
             hasKey = state.hasKey,
@@ -120,7 +120,6 @@ class NodeModel(private val context: Context) {
             startPhase = state.startPhase,
             onWifi = state.network == "Wi-Fi" || state.network == "Ethernet",
             ignoringBatteryOptimizations = state.ignoringBatteryOptimizations,
-            xiaomi = xiaomi,
             nowSeconds = System.currentTimeMillis() / 1000,
         )
     }

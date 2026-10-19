@@ -81,8 +81,6 @@ data class GuideInput(
     val startPhase: StartPhase?,
     val onWifi: Boolean,
     val ignoringBatteryOptimizations: Boolean,
-    /** A Xiaomi phone: MIUI stops apps after the screen locks unless Autostart is on. */
-    val xiaomi: Boolean,
     /** The phone's clock (seconds), to tell an old head block; null leaves it out. */
     val nowSeconds: Long? = null,
 )
@@ -138,7 +136,7 @@ fun syncGuide(input: GuideInput, stepForMs: Long): SyncGuide {
         }
         if (step == GuideStep.Blocks) add(GuideHint.CatchesUp)
         val running = step == GuideStep.Peers || step == GuideStep.Network || step == GuideStep.Blocks
-        if (running && (!input.ignoringBatteryOptimizations || input.xiaomi)) add(GuideHint.Background)
+        if (running && !input.ignoringBatteryOptimizations) add(GuideHint.Background)
     }
     return SyncGuide(step, line, hints)
 }

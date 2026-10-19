@@ -8,7 +8,7 @@ import org.junit.Test
 class SyncGuideTest {
     private val now = 1_760_000_000L
 
-    /** A phone with a key, Sync on, on Wi-Fi, the battery setting allowed, not a Xiaomi; [node] as given. */
+    /** A phone with a key, Sync on, on Wi-Fi, the battery setting allowed; [node] as given. */
     private fun input(
         node: NodeView?,
         hasKey: Boolean = true,
@@ -16,13 +16,12 @@ class SyncGuideTest {
         runningForMs: Long? = 60_000,
         onWifi: Boolean = true,
         battery: Boolean = true,
-        xiaomi: Boolean = false,
         chainMoving: Boolean = false,
         startError: String? = null,
     ) = GuideInput(
         hasKey = hasKey, syncEnabled = syncEnabled, startError = startError, node = node, runningForMs = runningForMs,
         chainMoving = chainMoving, speed = null, startPhase = null, onWifi = onWifi, ignoringBatteryOptimizations = battery,
-        xiaomi = xiaomi, nowSeconds = now,
+        nowSeconds = now,
     )
 
     private fun node(peers: Int, syncing: Boolean, chain: Long, headers: Long, highest: Long, headTime: Long? = now - 20) =
@@ -67,9 +66,7 @@ class SyncGuideTest {
         val syncing = node(5, true, 11_429_095, 11_429_095, 11_430_011)
         assertEquals(listOf(GuideHint.CatchesUp), syncGuide(input(syncing), 0).hints)
         assertEquals(listOf(GuideHint.CatchesUp, GuideHint.Background), syncGuide(input(syncing, battery = false), 0).hints)
-        // MIUI stops the app after the screen locks unless Autostart is on, the battery setting allowed or not.
-        assertEquals(listOf(GuideHint.CatchesUp, GuideHint.Background), syncGuide(input(syncing, xiaomi = true), 0).hints)
-        assertEquals("not before the node runs", emptyList<GuideHint>(), syncGuide(input(null, syncEnabled = false, battery = false, xiaomi = true), 0).hints)
+        assertEquals("not before the node runs", emptyList<GuideHint>(), syncGuide(input(null, syncEnabled = false, battery = false), 0).hints)
         assertEquals("nor once up to date", emptyList<GuideHint>(), syncGuide(input(node(5, false, 11_430_011, 11_430_011, 11_430_011), battery = false), 0).hints)
     }
 
