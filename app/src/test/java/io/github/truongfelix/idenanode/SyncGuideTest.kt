@@ -74,6 +74,20 @@ class SyncGuideTest {
     }
 
     @Test
+    fun theFeedSaysWhyToStayWhileTheOlderPostsAreRead() {
+        // B-130: older posts are read only while Social is on screen.
+        val head = HISTORY_START + 999
+        val half = SocialCache(low = HISTORY_START + 500, high = head, posts = emptyList(), authors = emptyMap(), authorsHeight = head)
+        assertEquals(
+            "Reading older posts: 50%. They are read only while Idena Social is on screen: keep it open to read them all.",
+            historyLine(half, scanning = true),
+        )
+        assertNull("the scan off", historyLine(half, scanning = false))
+        assertNull("before the first scan", historyLine(null, scanning = true))
+        assertNull("all read", historyLine(half.copy(low = HISTORY_START), scanning = true))
+    }
+
+    @Test
     fun theLineNamesTheStepsProgress() {
         assertEquals("Sync is off", syncGuide(input(null, syncEnabled = false), 0).line)
         assertEquals("The node could not start: disk full", syncGuide(input(null, startError = "disk full"), 0).line)

@@ -13,7 +13,7 @@
     <string name="guide_open_panel">Ouvrir le panneau du nœud</string>
     <string name="guide_sync_off">Synchronisation coupée</string>
     <string name="guide_could_not_start">Le nœud n\'a pas pu démarrer : %1$s</string>
-    <string name="guide_reading">À jour. Lecture d\'Idena Social : les publications les plus récentes d\'abord.</string>
+    <string name="guide_reading">À jour. Votre fil se remplit à mesure que le réseau est lu : les publications les plus récentes d\'abord.</string>
     <string name="guide_peers_take_time">Il peut falloir plusieurs minutes, jusqu\'à 15 environ, avant qu\'un premier nœud accepte le vôtre. Gardez l\'appli ouverte en attendant.</string>
     <string name="guide_wifi_helps">En données mobiles ou en partage de connexion, les autres nœuds ne peuvent souvent pas joindre votre téléphone, qui trouve ses pairs lentement. Le Wi-Fi aide.</string>
     <string name="guide_snapshot_waits">Votre nœud attend qu\'un autre nœud lui envoie le dernier état du réseau. Il continue tout seul dès qu\'un pair le propose.</string>
@@ -25,4 +25,5 @@
     <string name="guide_tip_wifi_home">Une bonne habitude : synchronisez à la maison en Wi-Fi. Dehors, le nœud n\'a alors que les derniers blocs à rattraper, vite : écrivez sur Idena Social, puis coupez Sync jusqu\'à ce que vous en ayez besoin.</string>
     <string name="guide_tip_more_people">Idena est un réseau décentralisé : plus il y a de monde pour le faire tourner, plus chacun trouve vite des pairs pour se synchroniser. Parlez-en à vos amis.</string>
     <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau.</string>
+    <string name="guide_history_line">Lecture des publications plus anciennes : %1$d %%. Elles ne sont lues que lorsqu\'Idena Social est à l\'écran : gardez-le ouvert pour tout lire.</string>
 </resources>

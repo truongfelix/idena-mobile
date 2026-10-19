@@ -138,6 +138,13 @@ fun syncGuide(input: GuideInput, stepForMs: Long): SyncGuide {
     return SyncGuide(step, line, hints)
 }
 
+/**
+ * The feed's line while the scan reads the older posts (B-130): their share read, and that they are read only while
+ * Social is on screen; null once the history is read, before the first scan, or with the scan off.
+ */
+fun historyLine(cache: SocialCache?, scanning: Boolean): String? =
+    cache?.takeIf { scanning && !it.historyDone }?.let { t(R.string.guide_history_line, (it.scannedShare * 100).toInt()) }
+
 /** The text of [hint]; [stepMinutes]: how long the step has lasted. */
 fun GuideHint.text(stepMinutes: Long): String = when (this) {
     GuideHint.PeersTakeTime -> t(R.string.guide_peers_take_time)

@@ -384,9 +384,14 @@ fun SocialScreen(
                             }
                             return@LazyColumn
                         }
-                        // Nothing read yet: the way there (B-128).
+                        // Nothing read yet: the way there (B-128); then, while the older posts are read, why to stay (B-130).
                         if (feed.isEmpty()) item(key = "empty") { guide?.invoke() ?: Text(t(R.string.social_no_posts_yet), style = MaterialTheme.typography.bodySmall) }
                         else if (sorted.isEmpty()) item(key = "empty") { Text(emptyFeedText(model), style = MaterialTheme.typography.bodySmall) }
+                        if (feed.isNotEmpty()) historyLine(model.cache, model.scanning)?.let { line ->
+                            item(key = "history") {
+                                Text(line, Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                         // An ad after each POSTS_PER_AD posts.
                         items(
                             feedRows(sorted.size),
