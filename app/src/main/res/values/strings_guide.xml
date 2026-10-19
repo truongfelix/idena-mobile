@@ -2,7 +2,7 @@
 <resources>
     <!-- The way to Idena Social for a newcomer, where Social has nothing to show yet (SyncGuide.kt). -->
     <string name="guide_title">Welcome to Idena Social</string>
-    <string name="guide_intro">The most decentralized social network in the world. This app runs a node of the Idena blockchain: every message is a transaction on it and cannot be erased. What you write on Idena Social stays forever; for more privacy, use the encrypted private chats. The first start takes a while.</string>
+    <string name="guide_intro">The most decentralized social network in the world. This app runs a node of the Idena blockchain: every message is a transaction on it and cannot be erased. What you write on Idena Social stays forever; for more privacy, use the encrypted private chats.</string>
     <string name="guide_row_account">Your account</string>
     <string name="guide_row_connect">Connecting to other nodes</string>
     <string name="guide_row_download">Downloading the network</string>
@@ -22,6 +22,7 @@
     <string name="guide_background">Keep the app open during the first sync: Android may stop the node with the screen off. These settings let it run in the background.</string>
     <string name="guide_priority_peers">For priority access, add nodes you trust in Direct connections (Advanced settings, in the node tab), and exchange your node codes: your own node running at home all day and night (the Idena desktop app, its router port open), or a validator of the network you trust.</string>
     <string name="guide_good_to_know">Good to know</string>
+    <string name="guide_tip_first_start">The first start takes a while.</string>
     <string name="guide_tip_wifi_home">A good habit: sync at home on Wi-Fi. Outside, the node then only has the last blocks to catch up with.</string>
     <string name="guide_tip_more_people">Idena is decentralized: you can run a node at home on a computer, all day and night, and link your phone directly to it. Or exchange node codes with friends to connect to the network faster.</string>
     <string name="guide_tip_validator">You can earn iDNA for free by becoming a validator of the network. The more validators, the faster connections and posts travel, and the lower the fees.</string>

@@ -2,7 +2,7 @@
 <resources>
     <!-- Le chemin vers Idena Social pour un nouveau venu, là où Social n'a encore rien à montrer (SyncGuide.kt). -->
     <string name="guide_title">Bienvenue sur Idena Social</string>
-    <string name="guide_intro">Le réseau social le plus décentralisé au monde. Cette appli fait tourner un nœud de la blockchain Idena : chaque message y est une transaction et ne peut pas être effacé. Ce que vous écrivez sur Idena Social reste pour toujours ; pour plus d\'intimité, utilisez les discussions privées chiffrées. Le premier démarrage prend du temps.</string>
+    <string name="guide_intro">Le réseau social le plus décentralisé au monde. Cette appli fait tourner un nœud de la blockchain Idena : chaque message y est une transaction et ne peut pas être effacé. Ce que vous écrivez sur Idena Social reste pour toujours ; pour plus d\'intimité, utilisez les discussions privées chiffrées.</string>
     <string name="guide_row_account">Votre compte</string>
     <string name="guide_row_connect">Connexion aux autres nœuds</string>
     <string name="guide_row_download">Téléchargement du réseau</string>
@@ -22,6 +22,7 @@
     <string name="guide_background">Gardez l\'appli ouverte pendant la première synchronisation : Android peut arrêter le nœud écran éteint. Ces réglages le laissent tourner en arrière-plan.</string>
     <string name="guide_priority_peers">Pour un accès prioritaire, ajoutez des nœuds de confiance dans Connexions directes (Paramètres avancés, dans l\'onglet du nœud) et échangez vos codes de nœud : votre propre nœud qui tourne à la maison 24 h/24 (l\'appli Idena pour ordinateur, son port de routeur ouvert), ou un validateur du réseau en qui vous avez confiance.</string>
     <string name="guide_good_to_know">Bon à savoir</string>
+    <string name="guide_tip_first_start">Le premier démarrage prend du temps.</string>
     <string name="guide_tip_wifi_home">Une bonne habitude : synchronisez à la maison en Wi-Fi. Dehors, le nœud n\'a alors que les derniers blocs à rattraper.</string>
     <string name="guide_tip_more_people">Idena est décentralisé : vous pouvez faire tourner un nœud 24 h/24 chez vous sur un ordinateur, et relier votre téléphone directement à ce nœud. Ou échangez vos codes de nœud avec des amis pour vous connecter plus vite au réseau.</string>
     <string name="guide_tip_validator">Vous pouvez gagner des iDNA gratuitement en devenant validateur du réseau. Plus il y a de validateurs, plus les connexions et les publications circulent vite, et plus les frais baissent.</string>

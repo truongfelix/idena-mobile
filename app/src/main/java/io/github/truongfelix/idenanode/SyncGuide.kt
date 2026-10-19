@@ -211,7 +211,7 @@ fun SyncGuideCard(guide: SyncGuide, state: ScreenState, stepMinutes: Long, onOpe
         }
         HorizontalDivider()
         Text(t(R.string.guide_good_to_know), style = MaterialTheme.typography.titleSmall)
-        for (tip in listOf(R.string.guide_tip_wifi_home, R.string.guide_tip_more_people, R.string.guide_tip_validator)) {
+        for (tip in listOf(R.string.guide_tip_first_start, R.string.guide_tip_wifi_home, R.string.guide_tip_more_people, R.string.guide_tip_validator)) {
             Text(t(tip), style = MaterialTheme.typography.bodyMedium, color = muted)
         }
         var how by remember { mutableStateOf(false) }
