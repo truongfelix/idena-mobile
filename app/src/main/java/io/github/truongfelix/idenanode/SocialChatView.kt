@@ -68,13 +68,6 @@ fun noKeyText(addresses: List<String>, names: Map<String, String>): String =
 fun othersTitle(others: List<String>, names: Map<String, String>): String =
     others.joinToString(", ") { displayName(it, names) }
 
-/** One line of a message for the list: its text, or what it is. */
-private fun preview(message: ChatMessage): String = when {
-    message.text.startsWith("ipfs://") -> t(R.string.socialb_preview_ipfs)
-    message.text.isNotEmpty() -> message.text.replace('\n', ' ')
-    message.hasMedia -> t(R.string.socialb_preview_picture)
-    else -> "…"
-}
 
 /**
  * The Messages tab: the conversations, the latest first, with what was not read; Requests (strangers) behind their
@@ -158,7 +151,7 @@ private fun ConversationRow(conversation: Conversation, title: String, me: Strin
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                if (conversation.last.kind.isEmpty()) preview(conversation.last)
+                if (conversation.last.kind.isEmpty()) messagePreview(conversation.last)
                 else groupEventText(conversation.last, previousKeyLine(conversation, conversation.last), me, names).lines().first(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

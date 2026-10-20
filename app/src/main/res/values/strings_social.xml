@@ -14,6 +14,7 @@
     <string name="social_notify_likes">Likes</string>
     <string name="social_notify_comments">Comments</string>
     <string name="social_notify_tips">Tips</string>
+    <string name="social_notify_messages">Messages</string>
     <string name="social_notice_liked">%1$s liked your post</string>
     <string name="social_notice_replied">%1$s replied to your post</string>
     <string name="social_notice_commented">%1$s commented on your post</string>

@@ -105,8 +105,10 @@ object SocialBadge {
         val notify = SocialStore.notifyKinds(context)
         if (!SocialStore.isScanning(context) || notify.isEmpty()) {
             clear(context)
+            ChatNotifications.clearAll(context)
             return
         }
+        if (NotifyKind.Messages !in notify) ChatNotifications.clearAll(context)
         if (appShown(context)) return
         val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
         if ((rpc.call("bcn_syncing") as JSONObject).optBoolean("syncing") || rpc.ceremony().period != "None") return
@@ -117,6 +119,7 @@ object SocialBadge {
         val me = (rpc.call("dna_getCoinbaseAddr") as String).lowercase()
         val (next, news) = backgroundNews(base, NodeSocialSource(rpc), me, seenThrough, notify)
         scanned = next
+        if (NotifyKind.Messages in notify) ChatNotifications.check(context, rpc, me, next.messages, SocialStore.people(context))
         val alerted = runCatching { alertedFile(context).readText().trim().toLong() }.getOrNull()
         val update = badgeUpdate(news, alerted)
         if (update == null) {

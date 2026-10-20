@@ -289,6 +289,7 @@ class NodeService : Service() {
         channel.setShowBadge(false)
         manager.createNotificationChannel(channel)
         SocialBadge.createChannel(this)
+        ChatNotifications.createChannel(this)
     }
 
     private fun notification(text: String): Notification {

@@ -372,6 +372,15 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     }
 
     /** Shows the Activity from a notice: its list, not a page over it nor the editor (the draft's text stays). */
+    /** Shows the conversation of [key] (a message notification's tap) over the Messages list. */
+    fun showChat(key: String) {
+        stacks.getValue(SocialView.Messages).clear()
+        dropClosedPageStates()
+        sending.draft = null
+        view = SocialView.Messages
+        open(SocialPage.Chat(key))
+    }
+
     fun showActivity() {
         stacks.getValue(SocialView.Activity).clear()
         dropClosedPageStates()

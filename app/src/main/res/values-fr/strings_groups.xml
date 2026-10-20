@@ -44,4 +44,6 @@
         <item quantity="other">%1$d nouveaux messages</item>
         <item quantity="many">%1$d nouveaux messages</item>
     </plurals>
+    <string name="chat_channel_name">Messages</string>
+    <string name="chat_channel_description">Nouveaux messages privés quand l\'app est fermée, une notification par discussion</string>
 </resources>

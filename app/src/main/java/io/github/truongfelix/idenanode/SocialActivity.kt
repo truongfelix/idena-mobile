@@ -74,6 +74,8 @@ fun socialActivity(feed: List<SocialPost>, me: String): List<ActivityItem> {
 /** What can notify the identity, each kind on or off: likes, replies and comments, tips. */
 enum class NotifyKind(@StringRes private val titleId: Int) {
     Likes(R.string.social_notify_likes), Comments(R.string.social_notify_comments), Tips(R.string.social_notify_tips),
+    /** New messages while the app is not on screen ([ChatNotifications]): never activity on the identity's posts. */
+    Messages(R.string.social_notify_messages),
     ;
 
     val title: String
@@ -110,6 +112,7 @@ fun noticeText(news: List<ActivityItem>, shortAddress: (String) -> String): Stri
             NotifyKind.Likes -> tp(R.plurals.social_notice_likes, n, n)
             NotifyKind.Comments -> tp(R.plurals.social_notice_replies, n, n)
             NotifyKind.Tips -> tp(R.plurals.social_notice_tips, n, n)
+            NotifyKind.Messages -> null
         }
     }
     return t(R.string.social_notice_many, news.size, parts.joinToString(", "))

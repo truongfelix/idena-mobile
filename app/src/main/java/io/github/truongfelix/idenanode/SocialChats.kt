@@ -132,7 +132,7 @@ class SocialChats(private val context: Context) {
         private set
     private var account: String? = null
 
-    private fun file(address: String) = File(File(context.filesDir, "social").also { it.mkdirs() }, "messages-$address.json")
+    private fun file(address: String) = file(context, address)
 
     /** Loads [address]'s messages (another account's are not shown). Call off the main thread. */
     fun load(address: String) {
@@ -154,12 +154,16 @@ class SocialChats(private val context: Context) {
     fun markSeen(conversation: Conversation) {
         val address = account ?: return
         val last = conversation.last
+        ChatNotifications.cancel(context, conversation.key)
         if (store.seen[conversation.key] == (last.height to last.index)) return
         save(address, store.copy(seen = store.seen + (conversation.key to (last.height to last.index))))
     }
 
     /** Hides the conversation of [key] on this phone, or shows it again ([hidden] false). */
-    fun setHidden(key: String, hidden: Boolean) = change { it.copy(hiddenChats = if (hidden) it.hiddenChats + key else it.hiddenChats - key) }
+    fun setHidden(key: String, hidden: Boolean) {
+        if (hidden) ChatNotifications.cancel(context, key)
+        change { it.copy(hiddenChats = if (hidden) it.hiddenChats + key else it.hiddenChats - key) }
+    }
 
     /** Names the group of [key] [name] on this phone; blank takes the admin's name back. */
     fun setGroupName(key: String, name: String) = change {
@@ -188,5 +192,10 @@ class SocialChats(private val context: Context) {
             tmp.writeText(next.toJson().toString())
             if (!tmp.renameTo(f)) throw IOException("cannot save the messages")
         }
+    }
+
+    companion object {
+        /** The file of [address]'s messages, also read by the node's service ([ChatNotifications]). */
+        fun file(context: Context, address: String) = File(File(context.filesDir, "social").also { it.mkdirs() }, "messages-$address.json")
     }
 }
