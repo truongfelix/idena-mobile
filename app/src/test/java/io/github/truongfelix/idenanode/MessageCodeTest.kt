@@ -23,7 +23,8 @@ class MessageCodeTest {
         assertEquals(key, parseMessageCode("0x$key"))
         assertEquals(key, parseMessageCode(key.drop(2)))
         assertNull(parseMessageCode(address))
-        assertNull(parseMessageCode(key.dropLast(2)))
+        // 128 characters are a key without its 04 (taken, then checked against the address); 126 are none.
+        assertNull(parseMessageCode(key.dropLast(4)))
         assertNull(parseMessageCode("05" + key.drop(2)))
         assertNull(parseMessageCode(key.dropLast(1) + "g"))
     }
