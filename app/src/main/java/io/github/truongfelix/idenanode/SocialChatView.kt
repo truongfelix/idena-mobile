@@ -101,7 +101,10 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             if (!searching) item(key = "head") {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (requests) TextButton(onClick = { requests = false }) { Text(t(R.string.socialb_back_to_conversations)) }
-                    else if (waiting > 0) TextButton(onClick = { requests = true }) { Text(t(R.string.socialb_requests_count, waiting)) }
+                    else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { model.open(SocialPage.GroupEdit()) }) { Text(t(R.string.group_new)) }
+                        if (waiting > 0) TextButton(onClick = { requests = true }) { Text(t(R.string.socialb_requests_count, waiting)) }
+                    }
                     if (requests) Text(
                         t(R.string.socialb_requests_note),
                         style = MaterialTheme.typography.bodySmall,
@@ -122,7 +125,7 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             }
             items(shown, key = { it.key }) { conversation ->
                 val unread = unreadCount(conversation, me, model.chats.store.seen[conversation.key])
-                ConversationRow(conversation, model.names, unread) { model.open(SocialPage.Chat(conversation.key)) }
+                ConversationRow(conversation, me, model.names, unread) { model.open(SocialPage.Chat(conversation.key)) }
             }
             items(people, key = { "person:$it" }) { address -> PersonRow(address, model.names) { model.openChat(listOf(address)) } }
         }
@@ -130,11 +133,12 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
 }
 
 @Composable
-private fun ConversationRow(conversation: Conversation, names: Map<String, String>, unread: Int, onOpen: () -> Unit) {
+private fun ConversationRow(conversation: Conversation, me: String, names: Map<String, String>, unread: Int, onOpen: () -> Unit) {
+    val group = conversation.group
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box {
-            PersonAvatar(conversation.others.first(), 44.dp)
-            if (conversation.isGroup) {
+            if (group != null) GroupAvatar(44.dp) else PersonAvatar(conversation.others.first(), 44.dp)
+            if (group == null && conversation.isGroup) {
                 Text(
                     "+${conversation.others.size - 1}",
                     Modifier.align(Alignment.BottomEnd).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape).padding(horizontal = 4.dp),
@@ -145,14 +149,14 @@ private fun ConversationRow(conversation: Conversation, names: Map<String, Strin
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                othersTitle(conversation.others, names),
+                group?.let { groupTitle(it, me, names) } ?: othersTitle(conversation.others, names),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = if (unread > 0) FontWeight.Bold else null,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                preview(conversation.last),
+                if (conversation.last.kind.isNotEmpty()) groupEventText(conversation.last, null, me, names).lines().first() else preview(conversation.last),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -183,32 +187,48 @@ private fun ConversationRow(conversation: Conversation, names: Map<String, Strin
 fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend: Boolean, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val me = model.myAddress.orEmpty()
     val conversation = model.conversations.firstOrNull { it.key == key }
+    val group = conversation?.group
     val others = conversation?.others ?: key.split('-').filter { it != me }.ifEmpty { listOf(me) }
     val messages = conversation?.messages.orEmpty()
     // The text is the model's: it stays while the conversation is closed, another tab shown or the node panel open.
     val draft = model.chatDrafts[key].orEmpty()
     val setDraft = { text: String -> model.chatDrafts[key] = text }
     // The text stays until the node took the message (the fee's dialog can be cancelled): sent, it waits for its block.
-    LaunchedEffect(key) { model.lookUpKeys(others) }
-    val noKey = others.filter { model.messageKeys[it] == "" }
-    val looking = others.any { it !in model.messageKeys }
+    // A group's messages need no member's key: they are encrypted with the group's.
+    LaunchedEffect(key) { if (!isGroupKey(key)) model.lookUpKeys(others) }
+    val noKey = if (isGroupKey(key)) emptyList() else others.filter { model.messageKeys[it] == "" }
+    val looking = !isGroupKey(key) && others.any { it !in model.messageKeys }
+    // A group the account is no longer in (it left, or a newer key left it out) takes no message from it.
+    val outOfGroup = isGroupKey(key) && (group == null || me !in group.members)
     LaunchedEffect(conversation?.last?.hash) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size)
         conversation?.let { model.chats.markSeen(it) }
     }
     var privacy by remember { mutableStateOf(false) }
+    // Each key message's line reads against the one before it: who was added or removed.
+    val previousKeys = remember(messages) {
+        var last: ChatMessage? = null
+        messages.associate { m -> m.hash to last.also { if (m.kind == ChatMessage.KEY) last = m } }
+    }
     val focus = remember { FocusRequester() }
     LaunchedEffect(key) { if (messages.isEmpty()) runCatching { focus.requestFocus() } }
     Column(modifier.imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t(R.string.common_back)) }
             Row(
-                Modifier.weight(1f).clickable(enabled = others.size == 1) { model.openProfile(others.first()) },
+                Modifier.weight(1f).clickable(enabled = group != null || others.size == 1) {
+                    if (group != null) privacy = true else model.openProfile(others.first())
+                },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PersonAvatar(others.first(), 36.dp)
+                if (group != null) GroupAvatar(36.dp) else PersonAvatar(others.first(), 36.dp)
                 Spacer(Modifier.width(10.dp))
-                Text(othersTitle(others, model.names), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    group?.let { groupTitle(it, me, model.names) } ?: othersTitle(others, model.names),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             IconButton(onClick = { privacy = true }) { Icon(Icons.Outlined.Info, contentDescription = t(R.string.socialb_who_sees_what)) }
         }
@@ -229,14 +249,18 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                     if (messages.isEmpty()) Text(t(R.string.socialb_no_message_yet), style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            items(messages, key = { it.hash }) { message -> Bubble(message, mine = message.from == me, showSender = others.size > 1, names = model.names) }
+            items(messages, key = { it.hash }) { message ->
+                if (message.kind.isNotEmpty()) GroupEventLine(groupEventText(message, previousKeys[message.hash], me, model.names))
+                else Bubble(message, mine = message.from == me, showSender = group != null || others.size > 1, names = model.names)
+            }
         }
         Column(Modifier.padding(horizontal = 16.dp)) {
             when {
+                outOfGroup -> Text(t(R.string.group_not_member), Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
                 noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 looking -> Text(t(R.string.socialb_looking_up_keys), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (!outOfGroup) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { setDraft(it.take(MAX_MESSAGE)) },
@@ -249,14 +273,21 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 // Sending does not accept a request: once the message is in a block, the conversation holds one of the
                 // account's and leaves Requests ([conversations]); a send that fails leaves it there.
                 FilledIconButton(
-                    onClick = { model.sendMessage(others, draft.trim(), key) },
+                    onClick = { if (conversation?.group != null) model.sendGroupMessage(conversation, draft.trim()) else model.sendMessage(others, draft.trim(), key) },
                     enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
                     modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.common_send)) }
             }
         }
     }
-    if (privacy) {
+    if (privacy && group != null) {
+        GroupInfoDialog(
+            group, me, model.names,
+            onEdit = { model.open(SocialPage.GroupEdit(key)) },
+            onLeave = { conversation?.let(model::leaveGroup) },
+            onDismiss = { privacy = false },
+        )
+    } else if (privacy) {
         AlertDialog(
             onDismissRequest = { privacy = false },
             text = { Text(t(R.string.socialb_privacy_note)) },

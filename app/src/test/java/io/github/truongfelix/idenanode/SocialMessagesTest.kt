@@ -44,7 +44,8 @@ class SocialMessagesTest {
         assertEquals(a, call.from)
         assertEquals(call, MessageCall.fromJson(JSONObject(call.toJson().toString())))
         assertNull("not encrypted", MessageCall.parse("0x1", 7, 140, 2, a, hex("""{"message":["x","y"],"messageHash":"${m.getString("messageHash")}","encrypted":false}""")))
-        assertNull("one part", MessageCall.parse("0x1", 7, 140, 2, a, hex("""{"message":["x"],"messageHash":"${m.getString("messageHash")}","encrypted":true}""")))
+        // One part is a group's message (SocialGroupsTest); none is nothing.
+        assertNull("no part", MessageCall.parse("0x1", 7, 140, 2, a, hex("""{"message":[],"messageHash":"${m.getString("messageHash")}","encrypted":true}""")))
         assertNull("no hash", MessageCall.parse("0x1", 7, 140, 2, a, hex("""{"message":["x","y"],"encrypted":true}""")))
     }
 

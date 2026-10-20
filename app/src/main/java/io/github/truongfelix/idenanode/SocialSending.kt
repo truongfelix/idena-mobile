@@ -251,7 +251,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             PendingPost(what, call, from, fee, detail, files, memberExtra = extra)
         }
 
-    private fun prepareWith(what: String, build: (SocialPosting, String) -> PendingPost) {
+    fun prepareWith(what: String, build: (SocialPosting, String) -> PendingPost) {
         busy = true
         report(null)
         scope.launch {

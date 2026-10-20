@@ -53,14 +53,15 @@ data class MessageCall(
 
         /**
          * The message of a sendMessage call from its argument ({"message": [...], "messageHash", "encrypted": true});
-         * null when it is not encrypted, has fewer than 2 parts (the website's rule), or parts too large or too many.
+         * null when it is not encrypted, has no part, or parts too large or too many. The website reads only those of 2
+         * parts or more; one part is a group's message ([acceptGroupMessage]).
          */
         fun parse(hash: String, height: Long, time: Long, index: Int, from: String, argHex: String): MessageCall? {
             val text = runCatching { String(hexToBytes(argHex), Charsets.UTF_8) }.getOrNull() ?: return null
             val args = runCatching { JSONObject(text) }.getOrNull() ?: return null
             if (args.opt("encrypted")?.toString() != "true") return null
             val array = args.optJSONArray("message") ?: return null
-            if (array.length() < 2 || array.length() > MAX_PARTS) return null
+            if (array.length() < 1 || array.length() > MAX_PARTS) return null
             val parts = (0 until array.length()).map { array.opt(it) as? String ?: return null }
             if (parts.any { it.isEmpty() || it.length > MAX_PART }) return null
             val messageHash = args.optString("messageHash").lowercase().removePrefix("0x")
@@ -87,17 +88,27 @@ data class ChatMessage(
     val hasMedia: Boolean = false,
     /** Whether it answers another message (a reply or a ❤️). */
     val isReply: Boolean = false,
+    /** The group's conversation ([groupConversationKey]) for a group's line; empty for idena.social's messages. */
+    val group: String = "",
+    /** What a group's line is: a message (empty), a key message ([KEY]: [text] is the name) or a member leaving ([LEAVE]). */
+    val kind: String = "",
 ) {
-    /** The conversation it belongs to: its participants, sorted and distinct. */
+    /** The conversation it belongs to: its group, or its participants sorted and distinct. */
     val conversation: String
-        get() = conversationKey(participants)
+        get() = group.ifEmpty { conversationKey(participants) }
 
     fun toJson(): JSONObject = JSONObject()
         .put("hash", hash).put("height", height).put("time", time).put("index", index).put("from", from)
         .put("participants", JSONArray(participants)).put("text", text).put("textPassword", textPassword)
-        .put("hasMedia", hasMedia).put("isReply", isReply)
+        .put("hasMedia", hasMedia).put("isReply", isReply).put("group", group).put("kind", kind)
 
     companion object {
+        /** A group's key message ([kind]). */
+        const val KEY = "key"
+
+        /** A member leaving a group ([kind]). */
+        const val LEAVE = "leave"
+
         fun fromJson(json: JSONObject): ChatMessage {
             val participants = json.getJSONArray("participants")
             return ChatMessage(
@@ -111,6 +122,8 @@ data class ChatMessage(
                 textPassword = json.optString("textPassword"),
                 hasMedia = json.optBoolean("hasMedia"),
                 isReply = json.optBoolean("isReply"),
+                group = json.optString("group"),
+                kind = json.optString("kind"),
             )
         }
     }
@@ -178,13 +191,22 @@ fun decryptIpfsText(bytes: ByteArray, keyBase64: String): String? = runCatching 
     String(cipher.doFinal(bytes, 12, bytes.size - 12), Charsets.UTF_8)
 }.getOrNull()
 
-/** A conversation: the others in it, its messages (oldest first), and whether it waits in Requests. */
-data class Conversation(val key: String, val others: List<String>, val messages: List<ChatMessage>, val isRequest: Boolean) {
+/**
+ * A conversation: the others in it, its messages (oldest first), and whether it waits in Requests; a group with a
+ * shared key has its [group] (its name, admin and members), its key messages and leaves among the messages.
+ */
+data class Conversation(
+    val key: String,
+    val others: List<String>,
+    val messages: List<ChatMessage>,
+    val isRequest: Boolean,
+    val group: GroupState? = null,
+) {
     val last: ChatMessage
         get() = messages.last()
 
     val isGroup: Boolean
-        get() = others.size > 1
+        get() = others.size > 1 || group != null
 }
 
 /**
@@ -192,19 +214,24 @@ data class Conversation(val key: String, val others: List<String>, val messages:
  * someone in it is followed or marked to message ([Person.message]): a stranger's first message does not show among
  * the conversations.
  */
-fun conversations(messages: List<ChatMessage>, me: String, people: Map<String, Person>): List<Conversation> =
-    messages.groupBy { it.conversation }
+fun conversations(
+    messages: List<ChatMessage>,
+    me: String,
+    people: Map<String, Person>,
+    groupKeys: List<GroupKey> = emptyList(),
+): List<Conversation> =
+    (messages.filter { it.group.isEmpty() }.groupBy { it.conversation }
         .map { (key, list) ->
             val sorted = list.sortedWith(compareBy({ it.height }, { it.index }))
             val others = key.split('-').filter { it != me }.ifEmpty { listOf(me) }
             val known = others.any { people[it]?.let { p -> p.following || p.message } == true }
             Conversation(key, others, sorted, isRequest = !known && sorted.none { it.from == me })
-        }
+        } + groupConversations(messages.filter { it.group.isNotEmpty() }, groupKeys, me, people))
         .sortedWith(compareByDescending<Conversation> { it.last.height }.thenByDescending { it.last.index })
 
 /** The messages of [conversation] from others after [seen] (a height and index), the unread ones. */
 fun unreadCount(conversation: Conversation, me: String, seen: Pair<Long, Int>?): Int =
-    conversation.messages.count { it.from != me && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second) }
+    conversation.messages.count { it.from != me && it.kind.isEmpty() && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second) }
 
 /** A public key as the node writes it ("0x" optional), in lowercase hex without 0x; null when it is not one (33, 64 or 65 bytes). */
 fun publicKeyHex(text: String): String? {

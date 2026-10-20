@@ -57,8 +57,11 @@ sealed interface SocialPage {
     /** The people followed, or the topics ([topics]). */
     data class Following(val topics: Boolean = false) : SocialPage
 
-    /** The conversation of [key] ([conversationKey]: its participants, the account included). */
+    /** The conversation of [key] ([conversationKey]: its participants, the account included; or a group's). */
     data class Chat(val key: String) : SocialPage
+
+    /** A new group ([key] null), or the name and members of the group of [key] ([GroupEditView]). */
+    data class GroupEdit(val key: String? = null) : SocialPage
 
     /** Social settings ([SocialSettingsView]). */
     data object Settings : SocialPage
@@ -494,7 +497,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     /** The account's conversations, the latest first, those of strangers in Requests ([conversations]); none with a blocked account. */
     val conversations: List<Conversation>
-        get() = myAddress?.let { visibleConversations(conversations(chats.store.messages, it, people), blocked) }.orEmpty()
+        get() = myAddress?.let { visibleConversations(conversations(chats.store.messages, it, people, chats.store.groupKeys), blocked) }.orEmpty()
 
     /** The conversations (not Requests) with a message not read yet. */
     val unreadConversations: Int
@@ -546,9 +549,28 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         sending.prepareMessage(others, keys, text) { chatDrafts.remove(conversation) }
     }
 
-    /** Takes [conversation] out of Requests: its people are marked to message ([Person.message]). */
+    /** Takes [conversation] out of Requests: its people (a group's admin) are marked to message ([Person.message]). */
     fun acceptChat(conversation: Conversation) {
-        conversation.others.forEach { setPerson(person(it).copy(message = true)) }
+        (conversation.group?.let { listOf(it.key.admin) } ?: conversation.others).forEach { setPerson(person(it).copy(message = true)) }
+    }
+
+    /** Sends [text] to the group of [conversation], under its current key. */
+    fun sendGroupMessage(conversation: Conversation, text: String) {
+        val key = conversation.group?.key ?: return
+        sending.prepareGroupMessage(key, text) { chatDrafts.remove(conversation.key) }
+    }
+
+    /** Leaves the group of [conversation]: its members see it, and its admin can then hand a new key without the account. */
+    fun leaveGroup(conversation: Conversation) {
+        val key = conversation.group?.key ?: return
+        sending.prepareGroupMessage(key, "", leave = true) { back() }
+    }
+
+    /** Creates a group ([group] null) or changes its [name] and [members], once each member's public key is known. */
+    fun saveGroup(group: GroupKey?, name: String, members: List<String>) {
+        val keys = members.map { messageKeys[it].orEmpty() }
+        if (keys.any { it.isEmpty() }) return
+        sending.prepareGroupKey(group, name, members, keys) { back() }
     }
 
     /**

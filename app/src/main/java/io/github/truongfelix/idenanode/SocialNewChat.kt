@@ -54,9 +54,11 @@ private fun matches(address: String, query: String, names: Map<String, String>):
     return q.isEmpty() || address.contains(q) || names[address]?.lowercase()?.contains(q) == true
 }
 
-/** The conversations of [conversations] with someone whose name or address holds [query]. */
+/** The conversations of [conversations] with someone whose name or address holds [query], or a group so named. */
 fun findConversations(conversations: List<Conversation>, query: String, names: Map<String, String>): List<Conversation> =
-    conversations.filter { c -> c.others.any { matches(it, query, names) } }
+    conversations.filter { c ->
+        c.others.any { matches(it, query, names) } || c.group?.key?.name?.lowercase()?.contains(query.trim().lowercase()) == true
+    }
 
 /**
  * Who a new conversation can be with, for [query] (lowercase addresses): a whole address typed first, then the

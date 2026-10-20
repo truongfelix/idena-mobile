@@ -229,6 +229,9 @@ fun SocialScreen(
             page is SocialPage.Chat -> key(page) {
                 ChatView(model, page.key, model.pageState(page).list, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
             }
+            page is SocialPage.GroupEdit -> key(page) {
+                GroupEditView(model, page.key, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
+            }
             page is SocialPage.Settings -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -510,7 +513,7 @@ fun SocialScreen(
         }
     }
     // A conversation keeps the room for its messages and the keyboard.
-    AnimatedVisibility(current == null && barShown && page !is SocialPage.Chat, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+    AnimatedVisibility(current == null && barShown && page !is SocialPage.Chat && page !is SocialPage.GroupEdit, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
         BottomBar(model)
     }
     }
