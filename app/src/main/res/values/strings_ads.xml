@@ -9,11 +9,11 @@
     <string name="ads_dev_note_line">Community work, same chain as the original. Tap to read.</string>
     <string name="ads_credit_idena_network">the original Idena code, no longer maintained</string>
     <string name="ads_credit_ubiubi18">the forks I started from, and code reviews</string>
-    <string name="ads_credit_social">idena.social, the Social tab</string>
+    <string name="ads_credit_social">Idena Social, the Social tab</string>
     <string name="ads_dev_note_community">Community work, not by the original Idena team. Same chain as the original.</string>
     <string name="ads_dev_note_thanks">Thanks to:</string>
     <string name="ads_dev_note_belief">What I believe: today an identity that fails to solve flips loses mining rewards, but an identity whose flips get reported loses nothing. That is unfair, and it weakens the network.</string>
-    <string name="ads_dev_note_proposal">The proposal: cut an identity\'s mining rewards in proportion to its share of reported flips over the last 10 epochs. Also, an identity with 2 or more flips reported in a validation can\'t mine during the next epoch. If you agree, say so on Telegram, Discord or idena.social.</string>
+    <string name="ads_dev_note_proposal">The proposal: cut an identity\'s mining rewards in proportion to its share of reported flips over the last 10 epochs. Also, an identity with 2 or more flips reported in a validation can\'t mine during the next epoch. If you agree, say so on Telegram, Discord or Idena Social.</string>
     <string name="ads_dev_note_help">Want to help? Feel free to fork the code, review it and propose changes on GitHub.</string>
     <string name="ads_dev_note_avatars">Robot avatars: RoboHash (MIT), robots by Zikri Kader (CC-BY 4.0), drawn on this phone.</string>
     <string name="ads_preparing_picture">Preparing the picture…</string>

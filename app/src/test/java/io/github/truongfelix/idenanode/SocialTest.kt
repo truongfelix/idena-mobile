@@ -406,7 +406,7 @@ class SocialTest {
         assertNull("a phone clock behind the block's", scanStartWait(11_423_708, now + 600, now))
         // Mainnet's first block for a new node (resources/header.tar in idena-go).
         assertTrue(scanStartWait(4_871_137, 1_661_760_762, now)!!.startsWith("Waiting"))
-        assertTrue("before the contract, even with a recent time", scanStartWait(SOCIAL_FIRST_BLOCK - 1, now, now)!!.contains("before idena.social"))
+        assertTrue("before the contract, even with a recent time", scanStartWait(SOCIAL_FIRST_BLOCK - 1, now, now)!!.contains("before Idena Social"))
         assertEquals(
             "Waiting for the node's newest blocks: its newest one is 2 h old.",
             scanStartWait(11_000_000, now - 2 * 3_600, now),

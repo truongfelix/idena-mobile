@@ -28,7 +28,7 @@
     <string name="social_ago_hours">%1$d h</string>
     <string name="social_ago_days">%1$d j</string>
     <string name="social_ago_months">%1$d mois</string>
-    <string name="social_wait_before_contract">En attente des blocs les plus récents du nœud : il est au bloc %1$s, avant idena.social.</string>
+    <string name="social_wait_before_contract">En attente des blocs les plus récents du nœud : il est au bloc %1$s, avant Idena Social.</string>
     <string name="social_wait_old_head">En attente des blocs les plus récents du nœud : son dernier bloc date de %1$s.</string>
     <string name="social_age_days">%1$d jours</string>
     <string name="social_age_hours">%1$d h</string>
@@ -112,10 +112,10 @@
     <string name="social_confirm_member">En tant que membre garanti, vous envoyez aussi %1$s iDNA, brûlés par le contrat (environ des frais en plus).</string>
     <string name="social_confirm_total">Total : environ %1$s iDNA.</string>
     <string name="social_place_profile">dans votre profil public</string>
-    <string name="social_place_social">sur idena.social</string>
+    <string name="social_place_social">sur Idena Social</string>
     <string name="social_kilobytes">%1$d Ko</string>
     <string name="social_tip_title">Pourboire à %1$s</string>
-    <string name="social_tip_text">Le pourboire va à l\'auteur de cette publication, par le contrat idena.social. iDNA entiers uniquement.</string>
+    <string name="social_tip_text">Le pourboire va à l\'auteur de cette publication, par le contrat Idena Social. iDNA entiers uniquement.</string>
     <string name="social_tip_balance">Votre solde : %1$s iDNA</string>
     <string name="social_in_flight_title">En attente d\'un bloc</string>
     <string name="social_in_flight_item">%1$s · envoyé, en attente de son bloc (%2$s…)</string>
@@ -199,7 +199,7 @@
     <string name="social_who_description">Qui a aimé et donné un pourboire</string>
     <string name="social_who_title">J\'aime et pourboires</string>
     <string name="social_thread_missing">Cette publication n\'est pas dans les blocs analysés.</string>
-    <string name="social_thread_older">D\'un ancien contrat idena.social (%1$s) : lecture seule.</string>
+    <string name="social_thread_older">D\'un ancien contrat Idena Social (%1$s) : lecture seule.</string>
     <string name="social_reply_pill">💬 Répondre</string>
     <string name="social_folded_hidden">Caché</string>
     <string name="social_folded_muted">Masqué</string>
@@ -317,8 +317,8 @@
         <item quantity="many">"%1$d publications  ·  dernière activité %2$s"</item>
     </plurals>
     <plurals name="social_topic_header">
-        <item quantity="one">%1$d publication parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; idena.social n\'affiche pas les publications des sujets.</item>
-        <item quantity="other">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; idena.social n\'affiche pas les publications des sujets.</item>
-        <item quantity="many">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; idena.social n\'affiche pas les publications des sujets.</item>
+        <item quantity="one">%1$d publication parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; le site Idena Social n\'affiche pas les publications des sujets.</item>
+        <item quantity="other">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; le site Idena Social n\'affiche pas les publications des sujets.</item>
+        <item quantity="many">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; le site Idena Social n\'affiche pas les publications des sujets.</item>
     </plurals>
 </resources>

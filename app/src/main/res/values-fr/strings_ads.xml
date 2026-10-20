@@ -9,11 +9,11 @@
     <string name="ads_dev_note_line">Travail communautaire, même chaîne que l\'original. Touchez pour lire.</string>
     <string name="ads_credit_idena_network">le code Idena d\'origine, qui n\'est plus maintenu</string>
     <string name="ads_credit_ubiubi18">les forks dont je suis parti, et des relectures de code</string>
-    <string name="ads_credit_social">idena.social, l\'onglet Social</string>
+    <string name="ads_credit_social">Idena Social, l\'onglet Social</string>
     <string name="ads_dev_note_community">Travail communautaire, pas de l\'équipe Idena d\'origine. Même chaîne que l\'original.</string>
     <string name="ads_dev_note_thanks">Merci à :</string>
     <string name="ads_dev_note_belief">Ce que je pense : aujourd\'hui, une identité qui ne résout pas les flips perd ses récompenses de minage, mais une identité dont les flips sont signalés ne perd rien. C\'est injuste, et cela affaiblit le réseau.</string>
-    <string name="ads_dev_note_proposal">La proposition : réduire les récompenses de minage d\'une identité en proportion de sa part de flips signalés sur les 10 dernières époques. De plus, une identité dont 2 flips ou plus sont signalés lors d\'une validation ne peut pas miner pendant l\'époque suivante. Si vous êtes d\'accord, dites-le sur Telegram, Discord ou idena.social.</string>
+    <string name="ads_dev_note_proposal">La proposition : réduire les récompenses de minage d\'une identité en proportion de sa part de flips signalés sur les 10 dernières époques. De plus, une identité dont 2 flips ou plus sont signalés lors d\'une validation ne peut pas miner pendant l\'époque suivante. Si vous êtes d\'accord, dites-le sur Telegram, Discord ou Idena Social.</string>
     <string name="ads_dev_note_help">Envie d\'aider ? N\'hésitez pas à forker le code, à le relire et à proposer des modifications sur GitHub.</string>
     <string name="ads_dev_note_avatars">Avatars robots : RoboHash (MIT), robots de Zikri Kader (CC-BY 4.0), dessinés sur ce téléphone.</string>
     <string name="ads_preparing_picture">Préparation de l\'image…</string>

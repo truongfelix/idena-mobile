@@ -28,7 +28,7 @@
     <string name="social_ago_hours">%1$dh</string>
     <string name="social_ago_days">%1$dd</string>
     <string name="social_ago_months">%1$dmo</string>
-    <string name="social_wait_before_contract">Waiting for the node\'s newest blocks: it is at block %1$s, before idena.social.</string>
+    <string name="social_wait_before_contract">Waiting for the node\'s newest blocks: it is at block %1$s, before Idena Social.</string>
     <string name="social_wait_old_head">Waiting for the node\'s newest blocks: its newest one is %1$s old.</string>
     <string name="social_age_days">%1$d days</string>
     <string name="social_age_hours">%1$d h</string>
@@ -112,10 +112,10 @@
     <string name="social_confirm_member">As a vouched member, you also send %1$s iDNA, burned by the contract (about one more fee).</string>
     <string name="social_confirm_total">Total: about %1$s iDNA.</string>
     <string name="social_place_profile">in your public profile</string>
-    <string name="social_place_social">on idena.social</string>
+    <string name="social_place_social">on Idena Social</string>
     <string name="social_kilobytes">%1$d KB</string>
     <string name="social_tip_title">Tip %1$s</string>
-    <string name="social_tip_text">The tip goes to the author of this post, through the idena.social contract. Whole iDNA only.</string>
+    <string name="social_tip_text">The tip goes to the author of this post, through the Idena Social contract. Whole iDNA only.</string>
     <string name="social_tip_balance">Your balance: %1$s iDNA</string>
     <string name="social_in_flight_title">Waiting for a block</string>
     <string name="social_in_flight_item">%1$s · sent, waiting for its block (%2$s…)</string>
@@ -199,7 +199,7 @@
     <string name="social_who_description">Who liked and tipped</string>
     <string name="social_who_title">Likes and tips</string>
     <string name="social_thread_missing">This post is not in the scanned blocks.</string>
-    <string name="social_thread_older">From an earlier idena.social contract (%1$s): read only.</string>
+    <string name="social_thread_older">From an earlier Idena Social contract (%1$s): read only.</string>
     <string name="social_reply_pill">💬 Reply</string>
     <string name="social_folded_hidden">Hidden</string>
     <string name="social_folded_muted">Muted</string>
@@ -303,7 +303,7 @@
         <item quantity="other">"%1$d posts  ·  last activity %2$s"</item>
     </plurals>
     <plurals name="social_topic_header">
-        <item quantity="one">%1$d post in the posts read so far. Anyone can write in any topic; idena.social does not show topic posts.</item>
-        <item quantity="other">%1$d posts in the posts read so far. Anyone can write in any topic; idena.social does not show topic posts.</item>
+        <item quantity="one">%1$d post in the posts read so far. Anyone can write in any topic; the Idena Social website does not show topic posts.</item>
+        <item quantity="other">%1$d posts in the posts read so far. Anyone can write in any topic; the Idena Social website does not show topic posts.</item>
     </plurals>
 </resources>

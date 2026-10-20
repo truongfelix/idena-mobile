@@ -162,7 +162,7 @@ class ProfilesWriteTest {
         assertTrue("As a vouched member, you also send 2.43375 iDNA" in confirmText(member))
         val lapsed = PendingPost("Name @felixflx", call, pending.from, pending.fee, null, memberExtra = MemberExtra("2.43375", lapsed = true))
         assertTrue("Ending the vouch first avoids it" in confirmText(lapsed))
-        assertEquals("on idena.social", placeOf(PendingPost("Post", SocialPosting.post("{}"), pending.from, pending.fee, null)))
+        assertEquals("on Idena Social", placeOf(PendingPost("Post", SocialPosting.post("{}"), pending.from, pending.fee, null)))
     }
 
     @Test

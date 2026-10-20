@@ -40,6 +40,8 @@ data class ChatStore(
     val groupNames: Map<String, String> = emptyMap(),
     /** By conversation key: names given on this phone to the group's members, shown in that group only. */
     val memberNames: Map<String, Map<String, String>> = emptyMap(),
+    /** By lowercase address: the public key its owner shared as a message code ([messageCodeFor]: checked against it). */
+    val sharedKeys: Map<String, String> = emptyMap(),
 ) {
     fun toJson(): JSONObject {
         val seenJson = JSONObject()
@@ -49,6 +51,7 @@ data class ChatStore(
         return JSONObject().put("tried", JSONArray(tried.sorted())).put("messages", JSONArray(messages.map { it.toJson() })).put("seen", seenJson)
             .put("groupKeys", JSONArray(groupKeys.map { it.toJson() })).put("groupTried", JSONArray(groupTried.sorted()))
             .put("hiddenChats", JSONArray(hiddenChats.sorted())).put("groupNames", JSONObject(groupNames)).put("memberNames", memberJson)
+            .put("sharedKeys", JSONObject(sharedKeys))
             .also { json -> readBefore?.let { json.put("readBefore", it) } }
     }
 
@@ -77,6 +80,7 @@ data class ChatStore(
                 hiddenChats = strings(json.optJSONArray("hiddenChats")).toSet(),
                 groupNames = stringMap(json.optJSONObject("groupNames")),
                 memberNames = members.keys().asSequence().associateWith { stringMap(members.getJSONObject(it)) },
+                sharedKeys = stringMap(json.optJSONObject("sharedKeys")),
             )
         }
     }
@@ -201,6 +205,9 @@ class SocialChats(private val context: Context) {
         account?.let { ChatNotifications.cancel(context, it, conversation.key) }
         change { it.copy(seen = it.seen + (conversation.key to (last.height to last.index))) }
     }
+
+    /** Keeps [publicKey], [address]'s message code once checked ([messageCodeFor]), to write to it. */
+    fun setSharedKey(address: String, publicKey: String) = change { it.copy(sharedKeys = it.sharedKeys + (address.lowercase() to publicKey)) }
 
     /** Hides the conversation of [key] on this phone, or shows it again ([hidden] false). */
     fun setHidden(key: String, hidden: Boolean) {

@@ -208,8 +208,9 @@ private fun NameHereDialog(initial: String, shown: String, note: String, onSave:
 
 /**
  * A new group ([key] null), or the name and members of the group of [key], for its admin: a name, the people chosen
- * (the People list, those already written with, an address typed), at most [MAX_GROUP_MEMBERS]; sent once each one's
- * public key is known, with its fee shown first. With nothing changed, it hands out a new key alone.
+ * (the People list, those already written with, the accounts known by name, an address or a claimed name typed), at
+ * most [MAX_GROUP_MEMBERS]; sent once each one's public key is known, with its fee shown first. With nothing changed,
+ * it hands out a new key alone.
  */
 @Composable
 fun GroupEditView(model: SocialModel, key: String?, canSend: Boolean, onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -223,7 +224,11 @@ fun GroupEditView(model: SocialModel, key: String?, canSend: Boolean, onBack: ()
     LaunchedEffect(chosen.toList()) { model.lookUpKeys(chosen.toList()) }
     val noKey = chosen.filter { model.messageKeys[it] == "" }
     val looking = chosen.any { it !in model.messageKeys }
-    val candidates = chosen.toList() + chatCandidates(query, model.people, model.conversations, me).filter { it !in chosen }
+    // A name typed is also looked up in the profiles contract, and a message code pasted gives its account (its key
+    // kept): anyone can be added, followed or not.
+    val coded = rememberMessageCodeAddress(model, query)
+    val holder = rememberNameHolder(query)
+    val candidates = chosen.toList() + chatCandidates(query, model.people, model.conversations, me, model.names, coded ?: holder).filter { it !in chosen }
     val changed = group == null || name.trim() != group.key.name || chosen.toSet() != before.toSet()
     // Nothing changed in a group: the button hands out a new key alone.
     val ready = canSend && name.isNotBlank() && chosen.isNotEmpty() && chosen.size <= MAX_GROUP_MEMBERS && noKey.isEmpty() && !looking

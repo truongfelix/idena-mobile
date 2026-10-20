@@ -2,20 +2,20 @@
 <!-- The Social tab's messages, contacts, lists, following and profile pages, and the profiles contract's cards, editor, Trust and vouching (Social*.kt, Profile*.kt, People.kt). -->
 <resources>
     <plurals name="socialb_no_key">
-        <item quantity="one">%1$s ne peut pas recevoir de messages privés : aucune clé publique n\'est connue pour cette adresse (jamais une identité Idena, et aucune transaction signée sur idena.social), donc rien ne peut être chiffré pour elle.</item>
-        <item quantity="other">%1$s ne peuvent pas recevoir de messages privés : aucune clé publique n\'est connue pour ces adresses (jamais une identité Idena, et aucune transaction signée sur idena.social), donc rien ne peut être chiffré pour elles.</item>
-        <item quantity="many">%1$s ne peuvent pas recevoir de messages privés : aucune clé publique n\'est connue pour ces adresses (jamais une identité Idena, et aucune transaction signée sur idena.social), donc rien ne peut être chiffré pour elles.</item>
+        <item quantity="one">%1$s ne peut pas encore recevoir de messages privés. Un message est chiffré avec la clé publique du compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena, a utilisé Idena Social ou a partagé son code de message.</item>
+        <item quantity="other">%1$s ne peuvent pas encore recevoir de messages privés. Un message est chiffré avec la clé publique de chaque compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena, a utilisé Idena Social ou a partagé son code de message.</item>
+        <item quantity="many">%1$s ne peuvent pas encore recevoir de messages privés. Un message est chiffré avec la clé publique de chaque compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena, a utilisé Idena Social ou a partagé son code de message.</item>
     </plurals>
     <string name="socialb_privacy_note">Seules les personnes de la discussion peuvent lire le texte. Qui écrit, quand, la longueur du message et le nombre de personnes à qui il est envoyé sont publics, sur la chaîne pour toujours ; qui le reçoit ne l\'est pas.</string>
     <string name="socialb_preview_ipfs">Texte sur IPFS</string>
     <string name="socialb_preview_picture">🖼 Image</string>
     <string name="socialb_requests">Demandes</string>
     <string name="socialb_messages">Messages</string>
-    <string name="socialb_search_name_or_address">Chercher un nom ou une adresse</string>
+    <string name="socialb_search_name_or_address">Chercher quelqu\'un</string>
     <string name="socialb_back_to_conversations">‹ Discussions</string>
     <string name="socialb_requests_count">Demandes (%1$d) ›</string>
     <string name="socialb_requests_note">Messages de personnes que vous ne suivez pas et à qui vous n\'avez jamais écrit. Répondez ou acceptez pour les déplacer dans vos discussions.</string>
-    <string name="socialb_no_one_by_name">Personne de ce nom : collez son adresse.</string>
+    <string name="socialb_no_one_by_name">Personne de ce nom : tapez son @nom ou collez son adresse.</string>
     <string name="socialb_no_request">Aucune demande.</string>
     <string name="socialb_no_conversation_pending">Aucune discussion pour l\'instant. Les messages des blocs déjà lus sont encore en cours de lecture.</string>
     <string name="socialb_no_conversation">Aucune discussion pour l\'instant.</string>
