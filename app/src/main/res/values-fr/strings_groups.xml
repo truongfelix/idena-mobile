@@ -2,7 +2,7 @@
 <!-- Group chats with a shared key (SocialGroups.kt) and conversations hidden on the phone (SocialHiddenChats.kt). -->
 <resources>
     <string name="group_new">Nouveau groupe</string>
-    <string name="group_new_note">Chaque personne choisie reçoit la clé du groupe dans une seule transaction de votre part. Ensuite, chaque message est une seule transaction, quelle que soit la taille du groupe. Les membres voient le groupe dans cette application seulement, pas sur idena.social.</string>
+    <string name="group_new_note">Chaque personne choisie reçoit la clé du groupe dans une seule transaction de votre part. Ensuite, chaque message est une seule transaction, quelle que soit la taille du groupe. Les membres voient le groupe dans cette application seulement, pas sur le site Idena Social.</string>
     <string name="group_change">Modifier le groupe</string>
     <string name="group_change_note">Enregistrer donne une nouvelle clé aux personnes gardées et ajoutées. Les personnes retirées ne la reçoivent pas : elles ne peuvent pas lire ce qui est envoyé avec, et leurs propres messages ne comptent plus. Les personnes ajoutées lisent à partir de maintenant.</string>
     <string name="group_name">Nom du groupe</string>

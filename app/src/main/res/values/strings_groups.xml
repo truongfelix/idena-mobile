@@ -2,7 +2,7 @@
 <!-- Group chats with a shared key (SocialGroups.kt) and conversations hidden on the phone (SocialHiddenChats.kt). -->
 <resources>
     <string name="group_new">New group</string>
-    <string name="group_new_note">Each person chosen receives the group\'s key in one transaction from you. Then every message is a single transaction, whatever the group\'s size. Members see the group in this app only, not on idena.social.</string>
+    <string name="group_new_note">Each person chosen receives the group\'s key in one transaction from you. Then every message is a single transaction, whatever the group\'s size. Members see the group in this app only, not on the Idena Social website.</string>
     <string name="group_change">Change the group</string>
     <string name="group_change_note">Saving hands a new key to the people kept and added. People removed do not get it: they cannot read what is sent with it, and their own messages stop counting. People added read from now on.</string>
     <string name="group_name">Group name</string>
