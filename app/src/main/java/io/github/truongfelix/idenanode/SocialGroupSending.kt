@@ -4,13 +4,14 @@ import java.io.IOException
 
 /*
  * Sending to a group with a shared key ([GroupKey], notes/group-chat-design.md in the workspace): the key messages of
- * its admin (a new group, a member or name change), and the messages and leaves of its members. Each is one
+ * its admin (a new group, a member or name change, a new key alone), and its members' messages. Each is one
  * sendMessage call, shown with its fee before it is sent, as a private message.
  */
 
 /**
  * A key message: the group [group] (a new one when null) named [name], its [members] besides the account (lowercase)
- * with their public [keys] in the same order, and a new key. The account is its admin.
+ * with their public [keys] in the same order, and a new key; with the same name and members, only the key is new.
+ * The account is its admin.
  */
 fun SocialSending.prepareGroupKey(group: GroupKey?, name: String, members: List<String>, keys: List<String>, onSent: () -> Unit = {}) =
     prepareWith(t(if (group == null) R.string.group_what_create else R.string.group_what_change)) { posting, from ->
@@ -29,12 +30,10 @@ fun SocialSending.prepareGroupKey(group: GroupKey?, name: String, members: List<
         PendingPost(what, call, from, posting.estimate(from, call), tp(R.plurals.group_key_detail, others.size, others.size), onSent = onSent)
     }
 
-/** A message [text] to the group of [key] (its current key), or leaving it ([leave]: no text). */
-fun SocialSending.prepareGroupMessage(key: GroupKey, text: String, leave: Boolean = false, onSent: () -> Unit = {}) =
-    prepareWith(t(if (leave) R.string.group_what_leave else R.string.social_what_message)) { posting, from ->
-        val plain = groupMessagePlain(key.admin, key.group, key.keyId, if (leave) "leave" else "message", if (leave) "" else text)
-        val parts = listOf(encryptGroupPart(plain, key.key))
+/** A message [text] to the group of [key] (its current key), named [title] on this phone. */
+fun SocialSending.prepareGroupMessage(key: GroupKey, text: String, title: String, onSent: () -> Unit = {}) =
+    prepareWith(t(R.string.social_what_message)) { posting, from ->
+        val parts = listOf(encryptGroupPart(groupMessagePlain(key.admin, key.group, key.keyId, text), key.key))
         val call = SocialPosting.message(sendMessageArgument(parts, groupMessageHash(parts)))
-        val what = t(if (leave) R.string.group_what_leave else R.string.social_what_message)
-        PendingPost(what, call, from, posting.estimate(from, call), t(R.string.group_message_detail, key.name), onSent = onSent)
+        PendingPost(t(R.string.social_what_message), call, from, posting.estimate(from, call), t(R.string.group_message_detail, title), onSent = onSent)
     }

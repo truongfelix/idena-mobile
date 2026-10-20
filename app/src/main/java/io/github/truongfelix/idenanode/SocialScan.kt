@@ -47,12 +47,19 @@ data class SocialCache(
      * from the blocks scanned since, and reads the current contract's earlier blocks again for them ([scanOlderMessages]).
      */
     val messagesLow: Long = low,
+    /**
+     * While not 0, the block the messages are read again down to: a scan of version 5 dropped the one-part calls
+     * (groups' messages) and reads the blocks from [GROUPS_FROM] again; there, [messagesLow] goes back to
+     * [messagesResume], where it stood.
+     */
+    val messagesFloor: Long = 0,
+    val messagesResume: Long = 0,
     /** The public keys of the callers seen (lowercase address -> hex key), to encrypt a message for them. */
     val keys: Map<String, String> = emptyMap(),
 ) {
     /** Whether the current contract has blocks scanned before the app read messages, still to read for them. */
     val messagesPending: Boolean
-        get() = messagesLow > maxOf(low, CURRENT_VERSION.from)
+        get() = messagesLow > maxOf(low, CURRENT_VERSION.from, messagesFloor)
 
     /** Whether the scan reached the first block of idena.social's history. */
     val historyDone: Boolean
@@ -115,7 +122,8 @@ data class SocialCache(
         keys.forEach { (address, key) -> keyObject.put(address, key) }
         return JSONObject().put("contract", SOCIAL_CONTRACT).put("version", VERSION).put("low", low).put("high", high)
             .put("posts", postArray).put("tips", tipArray).put("authors", authorsJson(authors)).put("authorsHeight", authorsHeight)
-            .put("olderAuthors", olderObject).put("messages", messageArray).put("messagesLow", messagesLow).put("keys", keyObject)
+            .put("olderAuthors", olderObject).put("messages", messageArray).put("messagesLow", messagesLow)
+            .put("messagesFloor", messagesFloor).put("messagesResume", messagesResume).put("keys", keyObject)
     }
 
     companion object {
@@ -123,8 +131,12 @@ data class SocialCache(
          * 3: the media references are kept too; a scan of an older version is done again. 4: the older contracts
          * too ([olderAuthors]); a scan of version 3 holds the current contract's blocks only and goes on below them.
          * 5: the private messages ([messages], [messagesLow]); a scan of version 3 or 4 has none and reads them again.
+         * 6: the one-part calls too (groups' messages); a scan of version 5 reads the blocks from [GROUPS_FROM] again.
          */
-        const val VERSION = 5
+        const val VERSION = 6
+
+        /** A block before the first group message could be sent (2026-10-20): version 5 dropped none above it. */
+        const val GROUPS_FROM = 11_460_000L
 
         private fun authorsJson(authors: Map<Long, String>) = JSONObject().apply { authors.forEach { (id, author) -> put(id.toString(), author) } }
 
@@ -144,6 +156,14 @@ data class SocialCache(
             val olderObject = json.optJSONObject("olderAuthors") ?: JSONObject()
             val messageArray = json.optJSONArray("messages") ?: JSONArray()
             val high = json.getLong("high")
+            val version = json.optInt("version", 1)
+            // Before version 5, no block was read for messages. Version 5 read them without the one-part calls: from
+            // [GROUPS_FROM] again, then on from where it stood; all again while it had not reached [GROUPS_FROM].
+            val stood = json.optLong("messagesLow", high + 1)
+            val again = version < 6 && json.has("messagesLow") && high >= GROUPS_FROM
+            val floor = if (again && stood <= GROUPS_FROM) GROUPS_FROM else json.optLong("messagesFloor")
+            val messagesLow = if (again) high + 1 else stood
+            val messagesResume = if (again && floor > 0) stood else json.optLong("messagesResume")
             return SocialCache(
                 low = json.getLong("low"),
                 high = high,
@@ -153,8 +173,9 @@ data class SocialCache(
                 tips = (0 until tipArray.length()).map { TipCall.fromJson(tipArray.getJSONObject(it)) },
                 olderAuthors = olderObject.keys().asSequence().associateWith { authorsFrom(olderObject.getJSONObject(it)) },
                 messages = (0 until messageArray.length()).map { MessageCall.fromJson(messageArray.getJSONObject(it)) },
-                // Before version 5, no block was read for messages.
-                messagesLow = if (json.has("messagesLow")) json.getLong("messagesLow") else high + 1,
+                messagesLow = messagesLow,
+                messagesFloor = floor,
+                messagesResume = messagesResume,
                 keys = json.optJSONObject("keys")?.let { k -> k.keys().asSequence().associateWith { k.getString(it) } }.orEmpty(),
             )
         }
@@ -311,10 +332,18 @@ fun scanOlderBlocks(cache: SocialCache, source: SocialSource, save: (SocialCache
  */
 fun scanOlderMessages(cache: SocialCache, source: SocialSource, save: (SocialCache) -> Unit): SocialCache {
     if (!cache.messagesPending) return cache
-    val bottom = maxOf(cache.low, CURRENT_VERSION.from)
+    val bottom = maxOf(cache.low, CURRENT_VERSION.from, cache.messagesFloor)
     val from = maxOf(cache.messagesLow - source.batchSize(), bottom)
     val read = source.calls(from, cache.messagesLow - 1)
-    val next = cache.copy(messages = cache.withMessages(read.messages), messagesLow = from, keys = read.keys + cache.keys)
+    // The rescan of a version 5 scan ends at its bottom (the floor, or the scan's own low when that is above it).
+    val floorReached = cache.messagesFloor > 0 && from == bottom
+    val next = cache.copy(
+        messages = cache.withMessages(read.messages),
+        messagesLow = if (floorReached) cache.messagesResume else from,
+        messagesFloor = if (floorReached) 0 else cache.messagesFloor,
+        messagesResume = if (floorReached) 0 else cache.messagesResume,
+        keys = read.keys + cache.keys,
+    )
     save(next)
     return next
 }

@@ -31,7 +31,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -73,17 +74,16 @@ fun GroupAvatar(size: Dp) {
     }
 }
 
-/** A group's title: its name, else its members' names. */
-fun groupTitle(group: GroupState, me: String, names: Map<String, String>): String =
-    group.key.name.ifBlank { group.members.filter { it != me }.joinToString(", ") { displayName(it, names) } }
+/** A group's title: the name given on this phone ([local]), else its admin's, else its members' names. */
+fun groupTitle(group: GroupState, me: String, names: Map<String, String>, local: String? = null): String =
+    local ?: group.key.name.ifBlank { group.members.filter { it != me }.joinToString(", ") { displayName(it, names) } }
 
 /**
- * A group's key message or a leave as a line of its conversation: who made the group, who was added or removed and a
- * new name (against [previous], the key message before it), or who left.
+ * A group's key message as a line of its conversation: who made the group, who was added or removed, a new name or a
+ * new key alone, against [previous], the key message before it.
  */
 fun groupEventText(line: ChatMessage, previous: ChatMessage?, me: String, names: Map<String, String>): String {
     val who = { address: String -> if (address == me) t(R.string.group_you) else displayName(address, names) }
-    if (line.kind == ChatMessage.LEAVE) return t(R.string.group_left, who(line.from))
     // The first key message [me] holds: the group made, or [me] added later (the older keys never reach a new member).
     if (previous == null) return if (line.from == me) t(R.string.group_created, line.text) else t(R.string.group_added_you, who(line.from), line.text)
     val parts = ArrayList<String>()
@@ -95,7 +95,11 @@ fun groupEventText(line: ChatMessage, previous: ChatMessage?, me: String, names:
     return parts.ifEmpty { listOf(t(R.string.group_new_key, who(line.from))) }.joinToString("\n")
 }
 
-/** A key message or a leave, centred between the messages. */
+/** The key message before [line] in [conversation], for [groupEventText]. */
+fun previousKeyLine(conversation: Conversation, line: ChatMessage): ChatMessage? =
+    conversation.messages.takeWhile { it.hash != line.hash }.lastOrNull { it.kind == ChatMessage.KEY }
+
+/** A key message, centred between the messages. */
 @Composable
 fun GroupEventLine(text: String) {
     Text(
@@ -108,27 +112,35 @@ fun GroupEventLine(text: String) {
 }
 
 /**
- * A group's members ([group]: its admin first, those who left marked), and what [me] can do: its admin changes the
- * name and members, any other member leaves.
+ * A group's members ([group]: its admin first), with the names given on this phone ([names]); a tap on the title or a
+ * member names it on this phone only. Its admin changes the group; any other member leaves it, on this phone.
  */
 @Composable
-fun GroupInfoDialog(group: GroupState, me: String, names: Map<String, String>, onEdit: () -> Unit, onLeave: () -> Unit, onDismiss: () -> Unit) {
+fun GroupInfoDialog(
+    title: String,
+    group: GroupState,
+    me: String,
+    names: Map<String, String>,
+    onRenameGroup: (String) -> Unit,
+    onRenameMember: (String, String) -> Unit,
+    onEdit: () -> Unit,
+    onLeave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     var leaving by remember { mutableStateOf(false) }
-    val admin = group.key.admin == me
-    val stillIn = me in group.members
+    // The group ("") or the member named on this phone.
+    var renaming by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(groupTitle(group, me, names)) },
+        title = { Text(title, Modifier.clickable { renaming = "" }) },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item { Text(t(R.string.group_privacy_note), style = MaterialTheme.typography.bodySmall) }
+                item {
+                    TextButton(onClick = { renaming = "" }, contentPadding = PaddingValues(0.dp)) { Text(t(R.string.group_rename_here)) }
+                }
                 items(group.key.members) { address ->
-                    val note = when {
-                        address == group.key.admin -> t(R.string.group_admin)
-                        address in group.left -> t(R.string.group_has_left)
-                        else -> null
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable(enabled = address != me) { renaming = address }, verticalAlignment = Alignment.CenterVertically) {
                         PersonAvatar(address, 28.dp)
                         Spacer(Modifier.width(8.dp))
                         Text(
@@ -137,16 +149,16 @@ fun GroupInfoDialog(group: GroupState, me: String, names: Map<String, String>, o
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (address == group.key.admin) {
+                            Text(t(R.string.group_admin), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            when {
-                admin -> TextButton(onClick = { onDismiss(); onEdit() }) { Text(t(R.string.group_change)) }
-                stillIn -> TextButton(onClick = { leaving = true }) { Text(t(R.string.group_leave)) }
-            }
+            if (group.key.admin == me) TextButton(onClick = { onDismiss(); onEdit() }) { Text(t(R.string.group_change)) }
+            else TextButton(onClick = { leaving = true }) { Text(t(R.string.group_leave)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
@@ -158,12 +170,38 @@ fun GroupInfoDialog(group: GroupState, me: String, names: Map<String, String>, o
             dismissButton = { TextButton(onClick = { leaving = false }) { Text(t(R.string.common_cancel)) } },
         )
     }
+    renaming?.let { who ->
+        NameHereDialog(
+            initial = if (who.isEmpty()) title else names[who].orEmpty(),
+            note = t(if (who.isEmpty()) R.string.group_rename_note else R.string.group_rename_member_note),
+            onSave = { if (who.isEmpty()) onRenameGroup(it) else onRenameMember(who, it); renaming = null },
+            onDismiss = { renaming = null },
+        )
+    }
+}
+
+/** A name given on this phone: [initial] to change, [note] telling who sees it; empty takes the name back. */
+@Composable
+private fun NameHereDialog(initial: String, note: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by rememberSaveable { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t(R.string.group_rename_here)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(note, style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(value = name, onValueChange = { name = it.take(MAX_GROUP_NAME) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(name) }) { Text(t(R.string.group_save_name)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
+    )
 }
 
 /**
  * A new group ([key] null), or the name and members of the group of [key], for its admin: a name, the people chosen
  * (the People list, those already written with, an address typed), at most [MAX_GROUP_MEMBERS]; sent once each one's
- * public key is known, with its fee shown first.
+ * public key is known, with its fee shown first. With nothing changed, it hands out a new key alone.
  */
 @Composable
 fun GroupEditView(model: SocialModel, key: String?, canSend: Boolean, onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -172,13 +210,15 @@ fun GroupEditView(model: SocialModel, key: String?, canSend: Boolean, onBack: ()
     val before = group?.members?.filter { it != me }.orEmpty()
     var name by rememberSaveable { mutableStateOf(group?.key?.name.orEmpty()) }
     var query by rememberSaveable { mutableStateOf("") }
-    val chosen = remember { mutableStateListOf<String>().apply { addAll(before) } }
+    // Kept when the phone turns or the app is recreated: saving with another choice would send the wrong members.
+    val chosen = rememberSaveable(saver = listSaver({ it.toList() }, { it.toMutableStateList() })) { before.toMutableStateList() }
     LaunchedEffect(chosen.toList()) { model.lookUpKeys(chosen.toList()) }
     val noKey = chosen.filter { model.messageKeys[it] == "" }
     val looking = chosen.any { it !in model.messageKeys }
     val candidates = chosen.toList() + chatCandidates(query, model.people, model.conversations, me).filter { it !in chosen }
     val changed = group == null || name.trim() != group.key.name || chosen.toSet() != before.toSet()
-    val ready = canSend && changed && name.isNotBlank() && chosen.isNotEmpty() && chosen.size <= MAX_GROUP_MEMBERS && noKey.isEmpty() && !looking
+    // Nothing changed in a group: the button hands out a new key alone.
+    val ready = canSend && name.isNotBlank() && chosen.isNotEmpty() && chosen.size <= MAX_GROUP_MEMBERS && noKey.isEmpty() && !looking
     Column(modifier.imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t(R.string.common_back)) }
@@ -225,7 +265,7 @@ fun GroupEditView(model: SocialModel, key: String?, canSend: Boolean, onBack: ()
                 onClick = { model.saveGroup(group?.key, name, chosen.toList()) },
                 enabled = ready,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            ) { Text(t(if (group == null) R.string.group_create else R.string.group_save)) }
+            ) { Text(t(if (group == null) R.string.group_create else if (changed) R.string.group_save else R.string.group_renew)) }
         }
     }
 }

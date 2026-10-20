@@ -90,7 +90,7 @@ data class ChatMessage(
     val isReply: Boolean = false,
     /** The group's conversation ([groupConversationKey]) for a group's line; empty for idena.social's messages. */
     val group: String = "",
-    /** What a group's line is: a message (empty), a key message ([KEY]: [text] is the name) or a member leaving ([LEAVE]). */
+    /** What a group's line is: a message (empty) or a key message ([KEY]: [text] is the group's name). */
     val kind: String = "",
 ) {
     /** The conversation it belongs to: its group, or its participants sorted and distinct. */
@@ -105,9 +105,6 @@ data class ChatMessage(
     companion object {
         /** A group's key message ([kind]). */
         const val KEY = "key"
-
-        /** A member leaving a group ([kind]). */
-        const val LEAVE = "leave"
 
         fun fromJson(json: JSONObject): ChatMessage {
             val participants = json.getJSONArray("participants")
@@ -229,9 +226,9 @@ fun conversations(
         } + groupConversations(messages.filter { it.group.isNotEmpty() }, groupKeys, me, people))
         .sortedWith(compareByDescending<Conversation> { it.last.height }.thenByDescending { it.last.index })
 
-/** The messages of [conversation] from others after [seen] (a height and index), the unread ones. */
+/** The messages of [conversation] from others after [seen] (a height and index), the unread ones; a group's key messages too. */
 fun unreadCount(conversation: Conversation, me: String, seen: Pair<Long, Int>?): Int =
-    conversation.messages.count { it.from != me && it.kind.isEmpty() && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second) }
+    conversation.messages.count { it.from != me && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second) }
 
 /** A public key as the node writes it ("0x" optional), in lowercase hex without 0x; null when it is not one (33, 64 or 65 bytes). */
 fun publicKeyHex(text: String): String? {

@@ -26,8 +26,8 @@ class SocialGroupsTest {
         return acceptGroupKey(keyCall(hash, height, admin, members), plain, listOf(members.indexOf(me)), me)!!
     }
 
-    private fun groupCall(hash: String, height: Long, from: String, key: GroupKey, text: String = "hi", type: String = "message", keyId: Int = key.keyId): MessageCall {
-        val parts = listOf(encryptGroupPart(groupMessagePlain(key.admin, key.group, keyId, type, text), key.key))
+    private fun groupCall(hash: String, height: Long, from: String, key: GroupKey, text: String = "hi", keyId: Int = key.keyId): MessageCall {
+        val parts = listOf(encryptGroupPart(groupMessagePlain(key.admin, key.group, keyId, text), key.key))
         return MessageCall(hash, height, height * 20, 0, from, parts, groupMessageHash(parts))
     }
 
@@ -79,8 +79,6 @@ class SocialGroupsTest {
         assertNull("from someone not in the group", acceptGroupMessage(groupCall("0xm", 11, "0xdddd000000000000000000000000000000000004", key), key))
         assertNull("another key id", acceptGroupMessage(groupCall("0xm", 11, b, key, keyId = 1), key))
         assertNull("no text", acceptGroupMessage(groupCall("0xm", 11, b, key, text = ""), key))
-        val leave = acceptGroupMessage(groupCall("0xm", 11, b, key, text = "", type = "leave"), key)!!
-        assertEquals(ChatMessage.LEAVE, leave.kind)
         val call = groupCall("0xm", 11, b, key)
         assertNull("a hash that is not the part's", acceptGroupMessage(call.copy(messageHash = "0".repeat(64)), key))
         assertNull("two parts", acceptGroupMessage(call.copy(parts = call.parts + call.parts, messageHash = groupMessageHash(call.parts + call.parts)), key))
@@ -109,30 +107,28 @@ class SocialGroupsTest {
     }
 
     @Test
-    fun aMemberWhoLeftCountsAgainOnlyWhenAddedBack() {
-        val k0 = keyOf("0xk0", 100, 0, listOf(a, b, c), me = b)
-        val leave = acceptGroupMessage(groupCall("0xl", 110, c, k0, text = "", type = "leave"), k0)!!
-        val afterLeave = acceptGroupMessage(groupCall("0xc1", 111, c, k0), k0)!!
-        val (lines, state) = groupLines(listOf(k0), listOf(leave, afterLeave))
-        assertEquals(listOf("0xk0", "0xl"), lines.map { it.hash })
-        assertEquals(listOf(a, b), state!!.members)
-        assertEquals(setOf(c), state.left)
-
-        val k1 = keyOf("0xk1", 120, 1, listOf(a, b, c), me = b)
-        val back = acceptGroupMessage(groupCall("0xc2", 121, c, k1), k1)!!
-        assertEquals(listOf(a, b, c), groupLines(listOf(k0, k1), listOf(leave, afterLeave, back)).second!!.members)
-        assertTrue("0xc2" in groupLines(listOf(k0, k1), listOf(leave, afterLeave, back)).first.map { it.hash })
-    }
-
-    @Test
-    fun onlyTheFirstAdminChangesTheGroupAndNeverBackToAnOlderKey() {
+    fun aKeyOfAnotherAdminMakesAnotherGroupAndAnOlderKeyIsIgnored() {
         val k0 = keyOf("0xk0", 100, 0, listOf(a, b, c), me = b)
         val k2 = keyOf("0xk2", 110, 2, listOf(a, b, c), me = b)
         val older = keyOf("0xk1", 120, 1, listOf(a, b), me = b)
-        val forged = keyOf("0xkx", 130, 3, listOf(c, b), admin = c, me = b)
-        val (lines, state) = groupLines(listOf(k0, k2, older, forged), emptyList())
+        val (lines, state) = groupLines(listOf(k0, k2, older), emptyList())
         assertEquals(listOf("0xk0", "0xk2"), lines.map { it.hash })
         assertEquals(k2, state!!.key)
+        // The same group id from another admin: their own group, never a change of this one.
+        val forged = keyOf("0xkx", 130, 3, listOf(c, b), admin = c, me = b)
+        val groups = conversations(emptyList(), b, emptyMap(), listOf(k0, k2, older, forged))
+        assertEquals(setOf(k0.conversation to listOf(a, c), forged.conversation to listOf(c)), groups.map { it.key to it.others }.toSet())
+    }
+
+    @Test
+    fun aNewKeyAloneKeepsTheMembersAndIsALineOfItsOwn() {
+        val k0 = keyOf("0xk0", 100, 0, listOf(a, b, c), me = b)
+        val renewed = keyOf("0xk1", 110, 1, listOf(a, b, c), me = b)
+        val conversation = conversations(emptyList(), b, emptyMap(), listOf(k0, renewed)).single()
+        assertEquals(renewed, conversation.group!!.key)
+        assertEquals(listOf(a, c), conversation.others)
+        assertEquals("0xk0", previousKeyLine(conversation, conversation.last)?.hash)
+        assertNull(previousKeyLine(conversation, conversation.messages.first()))
     }
 
     @Test
@@ -165,7 +161,7 @@ class SocialGroupsTest {
         assertEquals(listOf(ChatMessage.KEY, ""), conversation.messages.map { it.kind })
         assertTrue("a stranger's group waits in Requests", conversation.isRequest)
         assertFalse(conversations(store.messages, b, mapOf(a to Person(a, message = true)), store.groupKeys).single { it.key == k.conversation }.isRequest)
-        assertEquals("the key message is not unread", 1, unreadCount(conversation, b, null))
+        assertEquals("being added counts as unread", 2, unreadCount(conversation, b, null))
     }
 
     @Test
@@ -176,5 +172,86 @@ class SocialGroupsTest {
         val all = conversations(listOf(fromC, fromA), b, emptyMap(), listOf(k))
         assertEquals(listOf("0xk", "0xa"), visibleConversations(all, setOf(c)).single().messages.map { it.hash })
         assertTrue(visibleConversations(all, setOf(a)).isEmpty())
+    }
+
+    @Test
+    fun aStoreOfTheAppBeforeGroupsTriesItsFailedCallsAgain() {
+        val members = listOf(a, b, c)
+        val plain = groupKeyPlain(a, group, 0, newGroupKey(), "Family", members)
+        val keyCall = keyCall("0xk", 10, a, members)
+        val oneToOne = MessageCall("0x1", 9, 180, 0, a, listOf("p0", "p1"), keccak256Hex(plainMessage(a, listOf(b), "hi")))
+        val decrypt = { chunk: List<MessageCall> ->
+            chunk.map {
+                when (it) {
+                    keyCall -> JSONObject().put("indexes", JSONArray().put(1)).put("message", plain)
+                    oneToOne -> JSONObject().put("indexes", JSONArray().put(1)).put("message", plainMessage(a, listOf(b), "hi"))
+                    else -> null
+                }
+            }
+        }
+        // As the app before groups saved it: both tried, the key message read as nothing.
+        val old = readNewMessages(ChatStore(), listOf(oneToOne), b, decrypt).let { it.copy(tried = it.tried + "0xk") }
+            .toJson().apply { remove("groupKeys"); remove("groupTried"); remove("leftGroups"); remove("groupNames"); remove("memberNames") }
+        val store = ChatStore.fromJson(old)
+        assertEquals(setOf("0x1"), store.tried)
+        val next = readNewMessages(store, listOf(oneToOne, keyCall), b, decrypt)
+        assertEquals(listOf("0xk"), next.groupKeys.map { it.hash })
+        assertEquals("the message read once", listOf("hi"), next.messages.map { it.text })
+    }
+
+    @Test
+    fun whatIsOfThisPhoneOnlyIsKept() {
+        val key = groupConversationKey(a, group)
+        val store = ChatStore(leftGroups = setOf(key), groupNames = mapOf(key to "Us"), memberNames = mapOf(key to mapOf(c to "Grandma")))
+        assertEquals(store, ChatStore.fromJson(JSONObject(store.toJson().toString())))
+        val k = keyOf("0xk", 10, 0, listOf(a, b, c), me = b)
+        assertEquals("Us", groupTitle(GroupState(k), b, emptyMap(), "Us"))
+        assertEquals("Family", groupTitle(GroupState(k), b, emptyMap()))
+    }
+
+    /** A node with a one-part message at each height of [messagesAt]. */
+    private class Source(private val messagesAt: Set<Long>, private val batch: Long = 1000) : SocialSource {
+        val ranges = ArrayList<LongRange>()
+        override fun batchSize() = batch
+        override fun head() = 0L
+        override fun calls(from: Long, to: Long, version: SocialVersion): BlockCalls {
+            ranges += from..to
+            return BlockCalls(emptyList(), emptyList(), messagesAt.filter { it in from..to }.map {
+                MessageCall("0xm$it", it, it * 20, 0, "0xaaaa000000000000000000000000000000000001", listOf("p0"), "0".repeat(64))
+            })
+        }
+        override fun authors(version: SocialVersion) = emptyMap<Long, String>()
+    }
+
+    @Test
+    fun aVersion5ScanReadsTheBlocksSinceGroupsAgainThenGoesOnWhereItStood() {
+        val floor = SocialCache.GROUPS_FROM
+        val high = floor + 2500
+        // Version 5, its history scan down to [low] with the messages read down to [stood], still going.
+        val low = CURRENT_VERSION.from
+        val stood = floor - 3000
+        val v5 = SocialCache(low = low, high = high, posts = emptyList(), authors = emptyMap(), authorsHeight = high, messagesLow = stood)
+            .toJson().apply { put("version", 5); remove("messagesFloor"); remove("messagesResume") }
+        var cache = SocialCache.fromJson(v5)!!
+        assertEquals(high + 1, cache.messagesLow)
+        val source = Source(setOf(floor + 10, floor + 2400, floor - 10))
+        while (cache.messagesLow > floor) cache = scanOlderMessages(cache, source) {}
+        assertEquals("the blocks since groups, newest first", listOf(floor + 1501..high, floor + 501..floor + 1500, floor..floor + 500), source.ranges)
+        assertEquals(listOf(floor + 10, floor + 2400), cache.messages.map { it.height }.sorted())
+        assertEquals("back where it stood", stood, cache.messagesLow)
+        assertEquals(0L, cache.messagesFloor)
+        assertTrue("its own pass goes on", cache.messagesPending)
+        cache = scanOlderMessages(cache, source) {}
+        assertEquals(stood - 1000..stood - 1, source.ranges.last())
+        assertEquals(cache, SocialCache.fromJson(JSONObject(cache.toJson().toString())))
+
+        // A version 5 scan that had read everything: only the blocks since groups, then done.
+        val done = SocialCache(low = low, high = high, posts = emptyList(), authors = emptyMap(), authorsHeight = high, messagesLow = low)
+            .toJson().apply { put("version", 5); remove("messagesFloor"); remove("messagesResume") }
+        var again = SocialCache.fromJson(done)!!
+        while (again.messagesPending) again = scanOlderMessages(again, Source(emptySet())) {}
+        assertEquals(low, again.messagesLow)
+        // A version 6 scan stays as it is.
+        assertEquals(again, SocialCache.fromJson(JSONObject(again.toJson().toString())))
     }
 }

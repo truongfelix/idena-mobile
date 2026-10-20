@@ -4,14 +4,18 @@
     <string name="group_new">New group</string>
     <string name="group_new_note">Each person chosen receives the group\'s key in one transaction from you. Then every message is a single transaction, whatever the group\'s size. Members see the group in this app only, not on idena.social.</string>
     <string name="group_change">Change the group</string>
-    <string name="group_change_note">Saving hands a new key to the people kept and added. People removed read nothing sent after that; people added read from now on.</string>
+    <string name="group_change_note">Saving hands a new key to the people kept and added. People removed do not get it: they cannot read what is sent with it, and their own messages stop counting. People added read from now on.</string>
     <string name="group_name">Group name</string>
     <string name="group_chosen">%1$d of %2$d people chosen</string>
     <string name="group_create">Create the group</string>
     <string name="group_save">Save the changes</string>
+    <string name="group_renew">Renew the key</string>
+    <string name="group_rename_here">Rename on this phone</string>
+    <string name="group_rename_note">Only you see this name, on this phone. Leave it empty to take the group\'s own name back.</string>
+    <string name="group_rename_member_note">Only you see this name, on this phone and in this group. Leave it empty to take their own name back.</string>
+    <string name="group_save_name">Save</string>
     <string name="group_what_create">New group</string>
     <string name="group_what_change">Group change</string>
-    <string name="group_what_leave">Leaving the group</string>
     <string name="group_message_detail">A message to the group “%1$s”</string>
     <plurals name="group_key_detail">
         <item quantity="one">The group\'s key for %1$d person and you</item>
@@ -26,11 +30,9 @@
     <string name="group_removed">%1$s removed %2$s</string>
     <string name="group_renamed">%1$s renamed the group “%2$s”</string>
     <string name="group_new_key">%1$s gave the group a new key</string>
-    <string name="group_left">%1$s left the group</string>
     <string name="group_admin">created the group</string>
-    <string name="group_has_left">left</string>
     <string name="group_leave">Leave the group</string>
-    <string name="group_leave_note">The group will see that you left, and you will no longer be able to write in it. Its creator can then hand out a new key without you.</string>
-    <string name="group_not_member">You are no longer in this group.</string>
+    <string name="group_leave_note">The group disappears from this phone. Its members are not told, and you stay a member until its creator removes you.</string>
+    <string name="group_not_member">You left this group on this phone.</string>
     <string name="group_privacy_note">Only the group\'s members can read its messages. Who writes and when is public, on the chain for good. The group\'s name and members are not; how many they are shows each time its creator hands out a key.</string>
 </resources>

@@ -125,7 +125,9 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             }
             items(shown, key = { it.key }) { conversation ->
                 val unread = unreadCount(conversation, me, model.chats.store.seen[conversation.key])
-                ConversationRow(conversation, me, model.names, unread) { model.open(SocialPage.Chat(conversation.key)) }
+                ConversationRow(conversation, model.groupTitle(conversation), me, model.chatNames(conversation.key), unread) {
+                    model.open(SocialPage.Chat(conversation.key))
+                }
             }
             items(people, key = { "person:$it" }) { address -> PersonRow(address, model.names) { model.openChat(listOf(address)) } }
         }
@@ -133,7 +135,7 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
 }
 
 @Composable
-private fun ConversationRow(conversation: Conversation, me: String, names: Map<String, String>, unread: Int, onOpen: () -> Unit) {
+private fun ConversationRow(conversation: Conversation, title: String, me: String, names: Map<String, String>, unread: Int, onOpen: () -> Unit) {
     val group = conversation.group
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box {
@@ -149,14 +151,15 @@ private fun ConversationRow(conversation: Conversation, me: String, names: Map<S
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                group?.let { groupTitle(it, me, names) } ?: othersTitle(conversation.others, names),
+                if (group != null) title else othersTitle(conversation.others, names),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = if (unread > 0) FontWeight.Bold else null,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                if (conversation.last.kind.isNotEmpty()) groupEventText(conversation.last, null, me, names).lines().first() else preview(conversation.last),
+                if (conversation.last.kind.isEmpty()) preview(conversation.last)
+                else groupEventText(conversation.last, previousKeyLine(conversation, conversation.last), me, names).lines().first(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -188,6 +191,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     val me = model.myAddress.orEmpty()
     val conversation = model.conversations.firstOrNull { it.key == key }
     val group = conversation?.group
+    val names = model.chatNames(key)
     val others = conversation?.others ?: key.split('-').filter { it != me }.ifEmpty { listOf(me) }
     val messages = conversation?.messages.orEmpty()
     // The text is the model's: it stays while the conversation is closed, another tab shown or the node panel open.
@@ -198,8 +202,8 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     LaunchedEffect(key) { if (!isGroupKey(key)) model.lookUpKeys(others) }
     val noKey = if (isGroupKey(key)) emptyList() else others.filter { model.messageKeys[it] == "" }
     val looking = !isGroupKey(key) && others.any { it !in model.messageKeys }
-    // A group the account is no longer in (it left, or a newer key left it out) takes no message from it.
-    val outOfGroup = isGroupKey(key) && (group == null || me !in group.members)
+    // A group left on this phone. A member removed cannot tell: the newer key never reaches them.
+    val outOfGroup = isGroupKey(key) && group == null
     LaunchedEffect(conversation?.last?.hash) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size)
         conversation?.let { model.chats.markSeen(it) }
@@ -224,7 +228,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 if (group != null) GroupAvatar(36.dp) else PersonAvatar(others.first(), 36.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    group?.let { groupTitle(it, me, model.names) } ?: othersTitle(others, model.names),
+                    if (conversation != null && group != null) model.groupTitle(conversation) else othersTitle(others, model.names),
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -250,8 +254,8 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 }
             }
             items(messages, key = { it.hash }) { message ->
-                if (message.kind.isNotEmpty()) GroupEventLine(groupEventText(message, previousKeys[message.hash], me, model.names))
-                else Bubble(message, mine = message.from == me, showSender = group != null || others.size > 1, names = model.names)
+                if (message.kind.isNotEmpty()) GroupEventLine(groupEventText(message, previousKeys[message.hash], me, names))
+                else Bubble(message, mine = message.from == me, showSender = group != null || others.size > 1, names = names)
             }
         }
         Column(Modifier.padding(horizontal = 16.dp)) {
@@ -282,7 +286,12 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     }
     if (privacy && group != null) {
         GroupInfoDialog(
-            group, me, model.names,
+            title = conversation?.let(model::groupTitle).orEmpty(),
+            group = group,
+            me = me,
+            names = names,
+            onRenameGroup = { model.chats.setGroupName(key, it) },
+            onRenameMember = { member, name -> model.chats.setMemberName(key, member, name) },
             onEdit = { model.open(SocialPage.GroupEdit(key)) },
             onLeave = { conversation?.let(model::leaveGroup) },
             onDismiss = { privacy = false },

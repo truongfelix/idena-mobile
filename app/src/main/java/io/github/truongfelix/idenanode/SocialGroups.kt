@@ -95,9 +95,9 @@ fun groupKeyPlain(admin: String, group: String, keyId: Int, key: String, name: S
     JSONObject().put("idenaGroup", GROUP_FORMAT).put("type", "key").put("admin", admin).put("group", group).put("keyId", keyId)
         .put("key", key).put("name", name).put("members", JSONArray(members)).toString()
 
-/** The plain text of a group message ([type] "message", or "leave" with no text) under key [keyId]. */
-fun groupMessagePlain(admin: String, group: String, keyId: Int, type: String, text: String): String =
-    JSONObject().put("idenaGroup", GROUP_FORMAT).put("type", type).put("admin", admin).put("group", group).put("keyId", keyId)
+/** The plain text of a group message under key [keyId]. */
+fun groupMessagePlain(admin: String, group: String, keyId: Int, text: String): String =
+    JSONObject().put("idenaGroup", GROUP_FORMAT).put("type", "message").put("admin", admin).put("group", group).put("keyId", keyId)
         .put("text", text).toString()
 
 /** [plain] encrypted with the group's [key]: `iv(12) || ciphertext+tag`, base64 (one part). */
@@ -143,42 +143,37 @@ fun acceptGroupKey(call: MessageCall, plain: String, indexes: List<Int>, me: Str
 
 /**
  * [call] as a group message under [key]: one part that [key] opens, naming its group and key, from one of the key's
- * members; null otherwise. A leave carries no text.
+ * members, with a text; null otherwise.
  */
 fun acceptGroupMessage(call: MessageCall, key: GroupKey): ChatMessage? {
     if (call.parts.size != 1 || call.messageHash != groupMessageHash(call.parts)) return null
     val plain = decryptGroupPart(call.parts[0], key.key) ?: return null
     val json = runCatching { JSONObject(plain) }.getOrNull() ?: return null
-    val type = json.optString("type")
-    if (json.optInt("idenaGroup") != GROUP_FORMAT || type !in setOf("message", "leave")) return null
+    if (!json.isGroupFormat("message")) return null
     if (json.optString("admin") != key.admin || json.optString("group") != key.group || json.opt("keyId") != key.keyId) return null
     if (call.from !in key.members) return null
-    val text = if (type == "message") json.optString("text").ifEmpty { return null } else ""
-    return ChatMessage(
-        call.hash, call.height, call.time, call.index, call.from, key.members, text,
-        group = key.conversation, kind = if (type == "leave") ChatMessage.LEAVE else "",
-    )
+    val text = json.optString("text").ifEmpty { return null }
+    return ChatMessage(call.hash, call.height, call.time, call.index, call.from, key.members, text, group = key.conversation)
 }
 
 /** A key message as a line of its conversation: who changed the group, and its members and name then. */
 fun GroupKey.asChatMessage(): ChatMessage =
     ChatMessage(hash, height, time, index, admin, members, name, group = conversation, kind = ChatMessage.KEY)
 
-/** A group as it stands after its last key message, with the members who left since. */
-data class GroupState(val key: GroupKey, val left: Set<String>) {
-    /** The members still in the group. */
+/** A group as it stands after its last key message. */
+data class GroupState(val key: GroupKey) {
     val members: List<String>
-        get() = key.members.filter { it !in left }
+        get() = key.members
 }
 
 /** Orders events of a group by block, then place in the block. */
 private val chainOrder = compareBy<ChatMessage>({ it.height }, { it.index })
 
 /**
- * The lines of one group, in chain order: its key messages ([keys], each a line) and the messages read under them
- * ([messages]), without those that no longer count: a message from someone who left (until a later key has them
- * again), or from a member removed more than [GROUP_GRACE_BLOCKS] blocks before it. A key message counts only from the
- * group's first admin and with a key id not below the last one. Returns the lines and the group's state.
+ * The lines of one group (its admin's: the conversation holds it), in chain order: its key messages ([keys], each a
+ * line) and the messages read under them ([messages]), without a message from a member removed more than
+ * [GROUP_GRACE_BLOCKS] blocks before it. A key message counts only with a key id not below the last one. Returns the
+ * lines and the group's state.
  */
 fun groupLines(keys: List<GroupKey>, messages: List<ChatMessage>): Pair<List<ChatMessage>, GroupState?> {
     val keyLines = keys.associateBy { it.hash }
@@ -190,21 +185,17 @@ fun groupLines(keys: List<GroupKey>, messages: List<ChatMessage>): Pair<List<Cha
         val key = keyLines[event.hash]
         if (key != null) {
             val current = state?.key
-            if (current != null && (key.admin != current.admin || key.keyId < current.keyId)) continue
+            if (current != null && key.keyId < current.keyId) continue
             current?.members?.filter { it !in key.members }?.forEach { removedAt[it] = key.height }
             key.members.forEach { removedAt.remove(it) }
-            state = GroupState(key, emptySet())
+            state = GroupState(key)
             lines += event
             continue
         }
         val now = state
-        if (now != null) {
-            if (event.from in now.left) continue
-            if (event.from !in now.key.members) {
-                val removed = removedAt[event.from] ?: continue
-                if (event.height > removed + GROUP_GRACE_BLOCKS) continue
-            }
-            if (event.kind == ChatMessage.LEAVE) state = now.copy(left = now.left + event.from)
+        if (now != null && event.from !in now.key.members) {
+            val removed = removedAt[event.from] ?: continue
+            if (event.height > removed + GROUP_GRACE_BLOCKS) continue
         }
         lines += event
     }
@@ -212,9 +203,9 @@ fun groupLines(keys: List<GroupKey>, messages: List<ChatMessage>): Pair<List<Cha
 }
 
 /**
- * The groups of [keys] with their [messages] ([groupLines]), as conversations for [me]: the others are the members
- * still in it ([me] left out). One waits in Requests until [me] wrote in it or its admin is followed or marked to
- * message, as a stranger's conversation.
+ * The groups of [keys] with their [messages] ([groupLines]), as conversations for [me]: the others are its members
+ * ([me] left out). One waits in Requests until [me] wrote in it or its admin is followed or marked to message, as a
+ * stranger's conversation.
  */
 fun groupConversations(messages: List<ChatMessage>, keys: List<GroupKey>, me: String, people: Map<String, Person>): List<Conversation> {
     val byGroup = messages.groupBy { it.group }

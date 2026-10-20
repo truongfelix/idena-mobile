@@ -495,9 +495,23 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
     val chats = SocialChats(context)
 
-    /** The account's conversations, the latest first, those of strangers in Requests ([conversations]); none with a blocked account. */
+    /**
+     * The account's conversations, the latest first, those of strangers in Requests ([conversations]); none with a
+     * blocked account, nor the groups left on this phone.
+     */
     val conversations: List<Conversation>
-        get() = myAddress?.let { visibleConversations(conversations(chats.store.messages, it, people, chats.store.groupKeys), blocked) }.orEmpty()
+        get() = myAddress?.let { me ->
+            val store = chats.store
+            visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked).filter { it.key !in store.leftGroups }
+        }.orEmpty()
+
+    /** The names shown in the conversation of [key]: those given to its members on this phone first. */
+    fun chatNames(key: String): Map<String, String> = chats.store.memberNames[key]?.let { names + it } ?: names
+
+    /** A group's title on this phone ([groupTitle]). */
+    fun groupTitle(conversation: Conversation): String = conversation.group?.let {
+        groupTitle(it, myAddress.orEmpty(), chatNames(conversation.key), chats.store.groupNames[conversation.key])
+    }.orEmpty()
 
     /** The conversations (not Requests) with a message not read yet. */
     val unreadConversations: Int
@@ -557,16 +571,19 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** Sends [text] to the group of [conversation], under its current key. */
     fun sendGroupMessage(conversation: Conversation, text: String) {
         val key = conversation.group?.key ?: return
-        sending.prepareGroupMessage(key, text) { chatDrafts.remove(conversation.key) }
+        sending.prepareGroupMessage(key, text, groupTitle(conversation)) { chatDrafts.remove(conversation.key) }
     }
 
-    /** Leaves the group of [conversation]: its members see it, and its admin can then hand a new key without the account. */
+    /** Leaves the group of [conversation] on this phone: no longer shown; its members are not told, and only its admin removes a member. */
     fun leaveGroup(conversation: Conversation) {
-        val key = conversation.group?.key ?: return
-        sending.prepareGroupMessage(key, "", leave = true) { back() }
+        chats.setGroupLeft(conversation.key, true)
+        back()
     }
 
-    /** Creates a group ([group] null) or changes its [name] and [members], once each member's public key is known. */
+    /**
+     * Creates a group ([group] null) or changes its [name] and [members], or only its key (the same name and members),
+     * once each member's public key is known.
+     */
     fun saveGroup(group: GroupKey?, name: String, members: List<String>) {
         val keys = members.map { messageKeys[it].orEmpty() }
         if (keys.any { it.isEmpty() }) return
