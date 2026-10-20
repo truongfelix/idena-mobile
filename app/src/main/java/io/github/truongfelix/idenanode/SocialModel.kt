@@ -531,7 +531,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     /** The conversations (not Requests) with a message not read yet. */
     val unreadConversations: Int
-        get() = conversations.count { !it.isRequest && unreadCount(it, myAddress.orEmpty(), chats.store.seen[it.key]) > 0 }
+        get() = conversations.count { !it.isRequest && chats.store.unreadCount(it, myAddress.orEmpty()) > 0 }
 
     private suspend fun updateChats() {
         val me = myAddress ?: return

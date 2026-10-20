@@ -51,10 +51,7 @@ fun chatNotices(store: ChatStore, me: String, people: Map<String, Person>): List
     return visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked)
         .filter { !it.isRequest && it.key !in store.hiddenChats }
         .mapNotNull { conversation ->
-            val seen = store.seen[conversation.key]
-            val unread = conversation.messages.filter {
-                it.from != me && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second)
-            }
+            val unread = store.unreadMessages(conversation, me)
             if (unread.isEmpty()) return@mapNotNull null
             val chatNames = store.chatNames(conversation.key, names)
             val title = store.titleOf(conversation, me, names)

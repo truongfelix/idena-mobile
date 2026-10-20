@@ -28,6 +28,12 @@ data class ChatStore(
     val groupKeys: List<GroupKey> = emptyList(),
     /** The one-part calls tried with every key of [groupKeys]: a new key tries only itself on them. */
     val groupTried: Set<String> = emptySet(),
+    /**
+     * The block time before which every message counts as read, set when the account's messages are first kept on
+     * this phone ([READ_ON_FIRST_LOAD] before then): a profile imported here does not show all its past as unread.
+     * Null for the files of the builds before it, whose read points stay as they were.
+     */
+    val readBefore: Long? = null,
     /** The conversations (their keys) hidden on this phone, one-to-one or groups: nobody is told. */
     val hiddenChats: Set<String> = emptySet(),
     /** By conversation key: the group's name on this phone, in place of the one its admin gave. */
@@ -43,6 +49,7 @@ data class ChatStore(
         return JSONObject().put("tried", JSONArray(tried.sorted())).put("messages", JSONArray(messages.map { it.toJson() })).put("seen", seenJson)
             .put("groupKeys", JSONArray(groupKeys.map { it.toJson() })).put("groupTried", JSONArray(groupTried.sorted()))
             .put("hiddenChats", JSONArray(hiddenChats.sorted())).put("groupNames", JSONObject(groupNames)).put("memberNames", memberJson)
+            .also { json -> readBefore?.let { json.put("readBefore", it) } }
     }
 
     companion object {
@@ -66,6 +73,7 @@ data class ChatStore(
                 seen = seen.keys().asSequence().associateWith { key -> seen.getJSONArray(key).let { it.getLong(0) to it.getInt(1) } },
                 groupKeys = (0 until keys.length()).map { GroupKey.fromJson(keys.getJSONObject(it)) },
                 groupTried = strings(json.optJSONArray("groupTried")).toSet(),
+                readBefore = if (json.has("readBefore")) json.getLong("readBefore") else null,
                 hiddenChats = strings(json.optJSONArray("hiddenChats")).toSet(),
                 groupNames = stringMap(json.optJSONObject("groupNames")),
                 memberNames = members.keys().asSequence().associateWith { stringMap(members.getJSONObject(it)) },
@@ -73,6 +81,22 @@ data class ChatStore(
         }
     }
 }
+
+/** The unread messages of [conversation] for [me] on this phone ([unreadMessages] with its read point). */
+fun ChatStore.unreadMessages(conversation: Conversation, me: String): List<ChatMessage> =
+    unreadMessages(conversation, me, seen[conversation.key], readBefore)
+
+/** How many messages of [conversation] are unread for [me] on this phone. */
+fun ChatStore.unreadCount(conversation: Conversation, me: String): Int = unreadMessages(conversation, me).size
+
+/** How long before an account's first load on this phone its messages still show as unread: 3 days, in seconds. */
+const val READ_ON_FIRST_LOAD = 3L * 24 * 60 * 60
+
+/**
+ * The store of an account seen for the first time on this phone, at [now] (seconds): its messages older than
+ * [READ_ON_FIRST_LOAD] count as read.
+ */
+fun firstStore(now: Long): ChatStore = ChatStore(readBefore = now - READ_ON_FIRST_LOAD)
 
 /** The names shown in the conversation of [key]: those given to its members on this phone first, then [names]. */
 fun ChatStore.chatNames(key: String, names: Map<String, String>): Map<String, String> = memberNames[key]?.let { names + it } ?: names
@@ -143,11 +167,19 @@ class SocialChats(private val context: Context) {
 
     private fun file(address: String) = file(context, address)
 
-    /** Loads [address]'s messages (another account's are not shown). Call off the main thread. */
+    /**
+     * Loads [address]'s messages (another account's are not shown). An account with no file yet (imported here, or
+     * new) starts with [firstStore], saved at once. Call off the main thread.
+     */
     fun load(address: String) {
         if (account == address) return
         account = address
-        store = runCatching { ChatStore.fromJson(JSONObject(file(address).readText())) }.getOrDefault(ChatStore())
+        val f = file(address)
+        if (!f.exists()) {
+            synchronized(lock) { save(address, firstStore(System.currentTimeMillis() / 1000)) }
+            return
+        }
+        store = runCatching { ChatStore.fromJson(JSONObject(f.readText())) }.getOrDefault(ChatStore())
     }
 
     /**

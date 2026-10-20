@@ -117,7 +117,9 @@ class SocialMessagesTest {
         assertFalse("accepted", accepted.first { it.others == listOf(c) }.isRequest)
 
         val withB = list[1]
-        assertEquals(1, unreadCount(withB, a, null))
-        assertEquals(0, unreadCount(withB, a, 10L to 0))
+        assertEquals("answered after it: read", 0, unreadCount(withB, a, null))
+        val answered = conversations(messages + msg(b, listOf(b, a), 14), a, emptyMap()).first { it.others == listOf(b) }
+        assertEquals("after my answer: unread", 1, unreadCount(answered, a, null))
+        assertEquals(0, unreadCount(answered, a, 14L to 0))
     }
 }
