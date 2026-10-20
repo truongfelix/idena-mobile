@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Group chats with a shared key (SocialGroups.kt). -->
+<!-- Group chats with a shared key (SocialGroups.kt) and conversations hidden on the phone (SocialHiddenChats.kt). -->
 <resources>
     <string name="group_new">Nouveau groupe</string>
     <string name="group_new_note">Chaque personne choisie reçoit la clé du groupe dans une seule transaction de votre part. Ensuite, chaque message est une seule transaction, quelle que soit la taille du groupe. Les membres voient le groupe dans cette application seulement, pas sur idena.social.</string>
@@ -32,8 +32,16 @@
     <string name="group_renamed">%1$s a renommé le groupe « %2$s »</string>
     <string name="group_new_key">%1$s a donné une nouvelle clé au groupe</string>
     <string name="group_admin">a créé le groupe</string>
-    <string name="group_leave">Quitter le groupe</string>
-    <string name="group_leave_note">Le groupe disparaît de ce téléphone. Ses membres ne sont pas prévenus, et vous restez membre jusqu\'à ce que son créateur vous retire.</string>
-    <string name="group_not_member">Vous avez quitté ce groupe sur ce téléphone.</string>
     <string name="group_privacy_note">Seuls les membres du groupe peuvent lire ses messages. Qui écrit et quand est public, sur la chaîne pour toujours. Le nom du groupe et ses membres ne le sont pas ; leur nombre se voit chaque fois que son créateur donne une clé.</string>
+    <string name="chat_hide">Masquer la discussion</string>
+    <string name="chat_hidden">Cette discussion est masquée sur ce téléphone. Les réglages de Social l\'affichent à nouveau.</string>
+    <string name="chat_hidden_title">Discussions masquées</string>
+    <string name="chat_hidden_note">Masquées sur ce téléphone seulement : personne n\'est prévenu, et les nouveaux messages arrivent toujours. Écrire de nouveau à quelqu\'un affiche votre discussion avec cette personne.</string>
+    <string name="chat_none_hidden">Aucune discussion masquée.</string>
+    <string name="chat_show_again">Afficher à nouveau</string>
+    <plurals name="chat_hidden_unread">
+        <item quantity="one">%1$d nouveau message</item>
+        <item quantity="other">%1$d nouveaux messages</item>
+        <item quantity="many">%1$d nouveaux messages</item>
+    </plurals>
 </resources>

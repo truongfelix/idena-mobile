@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Group chats with a shared key (SocialGroups.kt). -->
+<!-- Group chats with a shared key (SocialGroups.kt) and conversations hidden on the phone (SocialHiddenChats.kt). -->
 <resources>
     <string name="group_new">New group</string>
     <string name="group_new_note">Each person chosen receives the group\'s key in one transaction from you. Then every message is a single transaction, whatever the group\'s size. Members see the group in this app only, not on idena.social.</string>
@@ -31,8 +31,15 @@
     <string name="group_renamed">%1$s renamed the group “%2$s”</string>
     <string name="group_new_key">%1$s gave the group a new key</string>
     <string name="group_admin">created the group</string>
-    <string name="group_leave">Leave the group</string>
-    <string name="group_leave_note">The group disappears from this phone. Its members are not told, and you stay a member until its creator removes you.</string>
-    <string name="group_not_member">You left this group on this phone.</string>
     <string name="group_privacy_note">Only the group\'s members can read its messages. Who writes and when is public, on the chain for good. The group\'s name and members are not; how many they are shows each time its creator hands out a key.</string>
+    <string name="chat_hide">Hide the conversation</string>
+    <string name="chat_hidden">This conversation is hidden on this phone. Social settings shows it again.</string>
+    <string name="chat_hidden_title">Hidden conversations</string>
+    <string name="chat_hidden_note">Hidden on this phone only: nobody is told, and new messages still arrive. Writing to someone again shows your conversation with them.</string>
+    <string name="chat_none_hidden">No hidden conversation.</string>
+    <string name="chat_show_again">Show again</string>
+    <plurals name="chat_hidden_unread">
+        <item quantity="one">%1$d new message</item>
+        <item quantity="other">%1$d new messages</item>
+    </plurals>
 </resources>

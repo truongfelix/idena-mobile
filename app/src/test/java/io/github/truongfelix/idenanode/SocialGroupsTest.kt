@@ -191,7 +191,7 @@ class SocialGroupsTest {
         }
         // As the app before groups saved it: both tried, the key message read as nothing.
         val old = readNewMessages(ChatStore(), listOf(oneToOne), b, decrypt).let { it.copy(tried = it.tried + "0xk") }
-            .toJson().apply { remove("groupKeys"); remove("groupTried"); remove("leftGroups"); remove("groupNames"); remove("memberNames") }
+            .toJson().apply { remove("groupKeys"); remove("groupTried"); remove("hiddenChats"); remove("groupNames"); remove("memberNames") }
         val store = ChatStore.fromJson(old)
         assertEquals(setOf("0x1"), store.tried)
         val next = readNewMessages(store, listOf(oneToOne, keyCall), b, decrypt)
@@ -202,7 +202,7 @@ class SocialGroupsTest {
     @Test
     fun whatIsOfThisPhoneOnlyIsKept() {
         val key = groupConversationKey(a, group)
-        val store = ChatStore(leftGroups = setOf(key), groupNames = mapOf(key to "Us"), memberNames = mapOf(key to mapOf(c to "Grandma")))
+        val store = ChatStore(hiddenChats = setOf(key, conversationKey(listOf(a, b))), groupNames = mapOf(key to "Us"), memberNames = mapOf(key to mapOf(c to "Grandma")))
         assertEquals(store, ChatStore.fromJson(JSONObject(store.toJson().toString())))
         val k = keyOf("0xk", 10, 0, listOf(a, b, c), me = b)
         assertEquals("Us", groupTitle(GroupState(k), b, emptyMap(), "Us"))

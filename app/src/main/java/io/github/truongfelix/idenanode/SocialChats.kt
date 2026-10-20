@@ -18,7 +18,7 @@ import java.io.IOException
 /**
  * What the phone keeps of an account's messages: the calls tried with the node's key, the messages for it, how far
  * each conversation was read, the groups' keys ([GroupKey]) and the one-part calls tried with all of them, and what
- * is of this phone only: the groups left here, and the names given here to groups and to their members.
+ * is of this phone only: the conversations hidden here, and the names given here to groups and to their members.
  */
 data class ChatStore(
     val tried: Set<String> = emptySet(),
@@ -28,8 +28,8 @@ data class ChatStore(
     val groupKeys: List<GroupKey> = emptyList(),
     /** The one-part calls tried with every key of [groupKeys]: a new key tries only itself on them. */
     val groupTried: Set<String> = emptySet(),
-    /** The groups (conversation keys) left on this phone: not shown; the group is not told. */
-    val leftGroups: Set<String> = emptySet(),
+    /** The conversations (their keys) hidden on this phone, one-to-one or groups: nobody is told. */
+    val hiddenChats: Set<String> = emptySet(),
     /** By conversation key: the group's name on this phone, in place of the one its admin gave. */
     val groupNames: Map<String, String> = emptyMap(),
     /** By conversation key: names given on this phone to the group's members, shown in that group only. */
@@ -42,7 +42,7 @@ data class ChatStore(
         memberNames.forEach { (key, names) -> memberJson.put(key, JSONObject(names)) }
         return JSONObject().put("tried", JSONArray(tried.sorted())).put("messages", JSONArray(messages.map { it.toJson() })).put("seen", seenJson)
             .put("groupKeys", JSONArray(groupKeys.map { it.toJson() })).put("groupTried", JSONArray(groupTried.sorted()))
-            .put("leftGroups", JSONArray(leftGroups.sorted())).put("groupNames", JSONObject(groupNames)).put("memberNames", memberJson)
+            .put("hiddenChats", JSONArray(hiddenChats.sorted())).put("groupNames", JSONObject(groupNames)).put("memberNames", memberJson)
     }
 
     companion object {
@@ -66,7 +66,7 @@ data class ChatStore(
                 seen = seen.keys().asSequence().associateWith { key -> seen.getJSONArray(key).let { it.getLong(0) to it.getInt(1) } },
                 groupKeys = (0 until keys.length()).map { GroupKey.fromJson(keys.getJSONObject(it)) },
                 groupTried = strings(json.optJSONArray("groupTried")).toSet(),
-                leftGroups = strings(json.optJSONArray("leftGroups")).toSet(),
+                hiddenChats = strings(json.optJSONArray("hiddenChats")).toSet(),
                 groupNames = stringMap(json.optJSONObject("groupNames")),
                 memberNames = members.keys().asSequence().associateWith { stringMap(members.getJSONObject(it)) },
             )
@@ -158,8 +158,8 @@ class SocialChats(private val context: Context) {
         save(address, store.copy(seen = store.seen + (conversation.key to (last.height to last.index))))
     }
 
-    /** Leaves the group of [key] on this phone, or comes back to it ([left] false). */
-    fun setGroupLeft(key: String, left: Boolean) = change { it.copy(leftGroups = if (left) it.leftGroups + key else it.leftGroups - key) }
+    /** Hides the conversation of [key] on this phone, or shows it again ([hidden] false). */
+    fun setHidden(key: String, hidden: Boolean) = change { it.copy(hiddenChats = if (hidden) it.hiddenChats + key else it.hiddenChats - key) }
 
     /** Names the group of [key] [name] on this phone; blank takes the admin's name back. */
     fun setGroupName(key: String, name: String) = change {

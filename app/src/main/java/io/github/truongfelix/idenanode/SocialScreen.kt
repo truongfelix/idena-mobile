@@ -229,6 +229,12 @@ fun SocialScreen(
             page is SocialPage.Chat -> key(page) {
                 ChatView(model, page.key, model.pageState(page).list, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
             }
+            page is SocialPage.HiddenChats -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    HiddenChatsView(model, Modifier.weight(1f).padding(horizontal = 16.dp))
+                }
+            }
             page is SocialPage.GroupEdit -> key(page) {
                 GroupEditView(model, page.key, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
             }

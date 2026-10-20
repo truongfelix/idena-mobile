@@ -65,7 +65,7 @@ fun noKeyText(addresses: List<String>, names: Map<String, String>): String =
     tp(R.plurals.socialb_no_key, addresses.size, addresses.joinToString(", ") { displayName(it, names) })
 
 /** The people of a conversation as a title: their names, or short addresses. */
-private fun othersTitle(others: List<String>, names: Map<String, String>): String =
+fun othersTitle(others: List<String>, names: Map<String, String>): String =
     others.joinToString(", ") { displayName(it, names) }
 
 /** One line of a message for the list: its text, or what it is. */
@@ -202,7 +202,8 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     LaunchedEffect(key) { if (!isGroupKey(key)) model.lookUpKeys(others) }
     val noKey = if (isGroupKey(key)) emptyList() else others.filter { model.messageKeys[it] == "" }
     val looking = !isGroupKey(key) && others.any { it !in model.messageKeys }
-    // A group left on this phone. A member removed cannot tell: the newer key never reaches them.
+    // A group hidden on this phone (shown again from Social settings). A member removed cannot tell: the newer key
+    // never reaches them.
     val outOfGroup = isGroupKey(key) && group == null
     LaunchedEffect(conversation?.last?.hash) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size)
@@ -260,7 +261,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
         }
         Column(Modifier.padding(horizontal = 16.dp)) {
             when {
-                outOfGroup -> Text(t(R.string.group_not_member), Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
+                outOfGroup -> Text(t(R.string.chat_hidden), Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
                 noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 looking -> Text(t(R.string.socialb_looking_up_keys), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -293,7 +294,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             onRenameGroup = { model.chats.setGroupName(key, it) },
             onRenameMember = { member, name -> model.chats.setMemberName(key, member, name) },
             onEdit = { model.open(SocialPage.GroupEdit(key)) },
-            onLeave = { conversation?.let(model::leaveGroup) },
+            onHide = { conversation?.let(model::hideChat) },
             onDismiss = { privacy = false },
         )
     } else if (privacy) {
@@ -301,6 +302,8 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             onDismissRequest = { privacy = false },
             text = { Text(t(R.string.socialb_privacy_note)) },
             confirmButton = { TextButton(onClick = { privacy = false }) { Text(t(R.string.common_ok)) } },
+            // A conversation with messages hides on this phone; shown again from Social settings, or by writing again.
+            dismissButton = conversation?.let { c -> { TextButton(onClick = { privacy = false; model.hideChat(c) }) { Text(t(R.string.chat_hide)) } } },
         )
     }
 }

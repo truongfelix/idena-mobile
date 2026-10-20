@@ -113,7 +113,7 @@ fun GroupEventLine(text: String) {
 
 /**
  * A group's members ([group]: its admin first), with the names given on this phone ([names]); a tap on the title or a
- * member names it on this phone only. Its admin changes the group; any other member leaves it, on this phone.
+ * member names it on this phone only. Its admin changes the group; anyone hides it on this phone ([onHide]).
  */
 @Composable
 fun GroupInfoDialog(
@@ -124,10 +124,9 @@ fun GroupInfoDialog(
     onRenameGroup: (String) -> Unit,
     onRenameMember: (String, String) -> Unit,
     onEdit: () -> Unit,
-    onLeave: () -> Unit,
+    onHide: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var leaving by remember { mutableStateOf(false) }
     // The group ("") or the member named on this phone.
     var renaming by remember { mutableStateOf<String?>(null) }
     AlertDialog(
@@ -137,7 +136,10 @@ fun GroupInfoDialog(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item { Text(t(R.string.group_privacy_note), style = MaterialTheme.typography.bodySmall) }
                 item {
-                    TextButton(onClick = { renaming = "" }, contentPadding = PaddingValues(0.dp)) { Text(t(R.string.group_rename_here)) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextButton(onClick = { renaming = "" }, contentPadding = PaddingValues(0.dp)) { Text(t(R.string.group_rename_here)) }
+                        TextButton(onClick = { onDismiss(); onHide() }, contentPadding = PaddingValues(0.dp)) { Text(t(R.string.chat_hide)) }
+                    }
                 }
                 items(group.key.members) { address ->
                     Row(Modifier.fillMaxWidth().clickable(enabled = address != me) { renaming = address }, verticalAlignment = Alignment.CenterVertically) {
@@ -158,18 +160,10 @@ fun GroupInfoDialog(
         },
         confirmButton = {
             if (group.key.admin == me) TextButton(onClick = { onDismiss(); onEdit() }) { Text(t(R.string.group_change)) }
-            else TextButton(onClick = { leaving = true }) { Text(t(R.string.group_leave)) }
+            else TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
+        dismissButton = { if (group.key.admin == me) TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) } },
     )
-    if (leaving) {
-        AlertDialog(
-            onDismissRequest = { leaving = false },
-            text = { Text(t(R.string.group_leave_note)) },
-            confirmButton = { TextButton(onClick = { leaving = false; onDismiss(); onLeave() }) { Text(t(R.string.group_leave)) } },
-            dismissButton = { TextButton(onClick = { leaving = false }) { Text(t(R.string.common_cancel)) } },
-        )
-    }
     renaming?.let { who ->
         NameHereDialog(
             initial = if (who.isEmpty()) title else names[who].orEmpty(),

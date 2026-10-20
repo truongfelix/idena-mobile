@@ -63,6 +63,9 @@ sealed interface SocialPage {
     /** A new group ([key] null), or the name and members of the group of [key] ([GroupEditView]). */
     data class GroupEdit(val key: String? = null) : SocialPage
 
+    /** The conversations hidden on this phone ([HiddenChatsView]). */
+    data object HiddenChats : SocialPage
+
     /** Social settings ([SocialSettingsView]). */
     data object Settings : SocialPage
 
@@ -495,15 +498,20 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
     val chats = SocialChats(context)
 
-    /**
-     * The account's conversations, the latest first, those of strangers in Requests ([conversations]); none with a
-     * blocked account, nor the groups left on this phone.
-     */
-    val conversations: List<Conversation>
+    /** Every conversation of the account, the latest first ([conversations]), none with a blocked account. */
+    private val allConversations: List<Conversation>
         get() = myAddress?.let { me ->
             val store = chats.store
-            visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked).filter { it.key !in store.leftGroups }
+            visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked)
         }.orEmpty()
+
+    /** The account's conversations, those of strangers in Requests, without those hidden on this phone. */
+    val conversations: List<Conversation>
+        get() = allConversations.filter { it.key !in chats.store.hiddenChats }
+
+    /** The conversations hidden on this phone ([hideChat]). */
+    val hiddenConversations: List<Conversation>
+        get() = allConversations.filter { it.key in chats.store.hiddenChats }
 
     /** The names shown in the conversation of [key]: those given to its members on this phone first. */
     fun chatNames(key: String): Map<String, String> = chats.store.memberNames[key]?.let { names + it } ?: names
@@ -530,6 +538,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** Opens the conversation of the account with [others] (lowercase), with or without messages yet. */
     fun openChat(others: List<String>) {
         val me = myAddress ?: return
+        // Writing to someone again (a profile's ✉, a search) shows the conversation hidden with them.
+        chats.setHidden(conversationKey(others + me), false)
         open(SocialPage.Chat(conversationKey(others + me)))
     }
 
@@ -574,9 +584,12 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         sending.prepareGroupMessage(key, text, groupTitle(conversation)) { chatDrafts.remove(conversation.key) }
     }
 
-    /** Leaves the group of [conversation] on this phone: no longer shown; its members are not told, and only its admin removes a member. */
-    fun leaveGroup(conversation: Conversation) {
-        chats.setGroupLeft(conversation.key, true)
+    /**
+     * Hides [conversation] on this phone (one-to-one or a group): nobody is told, its messages still come and wait
+     * there, Social settings shows it again. In a group, only its admin removes a member.
+     */
+    fun hideChat(conversation: Conversation) {
+        chats.setHidden(conversation.key, true)
         back()
     }
 
