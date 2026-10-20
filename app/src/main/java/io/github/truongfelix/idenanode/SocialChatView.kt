@@ -268,7 +268,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 FilledIconButton(
                     onClick = { if (conversation?.group != null) model.sendGroupMessage(conversation, draft.trim()) else model.sendMessage(others, draft.trim(), key) },
                     enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
-                    modifier = Modifier.size(52.dp),
+                    modifier = Modifier.padding(bottom = 4.dp).size(SEND_BUTTON),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.common_send)) }
             }
         }

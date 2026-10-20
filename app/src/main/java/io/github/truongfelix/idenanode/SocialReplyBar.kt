@@ -51,7 +51,8 @@ fun replyDraft(post: SocialPost) = Draft(t(R.string.social_what_reply), t(R.stri
 /**
  * The reply bar under a thread, as the comments of the usual social apps: the thread stays on screen and scrolls
  * above it. The field answers [post] until 💬 Reply on a reply or comment points it there ("Replying to …", ✕ goes
- * back to the post); a tap in the field starts the reply. 🖼 opens the picture picker, and the picture joins the reply
+ * back to the post); a tap in the field starts the reply. 🖼, inside the field so that the text keeps the row (B-137),
+ * opens the picture picker, and the picture joins the reply
  * here; the line naming it (or a long text) opens a panel over the thread ([ReplyOptionsSheet]: the picture's size,
  * text on IPFS); ➤ asks for the fees as the editor's Post does. Not shown under a post of an older contract (read only).
  */
@@ -113,27 +114,32 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                             .focusRequester(focus)
                             .onFocusChanged { if (it.isFocused && sending.draft == null) sending.draft = replyDraft(post) },
                         placeholder = { Text(t(R.string.social_reply_to, displayName(post.call.author, model.names)), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (sending.draft == null) sending.draft = replyDraft(post)
+                                    picker.pick()
+                                },
+                                enabled = !picker.preparing,
+                            ) { Text("🖼") }
+                        },
                         maxLines = 5,
                         shape = RoundedCornerShape(24.dp),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     )
-                    IconButton(
-                        onClick = {
-                            if (sending.draft == null) sending.draft = replyDraft(post)
-                            picker.pick()
-                        },
-                        enabled = !picker.preparing,
-                    ) { Text("🖼") }
                     FilledIconButton(
                         onClick = sending::prepareDraft,
                         enabled = canPost && draft != null && !picker.preparing && (sending.draftText.isNotBlank() || sending.draftImage != null),
-                        modifier = Modifier.size(52.dp),
+                        modifier = Modifier.padding(bottom = 4.dp).size(SEND_BUTTON),
                     ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.social_post_reply)) }
                 }
             }
         }
     }
 }
+
+/** The send button of a reply or message bar: the field keeps the rest of the row (B-137). */
+val SEND_BUTTON = 48.dp
 
 /** A reply this long offers its text on IPFS (cheaper than in the transaction for long texts). */
 private const val LONG_REPLY = 280
