@@ -38,6 +38,15 @@
     <string name="chat_hidden_note">Hidden on this phone only: nobody is told, and new messages still arrive. Writing to someone again shows your conversation with them.</string>
     <string name="chat_none_hidden">No hidden conversation.</string>
     <string name="chat_show_again">Show again</string>
+    <string name="chat_hide_question">Hide this conversation?</string>
+    <string name="chat_hide_question_note">On this phone only: nobody is told, and new messages still arrive. Social settings › Hidden conversations shows it again.</string>
+    <string name="chat_hide_action">Hide</string>
+    <string name="chat_hidden_notice">Conversation hidden</string>
+    <string name="chat_hidden_undo">Undo</string>
+    <plurals name="chat_hidden_count">
+        <item quantity="one">%1$d hidden conversation</item>
+        <item quantity="other">%1$d hidden conversations</item>
+    </plurals>
     <plurals name="chat_hidden_unread">
         <item quantity="one">%1$d new message</item>
         <item quantity="other">%1$d new messages</item>

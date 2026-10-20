@@ -187,6 +187,12 @@ private fun MainScreen(showActivity: Int, showNode: Int, showChat: Pair<Int, Str
         }
     }
     LaunchedEffect(social) {
+        for (key in social.hiddenNotices) {
+            val result = notices.showSnackbar(t(R.string.chat_hidden_notice), actionLabel = t(R.string.chat_hidden_undo), duration = SnackbarDuration.Short)
+            if (result == SnackbarResult.ActionPerformed) social.chats.setHidden(key, false)
+        }
+    }
+    LaunchedEffect(social) {
         for (notice in social.notices) {
             val result = notices.showSnackbar(notice, actionLabel = t(R.string.node_notice_view), withDismissAction = true, duration = SnackbarDuration.Long)
             if (result == SnackbarResult.ActionPerformed) {

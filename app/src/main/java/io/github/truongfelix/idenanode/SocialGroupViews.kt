@@ -138,8 +138,9 @@ fun GroupInfoDialog(
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item { Text(t(R.string.group_privacy_note), style = MaterialTheme.typography.bodySmall) }
+                // One action a line: side by side, the longer texts (French) were cut.
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column {
                         TextButton(onClick = { renaming = "" }, contentPadding = PaddingValues(0.dp)) { Text(t(R.string.group_rename_here)) }
                         TextButton(onClick = { onDismiss(); onHide() }, contentPadding = PaddingValues(0.dp)) { Text(t(R.string.chat_hide)) }
                     }

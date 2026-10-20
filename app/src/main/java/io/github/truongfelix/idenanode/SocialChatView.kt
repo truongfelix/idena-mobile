@@ -123,6 +123,11 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
                 }
             }
             items(people, key = { "person:$it" }) { address -> PersonRow(address, model.names) { model.openChat(listOf(address)) } }
+            // The way back to what was hidden, also from Social settings.
+            val hidden = model.hiddenConversations.size
+            if (!searching && !requests && hidden > 0) item(key = "hidden") {
+                TextButton(onClick = { model.open(SocialPage.HiddenChats) }) { Text(tp(R.plurals.chat_hidden_count, hidden, hidden)) }
+            }
         }
     }
 }
@@ -203,6 +208,8 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
         conversation?.let { model.chats.markSeen(it) }
     }
     var privacy by remember { mutableStateOf(false) }
+    // Hiding asks first ([HideChatDialog]).
+    var hiding by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(key) { if (messages.isEmpty()) runCatching { focus.requestFocus() } }
     Column(modifier.imePadding()) {
@@ -284,7 +291,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             onRenameGroup = { model.chats.setGroupName(key, it) },
             onRenameMember = { member, name -> model.chats.setMemberName(key, member, name) },
             onEdit = { model.open(SocialPage.GroupEdit(key)) },
-            onHide = { conversation?.let(model::hideChat) },
+            onHide = { hiding = true },
             onDismiss = { privacy = false },
         )
     } else if (privacy) {
@@ -293,8 +300,11 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
             text = { Text(t(R.string.socialb_privacy_note)) },
             confirmButton = { TextButton(onClick = { privacy = false }) { Text(t(R.string.common_ok)) } },
             // A conversation with messages hides on this phone; shown again from Social settings, or by writing again.
-            dismissButton = conversation?.let { c -> { TextButton(onClick = { privacy = false; model.hideChat(c) }) { Text(t(R.string.chat_hide)) } } },
+            dismissButton = conversation?.let { { TextButton(onClick = { privacy = false; hiding = true }) { Text(t(R.string.chat_hide)) } } },
         )
+    }
+    if (hiding && conversation != null) {
+        HideChatDialog(onHide = { hiding = false; model.hideChat(conversation) }, onDismiss = { hiding = false })
     }
 }
 
