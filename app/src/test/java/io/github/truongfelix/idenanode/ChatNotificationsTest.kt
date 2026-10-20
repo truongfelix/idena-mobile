@@ -29,11 +29,15 @@ class ChatNotificationsTest {
         val store = ChatStore(messages = listOf(direct("0x1", 11, a, b, "hello"), direct("0x2", 12, b, a, "mine"), direct("0x3", 13, a, b, "again")))
         val notice = chatNotices(store, b, known).single()
         assertEquals("Alice", notice.title)
-        assertEquals(listOf("Alice" to "hello", "Alice" to "again"), notice.lines)
-        assertEquals(2, notice.count)
+        assertEquals("the message before my answer is read", listOf("Alice" to "again"), notice.lines)
+        assertEquals(1, notice.count)
         assertEquals(13L to 0, notice.newest)
-        val read = store.copy(seen = mapOf(notice.key to (11L to 0)))
+        val unanswered = ChatStore(messages = listOf(direct("0x1", 11, a, b, "hello"), direct("0x3", 13, a, b, "again")))
+        assertEquals(listOf("Alice" to "hello", "Alice" to "again"), chatNotices(unanswered, b, known).single().lines)
+        val read = unanswered.copy(seen = mapOf(notice.key to (11L to 0)))
         assertEquals(listOf("Alice" to "again"), chatNotices(read, b, known).single().lines)
+        val old = unanswered.copy(readBefore = 13 * 20)
+        assertEquals("before the first load: read", listOf("Alice" to "again"), chatNotices(old, b, known).single().lines)
         assertTrue("all read", chatNotices(store.copy(seen = mapOf(notice.key to (13L to 0))), b, known).isEmpty())
     }
 

@@ -232,9 +232,23 @@ fun conversations(
         } + groupConversations(messages.filter { it.group.isNotEmpty() }, groupKeys, me, people))
         .sortedWith(compareByDescending<Conversation> { it.last.height }.thenByDescending { it.last.index })
 
-/** The messages of [conversation] from others after [seen] (a height and index), the unread ones; a group's key messages too. */
-fun unreadCount(conversation: Conversation, me: String, seen: Pair<Long, Int>?): Int =
-    conversation.messages.count { it.from != me && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second) }
+/**
+ * The unread messages of [conversation] for [me]: those from others (a group's key messages too) after [seen] (a
+ * height and index), after [me]'s own last message (answering is reading), and from [readBefore] on (a block time;
+ * null: no such limit).
+ */
+fun unreadMessages(conversation: Conversation, me: String, seen: Pair<Long, Int>?, readBefore: Long? = null): List<ChatMessage> {
+    val mine = conversation.messages.lastOrNull { it.from == me }
+    val after = listOfNotNull(seen, mine?.let { it.height to it.index }).maxWithOrNull(compareBy({ it.first }, { it.second }))
+    return conversation.messages.filter {
+        it.from != me && (after == null || it.height > after.first || it.height == after.first && it.index > after.second) &&
+            (readBefore == null || it.time >= readBefore)
+    }
+}
+
+/** How many messages of [conversation] are unread for [me] ([unreadMessages]). */
+fun unreadCount(conversation: Conversation, me: String, seen: Pair<Long, Int>?, readBefore: Long? = null): Int =
+    unreadMessages(conversation, me, seen, readBefore).size
 
 /** A public key as the node writes it ("0x" optional), in lowercase hex without 0x; null when it is not one (33, 64 or 65 bytes). */
 fun publicKeyHex(text: String): String? {

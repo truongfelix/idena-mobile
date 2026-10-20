@@ -117,7 +117,7 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
                 )
             }
             items(shown, key = { it.key }) { conversation ->
-                val unread = unreadCount(conversation, me, model.chats.store.seen[conversation.key])
+                val unread = model.chats.store.unreadCount(conversation, me)
                 ConversationRow(conversation, model.chatTitle(conversation), me, model.chatNames(conversation.key), unread) {
                     model.open(SocialPage.Chat(conversation.key))
                 }
