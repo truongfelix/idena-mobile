@@ -11,11 +11,11 @@
     <string name="socialb_preview_picture">🖼 Image</string>
     <string name="socialb_requests">Demandes</string>
     <string name="socialb_messages">Messages</string>
-    <string name="socialb_search_name_or_address">Chercher un nom ou une adresse</string>
+    <string name="socialb_search_name_or_address">Chercher un nom, un @nom ou une adresse</string>
     <string name="socialb_back_to_conversations">‹ Discussions</string>
     <string name="socialb_requests_count">Demandes (%1$d) ›</string>
     <string name="socialb_requests_note">Messages de personnes que vous ne suivez pas et à qui vous n\'avez jamais écrit. Répondez ou acceptez pour les déplacer dans vos discussions.</string>
-    <string name="socialb_no_one_by_name">Personne de ce nom : collez son adresse.</string>
+    <string name="socialb_no_one_by_name">Personne de ce nom : tapez son @nom ou collez son adresse.</string>
     <string name="socialb_no_request">Aucune demande.</string>
     <string name="socialb_no_conversation_pending">Aucune discussion pour l\'instant. Les messages des blocs déjà lus sont encore en cours de lecture.</string>
     <string name="socialb_no_conversation">Aucune discussion pour l\'instant.</string>

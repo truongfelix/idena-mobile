@@ -83,9 +83,11 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
     val searching = query.isNotBlank()
     val shown = if (searching) findConversations(all, query, model.names) else all.filter { it.isRequest == requests }
     // Searching, the people with no one-to-one conversation shown come after the conversations.
+    // A name typed is also looked up in the profiles contract: anyone can be written to, followed or not.
+    val holder = rememberNameHolder(query)
     val people = if (!searching) emptyList() else {
         val withChat = shown.filter { !it.isGroup }.map { it.others.first() }.toSet()
-        chatCandidates(query, model.people, all, me).filter { it !in withChat }
+        chatCandidates(query, model.people, all, me, model.names, holder).filter { it !in withChat }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(if (requests) t(R.string.socialb_requests) else t(R.string.socialb_messages), style = MaterialTheme.typography.titleLarge)

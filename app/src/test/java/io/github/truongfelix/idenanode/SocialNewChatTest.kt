@@ -48,6 +48,36 @@ class SocialNewChatTest {
     }
 
     @Test
+    fun anAccountKnownByItsClaimedNameIsFoundWithoutBeingFollowed() {
+        // frank is in no list and no conversation: only the profiles read name him.
+        val frank = "0xffff000000000000000000000000000000000007"
+        val known = mapOf(frank to "@frank", alice to "@alice_c")
+        assertEquals(listOf(frank), chatCandidates("fra", people, emptyList(), me, known))
+        assertEquals(listOf(frank), chatCandidates("@Frank", people, emptyList(), me, known))
+        // The People list's name still finds alice, once.
+        assertEquals(listOf(alice), chatCandidates("ali", people, emptyList(), me, known))
+        // A blank query lists the conversations and the People list only, not every account known.
+        assertEquals(listOf(alice, bob, carol), chatCandidates("", people, emptyList(), me, known))
+    }
+
+    @Test
+    fun theHolderOfTheNameTypedComesFirst() {
+        val zed = "0x2222000000000000000000000000000000000008"
+        assertEquals(listOf(zed), chatCandidates("@zed", people, emptyList(), me, holder = zed.uppercase().replace("0X", "0x")))
+        assertEquals(listOf(alice), chatCandidates("@ali", people, emptyList(), me, holder = alice))
+        assertEquals(emptyList<String>(), chatCandidates("@me", people, emptyList(), me, holder = me))
+    }
+
+    @Test
+    fun aClaimableNameIsLowercaseWithoutItsAt() {
+        assertEquals("bob_1", claimableName(" @Bob_1 "))
+        assertEquals("frank", claimableName("frank"))
+        assertEquals(null, claimableName("ab"))
+        assertEquals(null, claimableName("a b"))
+        assertEquals(null, claimableName(alice))
+    }
+
+    @Test
     fun aConversationIsFoundByAnyOfItsPeople() {
         val names = peopleNames(people)
         val conversations = listOf(chat(dave), chat(alice, bob), chat(carol))

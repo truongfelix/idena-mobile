@@ -10,11 +10,11 @@
     <string name="socialb_preview_picture">🖼 Picture</string>
     <string name="socialb_requests">Requests</string>
     <string name="socialb_messages">Messages</string>
-    <string name="socialb_search_name_or_address">Search a name or address</string>
+    <string name="socialb_search_name_or_address">Search a name, @name or address</string>
     <string name="socialb_back_to_conversations">‹ Conversations</string>
     <string name="socialb_requests_count">Requests (%1$d) ›</string>
     <string name="socialb_requests_note">Messages from people you do not follow and never wrote to. Answer or accept to move them to your conversations.</string>
-    <string name="socialb_no_one_by_name">No one by that name: paste their address.</string>
+    <string name="socialb_no_one_by_name">No one by that name: type their @name or paste their address.</string>
     <string name="socialb_no_request">No request.</string>
     <string name="socialb_no_conversation_pending">No conversation yet. The messages of the blocks read before are still being read.</string>
     <string name="socialb_no_conversation">No conversation yet.</string>

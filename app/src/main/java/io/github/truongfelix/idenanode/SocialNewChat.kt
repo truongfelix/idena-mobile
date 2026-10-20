@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,20 +39,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /*
- * Starting a conversation: the people of the People list and those already written with, found by name or address
- * as it is typed; a whole address typed opens a conversation with it.
+ * Starting a conversation: the people of the People list, those already written with and every account the app knows
+ * a name of (the profiles read: the feed's authors among them), found by name or address as it is typed; a whole
+ * address typed, or a name claimed in the profiles contract (with or without its "@", [rememberNameHolder]), opens a
+ * conversation with that account, followed or not.
  */
 
-/** Whether [address]'s name or address holds [query] (any case); every address matches a blank query. */
+private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
+
+/** Whether [address]'s name or address holds [query] (any case, a leading "@" left out); every address matches a blank query. */
 private fun matches(address: String, query: String, names: Map<String, String>): Boolean {
-    val q = query.trim().lowercase()
-    return q.isEmpty() || address.contains(q) || names[address]?.lowercase()?.contains(q) == true
+    val q = query.trim().lowercase().removePrefix("@")
+    return q.isEmpty() || address.contains(q) || names[address]?.lowercase()?.removePrefix("@")?.contains(q) == true
 }
 
 /** The conversations of [conversations] with someone whose name or address holds [query], or a group so named. */
@@ -61,14 +70,48 @@ fun findConversations(conversations: List<Conversation>, query: String, names: M
     }
 
 /**
- * Who a new conversation can be with, for [query] (lowercase addresses): a whole address typed first, then the
- * people of the one-to-one conversations (the latest first), then the People list in name order; never [me], each once.
+ * Who a new conversation can be with, for [query] (lowercase addresses): a whole address typed first, then the holder
+ * of the name typed ([holder], from the profiles contract), then the people of the one-to-one conversations (the latest
+ * first), then the People list in name order, then, for a query that is not blank, the other accounts [known] names
+ * (by lowercase address: the names shown, claimed ones included) whose name or address holds it; never [me], each once.
  */
-fun chatCandidates(query: String, people: Map<String, Person>, conversations: List<Conversation>, me: String): List<String> {
-    val names = peopleNames(people)
+fun chatCandidates(
+    query: String,
+    people: Map<String, Person>,
+    conversations: List<Conversation>,
+    me: String,
+    known: Map<String, String> = emptyMap(),
+    holder: String? = null,
+): List<String> {
+    val names = known + peopleNames(people)
     val typed = query.trim().lowercase().takeIf(::isAddress)
-    val known = conversations.filter { !it.isGroup }.map { it.others.first() } + sortedPeople(people).map { it.address }
-    return (listOfNotNull(typed) + known.filter { matches(it, query, names) }).distinct().filter { it != me.lowercase() }
+    val listed = conversations.filter { !it.isGroup }.map { it.others.first() } + sortedPeople(people).map { it.address }
+    val others = if (query.isBlank()) emptyList() else known.keys.sortedBy { known[it]?.lowercase() }
+    return (listOfNotNull(typed, holder?.lowercase()) + (listed + others).filter { matches(it, query, names) })
+        .distinct().filter { it != me.lowercase() }
+}
+
+/**
+ * The name [query] holds when it can be one claimed in the profiles contract ("@name" or "name", [PROFILE_NAME]),
+ * lowercase without its "@"; else null.
+ */
+fun claimableName(query: String): String? = query.trim().lowercase().removePrefix("@").takeIf { PROFILE_NAME.matches(it) }
+
+/**
+ * The holder of the name [query] may be ([claimableName]), asked from the node's profiles contract once the typing
+ * pauses: null while asked, for a query that is no name, or when nobody holds it.
+ */
+@Composable
+fun rememberNameHolder(query: String): String? {
+    val context = LocalContext.current
+    val name = claimableName(query)
+    var holder by remember(name) { mutableStateOf<String?>(null) }
+    LaunchedEffect(name) {
+        if (name == null) return@LaunchedEffect
+        delay(300)
+        holder = withContext(Dispatchers.IO) { runCatching { NodeProfilesSource(rpc(context)).resolve(name).holder }.getOrNull() }
+    }
+    return holder
 }
 
 /** A rounded search bar, as the feed's ([SearchField]). */
