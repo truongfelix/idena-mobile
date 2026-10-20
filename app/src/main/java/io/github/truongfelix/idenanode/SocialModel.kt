@@ -200,6 +200,9 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The in-app notices of new activity, shown by the main screen. */
     val notices = Channel<String>(Channel.CONFLATED)
 
+    /** The conversation just hidden ([hideChat]), for the main screen's "Conversation hidden" bar and its Undo. */
+    val hiddenNotices = Channel<String>(Channel.CONFLATED)
+
     /** The activity of the kinds that notify, not seen yet. */
     val unread: List<ActivityItem>
         get() = newActivity(activity, seenThrough ?: Long.MAX_VALUE, notify)
@@ -598,6 +601,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
      */
     fun hideChat(conversation: Conversation) {
         chats.setHidden(conversation.key, true)
+        hiddenNotices.trySend(conversation.key)
         back()
     }
 

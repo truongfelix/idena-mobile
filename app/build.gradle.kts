@@ -12,7 +12,7 @@ android {
         applicationId = "io.github.truongfelix.idenanode"
         minSdk = 29
         targetSdk = 35
-        versionCode = 111
+        versionCode = 112
         versionName = "0.2.0"
         ndk {
             // The node library is built for 64-bit ARM only.
