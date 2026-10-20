@@ -204,6 +204,12 @@ data class Conversation(
 
     val isGroup: Boolean
         get() = others.size > 1 || group != null
+
+    /** By message hash: the group's key message before it ([groupEventText] reads a change against it). */
+    val previousKeys: Map<String, ChatMessage?> by lazy {
+        var last: ChatMessage? = null
+        messages.associate { m -> m.hash to last.also { if (m.kind == ChatMessage.KEY) last = m } }
+    }
 }
 
 /**

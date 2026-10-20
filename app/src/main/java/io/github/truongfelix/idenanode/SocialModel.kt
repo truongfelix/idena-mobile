@@ -371,7 +371,6 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         markSeen()
     }
 
-    /** Shows the Activity from a notice: its list, not a page over it nor the editor (the draft's text stays). */
     /** Shows the conversation of [key] (a message notification's tap) over the Messages list. */
     fun showChat(key: String) {
         stacks.getValue(SocialView.Messages).clear()
@@ -381,6 +380,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         open(SocialPage.Chat(key))
     }
 
+    /** Shows the Activity from a notice: its list, not a page over it nor the editor (the draft's text stays). */
     fun showActivity() {
         stacks.getValue(SocialView.Activity).clear()
         dropClosedPageStates()
@@ -507,12 +507,13 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The private messages of the account ([SocialChats]), read from the scan with the node's key. */
     val chats = SocialChats(context)
 
-    /** Every conversation of the account, the latest first ([conversations]), none with a blocked account. */
-    private val allConversations: List<Conversation>
-        get() = myAddress?.let { me ->
+    /** Every conversation of the account, the latest first ([conversations]), none with a blocked account; built once per change. */
+    private val allConversations: List<Conversation> by derivedStateOf {
+        myAddress?.let { me ->
             val store = chats.store
             visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked)
         }.orEmpty()
+    }
 
     /** The account's conversations, those of strangers in Requests, without those hidden on this phone. */
     val conversations: List<Conversation>
@@ -523,12 +524,10 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         get() = allConversations.filter { it.key in chats.store.hiddenChats }
 
     /** The names shown in the conversation of [key]: those given to its members on this phone first. */
-    fun chatNames(key: String): Map<String, String> = chats.store.memberNames[key]?.let { names + it } ?: names
+    fun chatNames(key: String): Map<String, String> = chats.store.chatNames(key, names)
 
-    /** A group's title on this phone ([groupTitle]). */
-    fun groupTitle(conversation: Conversation): String = conversation.group?.let {
-        groupTitle(it, myAddress.orEmpty(), chatNames(conversation.key), chats.store.groupNames[conversation.key])
-    }.orEmpty()
+    /** A conversation's title on this phone ([ChatStore.titleOf]). */
+    fun chatTitle(conversation: Conversation): String = chats.store.titleOf(conversation, myAddress.orEmpty(), names)
 
     /** The conversations (not Requests) with a message not read yet. */
     val unreadConversations: Int
@@ -590,7 +589,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** Sends [text] to the group of [conversation], under its current key. */
     fun sendGroupMessage(conversation: Conversation, text: String) {
         val key = conversation.group?.key ?: return
-        sending.prepareGroupMessage(key, text, groupTitle(conversation)) { chatDrafts.remove(conversation.key) }
+        sending.prepareGroupMessage(key, text, chatTitle(conversation)) { chatDrafts.remove(conversation.key) }
     }
 
     /**

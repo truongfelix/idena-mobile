@@ -96,8 +96,7 @@ fun groupEventText(line: ChatMessage, previous: ChatMessage?, me: String, names:
 }
 
 /** The key message before [line] in [conversation], for [groupEventText]. */
-fun previousKeyLine(conversation: Conversation, line: ChatMessage): ChatMessage? =
-    conversation.messages.takeWhile { it.hash != line.hash }.lastOrNull { it.kind == ChatMessage.KEY }
+fun previousKeyLine(conversation: Conversation, line: ChatMessage): ChatMessage? = conversation.previousKeys[line.hash]
 
 /** A key message, centred between the messages. */
 @Composable
@@ -112,8 +111,10 @@ fun GroupEventLine(text: String) {
 }
 
 /**
- * A group's members ([group]: its admin first), with the names given on this phone ([names]); a tap on the title or a
- * member names it on this phone only. Its admin changes the group; anyone hides it on this phone ([onHide]).
+ * A group's members ([group]: its admin first), with the names shown ([names]); a tap on the title or a member names
+ * it on this phone only, starting from the name given here before ([localTitle], [localNames]), never from the shown
+ * one: saved unchanged, the admin's name and the members' own keep following their changes. Its admin changes the
+ * group; anyone hides it on this phone ([onHide]).
  */
 @Composable
 fun GroupInfoDialog(
@@ -121,6 +122,8 @@ fun GroupInfoDialog(
     group: GroupState,
     me: String,
     names: Map<String, String>,
+    localTitle: String?,
+    localNames: Map<String, String>,
     onRenameGroup: (String) -> Unit,
     onRenameMember: (String, String) -> Unit,
     onEdit: () -> Unit,
@@ -166,7 +169,8 @@ fun GroupInfoDialog(
     )
     renaming?.let { who ->
         NameHereDialog(
-            initial = if (who.isEmpty()) title else names[who].orEmpty(),
+            initial = if (who.isEmpty()) localTitle.orEmpty() else localNames[who].orEmpty(),
+            shown = if (who.isEmpty()) title else displayName(who, names),
             note = t(if (who.isEmpty()) R.string.group_rename_note else R.string.group_rename_member_note),
             onSave = { if (who.isEmpty()) onRenameGroup(it) else onRenameMember(who, it); renaming = null },
             onDismiss = { renaming = null },
@@ -174,9 +178,12 @@ fun GroupInfoDialog(
     }
 }
 
-/** A name given on this phone: [initial] to change, [note] telling who sees it; empty takes the name back. */
+/**
+ * A name given on this phone: [initial] (the one given before, or empty), [shown] the name shown meanwhile, [note]
+ * telling who sees it; empty takes the name back.
+ */
 @Composable
-private fun NameHereDialog(initial: String, note: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+private fun NameHereDialog(initial: String, shown: String, note: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var name by rememberSaveable { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -184,7 +191,13 @@ private fun NameHereDialog(initial: String, note: String, onSave: (String) -> Un
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(note, style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(value = name, onValueChange = { name = it.take(MAX_GROUP_NAME) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(MAX_GROUP_NAME) },
+                    singleLine = true,
+                    placeholder = { Text(shown, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         confirmButton = { TextButton(onClick = { onSave(name) }) { Text(t(R.string.group_save_name)) } },

@@ -68,12 +68,12 @@ class ChatNotificationsTest {
     }
 
     @Test
-    fun onlyANewerMessageSounds() {
+    fun onlyANewerMessagePostsAgain() {
         val n1 = ChatNotice("k1", "A", false, listOf("A" to "x"), listOf(1), 1, 10L to 0)
         val n2 = ChatNotice("k2", "B", false, listOf("B" to "y"), listOf(1), 1, 20L to 1)
-        assertEquals(setOf("k1", "k2"), noticesToSound(listOf(n1, n2), emptyMap()))
-        assertEquals(setOf("k2"), noticesToSound(listOf(n1, n2), mapOf("k1" to (10L to 0), "k2" to (20L to 0))))
-        assertEquals(emptySet<String>(), noticesToSound(listOf(n1, n2), mapOf("k1" to (10L to 0), "k2" to (20L to 1))))
+        assertEquals(listOf("k1", "k2"), noticesToPost(listOf(n1, n2), emptyMap()).map { it.key })
+        assertEquals(listOf("k2"), noticesToPost(listOf(n1, n2), mapOf("k1" to (10L to 0), "k2" to (20L to 0))).map { it.key })
+        assertEquals("both shown already (or swiped away)", emptyList<ChatNotice>(), noticesToPost(listOf(n1, n2), mapOf("k1" to (10L to 0), "k2" to (20L to 1))))
     }
 
     @Test
@@ -88,5 +88,19 @@ class ChatNotificationsTest {
         assertEquals(setOf("0x9"), merged.groupTried)
         assertEquals("the app's own: what was seen", saved.seen, merged.seen)
         assertEquals(saved, withOpened(saved, null))
+    }
+
+    @Test
+    fun aReadFinishedAfterAHideOrARenameKeepsThem() {
+        val before = ChatStore(messages = listOf(direct("0x1", 11, a, b, "hello")))
+        // The app's read started from [before]; meanwhile the conversation was hidden, renamed and read.
+        val read = before.copy(tried = setOf("0x1", "0x2"), messages = before.messages + direct("0x2", 12, a, b, "again"))
+        val key = conversationKey(listOf(a, b))
+        val meanwhile = before.copy(hiddenChats = setOf(key), groupNames = mapOf(key to "x"), seen = mapOf(key to (11L to 0)))
+        val merged = withOpened(meanwhile, read)
+        assertEquals(setOf(key), merged.hiddenChats)
+        assertEquals(mapOf(key to "x"), merged.groupNames)
+        assertEquals(mapOf(key to (11L to 0)), merged.seen)
+        assertEquals(listOf("hello", "again"), merged.messages.map { it.text })
     }
 }

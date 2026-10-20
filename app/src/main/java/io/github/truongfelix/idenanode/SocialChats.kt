@@ -74,6 +74,15 @@ data class ChatStore(
     }
 }
 
+/** The names shown in the conversation of [key]: those given to its members on this phone first, then [names]. */
+fun ChatStore.chatNames(key: String, names: Map<String, String>): Map<String, String> = memberNames[key]?.let { names + it } ?: names
+
+/** [conversation]'s title on this phone: a group's ([groupTitle], its name here first), else its people's names. */
+fun ChatStore.titleOf(conversation: Conversation, me: String, names: Map<String, String>): String {
+    val shown = chatNames(conversation.key, names)
+    return conversation.group?.let { groupTitle(it, me, shown, groupNames[conversation.key]) } ?: othersTitle(conversation.others, shown)
+}
+
 /** The messages to try at once (one batch of social_decrypt calls). */
 private const val DECRYPT_BATCH = 40
 
@@ -141,27 +150,29 @@ class SocialChats(private val context: Context) {
         store = runCatching { ChatStore.fromJson(JSONObject(file(address).readText())) }.getOrDefault(ChatStore())
     }
 
-    /** Tries the calls not tried yet with the node's key and saves what changed. Call off the main thread. */
+    /**
+     * Tries the calls not tried yet with the node's key and saves what changed. Call off the main thread. What was
+     * read is merged into the store as it is once the node answered ([withOpened]): a conversation hidden, renamed or
+     * read meanwhile stays so.
+     */
     fun update(calls: List<MessageCall>, rpc: NodeRpc) {
         val address = account ?: return
-        val next = readNewMessages(store, calls, address) { chunk ->
+        val read = readNewMessages(store, calls, address) { chunk ->
             rpc.batch("social_decrypt", chunk.map { JSONArray().put(JSONObject().put("parts", JSONArray(it.parts))) }).map { it as? JSONObject }
         }
-        if (next != store) save(address, next)
+        change { if (account == address) withOpened(it, read) else it }
     }
 
     /** Marks [conversation] read up to its last message. */
     fun markSeen(conversation: Conversation) {
-        val address = account ?: return
         val last = conversation.last
-        ChatNotifications.cancel(context, conversation.key)
-        if (store.seen[conversation.key] == (last.height to last.index)) return
-        save(address, store.copy(seen = store.seen + (conversation.key to (last.height to last.index))))
+        account?.let { ChatNotifications.cancel(context, it, conversation.key) }
+        change { it.copy(seen = it.seen + (conversation.key to (last.height to last.index))) }
     }
 
     /** Hides the conversation of [key] on this phone, or shows it again ([hidden] false). */
     fun setHidden(key: String, hidden: Boolean) {
-        if (hidden) ChatNotifications.cancel(context, key)
+        if (hidden) account?.let { ChatNotifications.cancel(context, it, key) }
         change { it.copy(hiddenChats = if (hidden) it.hiddenChats + key else it.hiddenChats - key) }
     }
 
@@ -178,7 +189,11 @@ class SocialChats(private val context: Context) {
         it.copy(memberNames = if (names.isEmpty()) it.memberNames - key else it.memberNames + (key to names))
     }
 
-    private fun change(transform: (ChatStore) -> ChatStore) {
+    // One change of the store at a time (the reads off the main thread, the user's changes on it): each starts from
+    // the last one saved, and one file write at a time.
+    private val lock = Any()
+
+    private fun change(transform: (ChatStore) -> ChatStore) = synchronized(lock) {
         val address = account ?: return
         val next = transform(store)
         if (next != store) save(address, next)

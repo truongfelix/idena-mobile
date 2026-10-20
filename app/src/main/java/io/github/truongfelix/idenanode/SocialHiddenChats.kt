@@ -36,7 +36,7 @@ fun HiddenChatsView(model: SocialModel, modifier: Modifier = Modifier) {
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (conversation.group != null) model.groupTitle(conversation) else othersTitle(conversation.others, model.names),
+                        model.chatTitle(conversation),
                         style = MaterialTheme.typography.bodyLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

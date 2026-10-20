@@ -56,10 +56,8 @@ fun chatNotices(store: ChatStore, me: String, people: Map<String, Person>): List
                 it.from != me && (seen == null || it.height > seen.first || it.height == seen.first && it.index > seen.second)
             }
             if (unread.isEmpty()) return@mapNotNull null
-            val chatNames = store.memberNames[conversation.key]?.let { names + it } ?: names
-            val group = conversation.group
-            val title = if (group != null) groupTitle(group, me, chatNames, store.groupNames[conversation.key])
-            else conversation.others.joinToString(", ") { displayName(it, chatNames) }
+            val chatNames = store.chatNames(conversation.key, names)
+            val title = store.titleOf(conversation, me, names)
             val shown = unread.takeLast(NOTICE_LINES)
             ChatNotice(
                 key = conversation.key,
@@ -76,14 +74,9 @@ fun chatNotices(store: ChatStore, me: String, people: Map<String, Person>): List
         }
 }
 
-/** The conversations of [notices] to sound for: a message newer than the one announced before ([announced], by key). */
-fun noticesToSound(notices: List<ChatNotice>, announced: Map<String, Pair<Long, Int>>): Set<String> =
-    notices.filter { n -> announced[n.key]?.let { a -> n.newest.first > a.first || n.newest.first == a.first && n.newest.second > a.second } ?: true }
-        .mapTo(HashSet()) { it.key }
-
 /**
- * [store] (the app's file: what it read, seen, hid and named) with what the service opened before ([opened], kept in
- * its own process), so that no call is opened twice.
+ * [store] with what another reading opened ([opened]: the service's, or the app's own read while [store] changed),
+ * so that no call is opened twice; what is of the phone only (seen, hidden, names) stays [store]'s.
  */
 fun withOpened(store: ChatStore, opened: ChatStore?): ChatStore {
     if (opened == null) return store
@@ -97,6 +90,10 @@ fun withOpened(store: ChatStore, opened: ChatStore?): ChatStore {
     )
 }
 
+/** The notices to post (again): those whose newest message is not the one their notification already shows. */
+fun noticesToPost(notices: List<ChatNotice>, posted: Map<String, Pair<Long, Int>>): List<ChatNotice> =
+    notices.filter { posted[it.key] != it.newest }
+
 /** The notifications of new messages (see the top of this file). */
 object ChatNotifications {
     private const val CHANNEL_ID = "messages"
@@ -105,8 +102,8 @@ object ChatNotifications {
     /** The extra of the intent that opens a conversation: its key. */
     const val EXTRA_OPEN_CHAT = "openChat"
 
-    // What the service opened, kept in its process only.
-    private var opened: ChatStore? = null
+    // What the service opened, and for which account, kept in its process (and its own file across restarts).
+    private var opened: Pair<String, ChatStore>? = null
 
     fun createChannel(context: Context) {
         val channel = NotificationChannel(CHANNEL_ID, t(R.string.chat_channel_name), NotificationManager.IMPORTANCE_DEFAULT)
@@ -115,64 +112,81 @@ object ChatNotifications {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    /** Removes the notification of the conversation of [key] (read, or hidden). */
-    fun cancel(context: Context, key: String) {
+    /** Removes the notification of [account]'s conversation of [key] (read, or hidden). */
+    @Synchronized
+    fun cancel(context: Context, account: String, key: String) {
         runCatching { context.getSystemService(NotificationManager::class.java).cancel(key, NOTIFICATION_ID) }
         runCatching {
-            val state = announced(context) ?: return
-            if (key in state.second) save(context, state.first, state.second - key)
+            val state = announced(context, account) ?: return
+            if (key in state.second) save(context, account, state.first, state.second - key)
         }
     }
 
-    /** Removes every message notification ("Messages" switched off). */
+    /** Removes every message notification ("Messages" switched off), of every account. */
+    @Synchronized
     fun clearAll(context: Context) {
-        val state = announced(context) ?: return
-        state.second.keys.forEach { runCatching { context.getSystemService(NotificationManager::class.java).cancel(it, NOTIFICATION_ID) } }
-        runCatching { save(context, state.first, emptyMap()) }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        dir(context).listFiles { f -> f.name.startsWith(ANNOUNCED) }.orEmpty().forEach { f ->
+            val account = f.name.removePrefix(ANNOUNCED).removeSuffix(".json")
+            val state = announced(context, account) ?: return@forEach
+            state.second.keys.forEach { runCatching { manager.cancel(it, NOTIFICATION_ID) } }
+            runCatching { save(context, account, state.first, emptyMap()) }
+        }
     }
 
-    private fun file(context: Context) = File(context.filesDir, "social/messages_announced.json")
+    private const val ANNOUNCED = "messages_announced-"
+
+    private fun dir(context: Context) = File(context.filesDir, "social").also { it.mkdirs() }
+
+    private fun announcedFile(context: Context, account: String) = File(dir(context), "$ANNOUNCED$account.json")
+
+    // The service's own reading of [account]'s calls, so that a restart of the node does not open them all again.
+    private fun openedFile(context: Context, account: String) = File(dir(context), "messages_opened-$account.json")
 
     /**
-     * The first block whose messages notify (the newest one at the first check: older ones were there before) and,
-     * by conversation, the notification posted and the newest message it announced; null before the first check.
+     * The first block whose messages notify (the newest one at [account]'s first check: older ones were there before)
+     * and, by conversation, the notification posted and the newest message it shows; null before the first check.
      */
-    private fun announced(context: Context): Pair<Long, Map<String, Pair<Long, Int>>>? = runCatching {
-        val json = JSONObject(file(context).readText())
+    private fun announced(context: Context, account: String): Pair<Long, Map<String, Pair<Long, Int>>>? = runCatching {
+        val json = JSONObject(announcedFile(context, account).readText())
         val posted = json.getJSONObject("posted")
         json.getLong("since") to posted.keys().asSequence().associateWith { key -> posted.getJSONArray(key).let { it.getLong(0) to it.getInt(1) } }
     }.getOrNull()
 
-    private fun save(context: Context, since: Long, posted: Map<String, Pair<Long, Int>>) {
+    private fun save(context: Context, account: String, since: Long, posted: Map<String, Pair<Long, Int>>) {
         val json = JSONObject()
         posted.forEach { (key, at) -> json.put(key, JSONArray().put(at.first).put(at.second)) }
-        file(context).writeText(JSONObject().put("since", since).put("posted", json).toString())
+        announcedFile(context, account).writeText(JSONObject().put("since", since).put("posted", json).toString())
     }
 
     /**
      * One check of the node's service: opens [calls] (the scan's messages) for [me] with the node ([rpc]) and the
-     * groups' keys, then posts, updates or removes each conversation's notification.
+     * groups' keys, then posts each conversation's notification when it has a newer message (one swiped away stays
+     * away until then), and removes those read or hidden.
      */
     @Synchronized
     fun check(context: Context, rpc: NodeRpc, me: String, calls: List<MessageCall>, people: Map<String, Person>) {
         val saved = runCatching { ChatStore.fromJson(JSONObject(SocialChats.file(context, me).readText())) }.getOrDefault(ChatStore())
-        val store = readNewMessages(withOpened(saved, opened), calls, me) { chunk ->
+        val mine = opened?.takeIf { it.first == me }?.second
+            ?: runCatching { ChatStore.fromJson(JSONObject(openedFile(context, me).readText())) }.getOrNull()
+        val store = readNewMessages(withOpened(saved, mine), calls, me) { chunk ->
             rpc.batch("social_decrypt", chunk.map { JSONArray().put(JSONObject().put("parts", JSONArray(it.parts))) }).map { it as? JSONObject }
         }
-        opened = store
-        val state = announced(context)
+        if (store != withOpened(saved, mine)) runCatching { openedFile(context, me).writeText(store.toJson().toString()) }
+        opened = me to store
+        val state = announced(context, me)
         val since = state?.first ?: calls.maxOfOrNull { it.height } ?: 0
         val posted = state?.second.orEmpty()
         val notices = chatNotices(store, me, people).filter { it.newest.first > since }
-        val sound = noticesToSound(notices, posted)
         val manager = context.getSystemService(NotificationManager::class.java)
         (posted.keys - notices.mapTo(HashSet()) { it.key }).forEach { runCatching { manager.cancel(it, NOTIFICATION_ID) } }
         createChannel(context)
-        notices.forEach { runCatching { manager.notify(it.key, NOTIFICATION_ID, notification(context, it, silent = it.key !in sound)) } }
-        save(context, since, notices.associate { it.key to it.newest })
+        // Only a newer message posts again, and sounds: each check would else bring back one swiped away.
+        noticesToPost(notices, posted).forEach { runCatching { manager.notify(it.key, NOTIFICATION_ID, notification(context, it)) } }
+        save(context, me, since, notices.associate { it.key to it.newest })
     }
 
-    private fun notification(context: Context, notice: ChatNotice, silent: Boolean): android.app.Notification {
+    private fun notification(context: Context, notice: ChatNotice): android.app.Notification {
         val open = PendingIntent.getActivity(
             context, notice.key.hashCode(), Intent(context, MainActivity::class.java).putExtra(EXTRA_OPEN_CHAT, notice.key),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -192,7 +206,7 @@ object ChatNotifications {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setContentIntent(open)
             .setAutoCancel(true)
-            .setSilent(silent)
             .build()
+            .also { SocialBadge.miuiCount(it, notice.count) }
     }
 }
