@@ -83,12 +83,15 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
     val searching = query.isNotBlank()
     val shown = if (searching) findConversations(all, query, model.names) else all.filter { it.isRequest == requests }
     // Searching, the people with no one-to-one conversation shown come after the conversations.
-    // A name typed is also looked up in the profiles contract: anyone can be written to, followed or not.
+    // A name typed is also looked up in the profiles contract, and a message code pasted gives its account (its key
+    // kept): anyone can be written to, followed or not.
+    val coded = rememberMessageCodeAddress(model, query)
     val holder = rememberNameHolder(query)
     val people = if (!searching) emptyList() else {
         val withChat = shown.filter { !it.isGroup }.map { it.others.first() }.toSet()
-        chatCandidates(query, model.people, all, me, model.names, holder).filter { it !in withChat }
+        chatCandidates(query, model.people, all, me, model.names, coded ?: holder).filter { it !in withChat }
     }
+    var ownCode by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(if (requests) t(R.string.socialb_requests) else t(R.string.socialb_messages), style = MaterialTheme.typography.titleLarge)
         RoundSearchField(query, { query = it }, t(R.string.socialb_search_name_or_address))
@@ -96,8 +99,11 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             if (!searching) item(key = "head") {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (requests) TextButton(onClick = { requests = false }) { Text(t(R.string.socialb_back_to_conversations)) }
-                    else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { model.open(SocialPage.GroupEdit()) }) { Text(t(R.string.group_new)) }
+                    else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { model.open(SocialPage.GroupEdit()) }) { Text(t(R.string.group_new)) }
+                            TextButton(onClick = { ownCode = true }) { Text(t(R.string.msgcode_mine)) }
+                        }
                         if (waiting > 0) TextButton(onClick = { requests = true }) { Text(t(R.string.socialb_requests_count, waiting)) }
                     }
                     if (requests) Text(
@@ -132,6 +138,7 @@ fun MessagesList(model: SocialModel, modifier: Modifier) {
             }
         }
     }
+    if (ownCode) OwnMessageCodeDialog(onDismiss = { ownCode = false })
 }
 
 @Composable
@@ -212,6 +219,8 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     var privacy by remember { mutableStateOf(false) }
     // Hiding asks first ([HideChatDialog]).
     var hiding by remember { mutableStateOf(false) }
+    // The address whose message code is being pasted.
+    var addingCode by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(key) { if (messages.isEmpty()) runCatching { focus.requestFocus() } }
     Column(modifier.imePadding()) {
@@ -259,7 +268,10 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
         Column(Modifier.padding(horizontal = 16.dp)) {
             when {
                 outOfGroup -> Text(t(R.string.chat_hidden), Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
-                noKey.isNotEmpty() -> Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                noKey.isNotEmpty() -> {
+                    Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    if (noKey.size == 1) TextButton(onClick = { addingCode = noKey.first() }) { Text(t(R.string.msgcode_add)) }
+                }
                 looking -> Text(t(R.string.socialb_looking_up_keys), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (!outOfGroup) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -307,6 +319,9 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     }
     if (hiding && conversation != null) {
         HideChatDialog(onHide = { hiding = false; model.hideChat(conversation) }, onDismiss = { hiding = false })
+    }
+    addingCode?.let { address ->
+        AddMessageCodeDialog(address, onAdd = { model.addMessageCode(address, it); addingCode = null }, onDismiss = { addingCode = null })
     }
 }
 

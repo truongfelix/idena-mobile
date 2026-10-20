@@ -224,9 +224,11 @@ fun GroupEditView(model: SocialModel, key: String?, canSend: Boolean, onBack: ()
     LaunchedEffect(chosen.toList()) { model.lookUpKeys(chosen.toList()) }
     val noKey = chosen.filter { model.messageKeys[it] == "" }
     val looking = chosen.any { it !in model.messageKeys }
-    // A name typed is also looked up in the profiles contract: anyone can be added, followed or not.
+    // A name typed is also looked up in the profiles contract, and a message code pasted gives its account (its key
+    // kept): anyone can be added, followed or not.
+    val coded = rememberMessageCodeAddress(model, query)
     val holder = rememberNameHolder(query)
-    val candidates = chosen.toList() + chatCandidates(query, model.people, model.conversations, me, model.names, holder).filter { it !in chosen }
+    val candidates = chosen.toList() + chatCandidates(query, model.people, model.conversations, me, model.names, coded ?: holder).filter { it !in chosen }
     val changed = group == null || name.trim() != group.key.name || chosen.toSet() != before.toSet()
     // Nothing changed in a group: the button hands out a new key alone.
     val ready = canSend && name.isNotBlank() && chosen.isNotEmpty() && chosen.size <= MAX_GROUP_MEMBERS && noKey.isEmpty() && !looking

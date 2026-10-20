@@ -98,6 +98,18 @@ fun chatCandidates(
 fun claimableName(query: String): String? = query.trim().lowercase().removePrefix("@").takeIf { PROFILE_NAME.matches(it) }
 
 /**
+ * The account of the message code [query] may be ([parseMessageCode]), its key kept for it ([SocialModel.addMessageCode]);
+ * null for a query that is no code.
+ */
+@Composable
+fun rememberMessageCodeAddress(model: SocialModel, query: String): String? {
+    val key = parseMessageCode(query)
+    val address = key?.let(::addressOfPublicKey)
+    LaunchedEffect(key) { if (key != null && address != null) model.addMessageCode(address, key) }
+    return address
+}
+
+/**
  * The holder of the name [query] may be ([claimableName]), asked from the node's profiles contract once the typing
  * pauses: null while asked, for a query that is no name, or when nobody holds it.
  */

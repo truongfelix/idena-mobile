@@ -38,6 +38,16 @@
     <string name="chat_hidden_note">Hidden on this phone only: nobody is told, and new messages still arrive. Writing to someone again shows your conversation with them.</string>
     <string name="chat_none_hidden">No hidden conversation.</string>
     <string name="chat_show_again">Show again</string>
+    <string name="msgcode_mine">My message code</string>
+    <string name="msgcode_title">Your message code</string>
+    <string name="msgcode_note">Share it with the people who should be able to write to you: with it they can, even before your first transaction. It holds only your public key, nothing secret.</string>
+    <string name="msgcode_unavailable">Your key cannot be read now.</string>
+    <string name="msgcode_share">Share my message code</string>
+    <string name="msgcode_add">Add their message code</string>
+    <string name="msgcode_add_note">Ask them for their message code (Messages, \"My message code\") and paste it here. You can also paste it in the Messages search.</string>
+    <string name="msgcode_field">Message code</string>
+    <string name="msgcode_wrong">This code is another account\'s.</string>
+    <string name="msgcode_save">Add</string>
     <string name="chat_hide_question">Hide this conversation?</string>
     <string name="chat_hide_question_note">On this phone only: nobody is told, and new messages still arrive. Social settings › Hidden conversations shows it again.</string>
     <string name="chat_hide_action">Hide</string>

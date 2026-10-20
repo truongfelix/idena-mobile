@@ -2,8 +2,8 @@
 <!-- The Social tab's messages, contacts, lists, following and profile pages, and the profiles contract's cards, editor, Trust and vouching (Social*.kt, Profile*.kt, People.kt). -->
 <resources>
     <plurals name="socialb_no_key">
-        <item quantity="one">%1$s cannot receive private messages yet. A message is encrypted with the account\'s public key, and an address alone does not give it: the key is known once the account is an Idena identity or has used Idena Social.</item>
-        <item quantity="other">%1$s cannot receive private messages yet. A message is encrypted with each account\'s public key, and an address alone does not give it: the key is known once the account is an Idena identity or has used Idena Social.</item>
+        <item quantity="one">%1$s cannot receive private messages yet. A message is encrypted with the account\'s public key, and an address alone does not give it: the key is known once the account is an Idena identity, has used Idena Social or shared its message code.</item>
+        <item quantity="other">%1$s cannot receive private messages yet. A message is encrypted with each account\'s public key, and an address alone does not give it: the key is known once the account is an Idena identity, has used Idena Social or shared its message code.</item>
     </plurals>
     <string name="socialb_privacy_note">Only the people in the conversation can read the text. Who writes, when, how long the message is and how many people it goes to are public, on the chain for good; who gets it is not.</string>
     <string name="socialb_preview_ipfs">Text on IPFS</string>

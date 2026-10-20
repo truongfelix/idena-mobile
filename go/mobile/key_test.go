@@ -95,6 +95,14 @@ func TestExportKeyBacksUpTheKey(t *testing.T) {
 	if PrivateKeyAddress(nil) != "" || PrivateKeyAddress(raw) != crypto.PubkeyToAddress(key.PublicKey).Hex() {
 		t.Fatal("PrivateKeyAddress")
 	}
+	public := PrivateKeyPublicKey(raw)
+	if PrivateKeyPublicKey(nil) != "" || public != hex.EncodeToString(crypto.FromECDSAPub(&key.PublicKey)) || len(public) != 130 || public[:2] != "04" {
+		t.Fatalf("PrivateKeyPublicKey %q", public)
+	}
+	decoded, _ := hex.DecodeString(public)
+	if pub, err := crypto.UnmarshalPubkey(decoded); err != nil || crypto.PubkeyToAddress(*pub) != crypto.PubkeyToAddress(key.PublicKey) {
+		t.Fatal("PrivateKeyPublicKey does not give the key's address back")
+	}
 }
 
 func TestReadKeyFileReadsTheNodesKeyFiles(t *testing.T) {

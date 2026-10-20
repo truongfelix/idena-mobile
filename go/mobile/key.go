@@ -78,6 +78,17 @@ func PrivateKeyAddress(key []byte) string {
 	return crypto.PubkeyToAddress(ecdsaKey.PublicKey).Hex()
 }
 
+// PrivateKeyPublicKey returns the public key of the private key key (32 bytes) as the hex of its 65 uncompressed
+// bytes (04, then X and Y), the form the node gives an identity's key in: what others encrypt private messages with.
+// An empty string if key is not one.
+func PrivateKeyPublicKey(key []byte) string {
+	ecdsaKey, err := crypto.ToECDSA(key)
+	if err != nil {
+		return ""
+	}
+	return hex.EncodeToString(crypto.FromECDSAPub(&ecdsaKey.PublicKey))
+}
+
 // ReadKeyFile returns the private key (32 bytes) in a key file the node wrote, the hex of the key: the node key of
 // the versions before 0.1.76 and the backups their imports left. The app encrypts it, then deletes the file.
 func ReadKeyFile(path string) ([]byte, error) {

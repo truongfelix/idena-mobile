@@ -2,9 +2,9 @@
 <!-- The Social tab's messages, contacts, lists, following and profile pages, and the profiles contract's cards, editor, Trust and vouching (Social*.kt, Profile*.kt, People.kt). -->
 <resources>
     <plurals name="socialb_no_key">
-        <item quantity="one">%1$s ne peut pas encore recevoir de messages privés. Un message est chiffré avec la clé publique du compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena ou a utilisé Idena Social.</item>
-        <item quantity="other">%1$s ne peuvent pas encore recevoir de messages privés. Un message est chiffré avec la clé publique de chaque compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena ou a utilisé Idena Social.</item>
-        <item quantity="many">%1$s ne peuvent pas encore recevoir de messages privés. Un message est chiffré avec la clé publique de chaque compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena ou a utilisé Idena Social.</item>
+        <item quantity="one">%1$s ne peut pas encore recevoir de messages privés. Un message est chiffré avec la clé publique du compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena, a utilisé Idena Social ou a partagé son code de message.</item>
+        <item quantity="other">%1$s ne peuvent pas encore recevoir de messages privés. Un message est chiffré avec la clé publique de chaque compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena, a utilisé Idena Social ou a partagé son code de message.</item>
+        <item quantity="many">%1$s ne peuvent pas encore recevoir de messages privés. Un message est chiffré avec la clé publique de chaque compte, et une adresse seule ne la donne pas : la clé est connue dès que le compte est une identité Idena, a utilisé Idena Social ou a partagé son code de message.</item>
     </plurals>
     <string name="socialb_privacy_note">Seules les personnes de la discussion peuvent lire le texte. Qui écrit, quand, la longueur du message et le nombre de personnes à qui il est envoyé sont publics, sur la chaîne pour toujours ; qui le reçoit ne l\'est pas.</string>
     <string name="socialb_preview_ipfs">Texte sur IPFS</string>

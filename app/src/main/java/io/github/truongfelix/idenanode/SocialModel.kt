@@ -568,13 +568,24 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                     runCatching {
                         val posting = SocialPosting(rpc(context))
                         findPublicKey(
-                            address, posting::publicKey, scanned?.keys.orEmpty(), scanned?.callHeightsOf(address).orEmpty(), posting::callKeysAt,
+                            address, posting::publicKey, scanned?.keys.orEmpty() + chats.store.sharedKeys, scanned?.callHeightsOf(address).orEmpty(), posting::callKeysAt,
                         ).orEmpty()
                     }.getOrNull()
                 } ?: continue
                 messageKeys[address] = key
             }
         }
+    }
+
+    /**
+     * Keeps [publicKey] for [address] (lowercase), from its owner's message code, checked against the address
+     * ([messageCodeFor]): it can be written to from now on, before it signed anything.
+     */
+    fun addMessageCode(address: String, publicKey: String) {
+        val lower = address.lowercase()
+        if (addressOfPublicKey(publicKey) != lower) return
+        chats.setSharedKey(lower, publicKey)
+        messageKeys[lower] = publicKey
     }
 
     /** Sends [text] to [others] (lowercase) once each one's public key is known. */

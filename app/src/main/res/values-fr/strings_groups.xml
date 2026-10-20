@@ -39,6 +39,16 @@
     <string name="chat_hidden_note">Masquées sur ce téléphone seulement : personne n\'est prévenu, et les nouveaux messages arrivent toujours. Écrire de nouveau à quelqu\'un affiche votre discussion avec cette personne.</string>
     <string name="chat_none_hidden">Aucune discussion masquée.</string>
     <string name="chat_show_again">Afficher à nouveau</string>
+    <string name="msgcode_mine">Mon code de message</string>
+    <string name="msgcode_title">Votre code de message</string>
+    <string name="msgcode_note">Partagez-le avec les personnes qui doivent pouvoir vous écrire : avec lui, elles le peuvent, même avant votre première transaction. Il ne contient que votre clé publique, rien de secret.</string>
+    <string name="msgcode_unavailable">Votre clé ne peut pas être lue maintenant.</string>
+    <string name="msgcode_share">Partager mon code de message</string>
+    <string name="msgcode_add">Ajouter son code de message</string>
+    <string name="msgcode_add_note">Demandez-lui son code de message (Messages, « Mon code de message ») et collez-le ici. Vous pouvez aussi le coller dans la recherche de Messages.</string>
+    <string name="msgcode_field">Code de message</string>
+    <string name="msgcode_wrong">Ce code est celui d\'un autre compte.</string>
+    <string name="msgcode_save">Ajouter</string>
     <string name="chat_hide_question">Masquer cette discussion ?</string>
     <string name="chat_hide_question_note">Sur ce téléphone seulement : personne n\'est prévenu, et les nouveaux messages arrivent toujours. Réglages de Social › Discussions masquées l\'affiche à nouveau.</string>
     <string name="chat_hide_action">Masquer</string>
