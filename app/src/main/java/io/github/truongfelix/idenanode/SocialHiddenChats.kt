@@ -30,7 +30,7 @@ fun HiddenChatsView(model: SocialModel, modifier: Modifier = Modifier) {
         item { Text(t(R.string.chat_hidden_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         if (hidden.isEmpty()) item { Text(t(R.string.chat_none_hidden), style = MaterialTheme.typography.bodyMedium) }
         items(hidden, key = { it.key }) { conversation ->
-            val unread = unreadCount(conversation, me, model.chats.store.seen[conversation.key])
+            val unread = model.chats.store.unreadCount(conversation, me)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (conversation.group != null) GroupAvatar(36.dp) else PersonAvatar(conversation.others.first(), 36.dp)
                 Spacer(Modifier.width(10.dp))
