@@ -82,7 +82,7 @@ object SocialBadge {
      * MIUI's launcher counts a notification as 1 on the icon, whatever its [Notification.number], unless its own
      * `extraNotification.setMessageCount` says how many (Xiaomi's badge documentation); nothing elsewhere.
      */
-    private fun miuiCount(notification: Notification, count: Int) {
+    fun miuiCount(notification: Notification, count: Int) {
         runCatching {
             val extra = notification.javaClass.getDeclaredField("extraNotification").get(notification) ?: return
             extra.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType).invoke(extra, count)
@@ -105,8 +105,10 @@ object SocialBadge {
         val notify = SocialStore.notifyKinds(context)
         if (!SocialStore.isScanning(context) || notify.isEmpty()) {
             clear(context)
+            ChatNotifications.clearAll(context)
             return
         }
+        if (NotifyKind.Messages !in notify) ChatNotifications.clearAll(context)
         if (appShown(context)) return
         val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
         if ((rpc.call("bcn_syncing") as JSONObject).optBoolean("syncing") || rpc.ceremony().period != "None") return
@@ -117,6 +119,11 @@ object SocialBadge {
         val me = (rpc.call("dna_getCoinbaseAddr") as String).lowercase()
         val (next, news) = backgroundNews(base, NodeSocialSource(rpc), me, seenThrough, notify)
         scanned = next
+        // A node that fails to open the messages leaves the other news as they are.
+        if (NotifyKind.Messages in notify) {
+            runCatching { ChatNotifications.check(context, rpc, me, next.messages, SocialStore.people(context)) }
+                .onFailure { android.util.Log.w("SocialBadge", "messages: $it") }
+        }
         val alerted = runCatching { alertedFile(context).readText().trim().toLong() }.getOrNull()
         val update = badgeUpdate(news, alerted)
         if (update == null) {

@@ -31,7 +31,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Social settings (the ⚙ of the identity's profile): the people and topics followed, the muted and blocked accounts,
- * the hidden words and posts, the blocked topics, "Pictures in posts", and the lists' export and import.
+ * the hidden words and posts, the blocked topics, the hidden conversations, "Pictures in posts", and the lists'
+ * export and import.
  */
 @Composable
 fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
@@ -45,6 +46,7 @@ fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
         SettingsLink(t(R.string.social_settings_hidden_words), model.hidden.words.size) { model.open(SocialPage.HiddenWords) }
         SettingsLink(t(R.string.social_settings_hidden_posts), model.hidden.posts.size) { model.open(SocialPage.HiddenPosts) }
         SettingsLink(t(R.string.social_settings_blocked_topics), model.hidden.topics.size) { model.open(SocialPage.BlockedTopics) }
+        SettingsLink(t(R.string.chat_hidden_title), model.hiddenConversations.size) { model.open(SocialPage.HiddenChats) }
         HorizontalDivider()
         PicturesSetting(model.picturesMode, model::changePicturesMode)
         HorizontalDivider()

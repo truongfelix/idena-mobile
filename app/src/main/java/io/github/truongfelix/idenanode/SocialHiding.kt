@@ -148,9 +148,16 @@ fun visibleActivity(items: List<ActivityItem>, hiding: Hiding, me: String?): Lis
 fun threadPost(feed: List<SocialPost>, id: Long, hiding: Hiding, me: String?): SocialPost? =
     feed.firstOrNull { it.id == id }?.let { visibleFeed(listOf(it), Hiding(blocked = hiding.blocked), me).firstOrNull() }
 
-/** The conversations without those where a blocked account takes part. */
+/**
+ * The conversations without those where a blocked account takes part; a group shows without what blocked members
+ * wrote, and not at all when its admin is blocked.
+ */
 fun visibleConversations(conversations: List<Conversation>, blocked: Set<String>): List<Conversation> =
-    if (blocked.isEmpty()) conversations else conversations.filter { c -> c.others.none { it in blocked } }
+    if (blocked.isEmpty()) conversations else conversations.mapNotNull { c ->
+        val group = c.group ?: return@mapNotNull c.takeIf { c.others.none { it in blocked } }
+        if (group.key.admin in blocked) return@mapNotNull null
+        c.copy(messages = c.messages.filter { it.kind == ChatMessage.KEY || it.from !in blocked }).takeIf { it.messages.isNotEmpty() }
+    }
 
 /** A hidden word or phrase is at most this long. */
 const val MAX_HIDDEN_WORD = 60

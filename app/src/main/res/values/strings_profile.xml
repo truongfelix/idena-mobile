@@ -34,7 +34,7 @@
     <string name="socialb_remove_name">Remove the name</string>
     <string name="socialb_save">Save</string>
     <string name="socialb_notifications">Notifications</string>
-    <string name="socialb_notifications_note">A notice comes for each new like, comment or tip on your posts of the kinds selected. All of them are listed here.</string>
+    <string name="socialb_notifications_note">A notice comes for each new like, comment or tip on your posts of the kinds selected. All of them are listed here. Messages: while the app is closed, a notification for each conversation with new messages, never for a hidden one.</string>
     <string name="socialb_no_activity">No likes, answers or tips on your posts yet.</string>
     <string name="socialb_activity_liked">"%1$s liked your post  ·  %2$s"</string>
     <string name="socialb_activity_replied">"%1$s replied to your post  ·  %2$s"</string>

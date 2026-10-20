@@ -35,7 +35,7 @@
     <string name="socialb_remove_name">Retirer le nom</string>
     <string name="socialb_save">Enregistrer</string>
     <string name="socialb_notifications">Notifications</string>
-    <string name="socialb_notifications_note">Une notification arrive pour chaque nouveau j\'aime, commentaire ou pourboire sur vos publications, pour les types sélectionnés. Tous sont listés ici.</string>
+    <string name="socialb_notifications_note">Une notification arrive pour chaque nouveau j\'aime, commentaire ou pourboire sur vos publications, pour les types sélectionnés. Tous sont listés ici. Messages : quand l\'app est fermée, une notification par discussion avec de nouveaux messages, jamais pour une discussion masquée.</string>
     <string name="socialb_no_activity">Aucun j\'aime, réponse ou pourboire sur vos publications pour l\'instant.</string>
     <string name="socialb_activity_liked">"%1$s a aimé votre publication  ·  %2$s"</string>
     <string name="socialb_activity_replied">"%1$s a répondu à votre publication  ·  %2$s"</string>

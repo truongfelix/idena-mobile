@@ -14,6 +14,7 @@
     <string name="social_notify_likes">J\'aime</string>
     <string name="social_notify_comments">Commentaires</string>
     <string name="social_notify_tips">Pourboires</string>
+    <string name="social_notify_messages">Messages</string>
     <string name="social_notice_liked">%1$s a aimé votre publication</string>
     <string name="social_notice_replied">%1$s a répondu à votre publication</string>
     <string name="social_notice_commented">%1$s a commenté votre publication</string>

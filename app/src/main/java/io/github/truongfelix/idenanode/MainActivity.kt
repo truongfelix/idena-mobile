@@ -96,18 +96,25 @@ class MainActivity : AppActivity() {
     private var showActivity by mutableIntStateOf(0)
     // The taps on the node's notification ([NodeService]): each opens the node panel.
     private var showNode by mutableIntStateOf(0)
+    // The tap on a message notification ([ChatNotifications]): the conversation to open, and a count for each tap.
+    private var showChat by mutableStateOf<Pair<Int, String>?>(null)
+
+    private fun takeChat(intent: Intent) {
+        intent.getStringExtra(ChatNotifications.EXTRA_OPEN_CHAT)?.let { showChat = ((showChat?.first ?: 0) + 1) to it }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
         if (savedInstanceState == null && intent.getBooleanExtra(ReleaseCheck.EXTRA_SHOW_RELEASE, false)) ReleaseUi.shown = true
         if (savedInstanceState == null && intent.getBooleanExtra(NodeService.EXTRA_SHOW_NODE, false)) showNode++
+        if (savedInstanceState == null) takeChat(intent)
         // The setting before the first frame: the question never shows to someone who answered it.
         ReleaseUi.on = ReleaseCheck.setting(this)
         setContent {
             AppTheme {
                 Scaffold { padding ->
-                    MainScreen(showActivity, showNode, Modifier.padding(padding))
+                    MainScreen(showActivity, showNode, showChat, Modifier.padding(padding))
                 }
             }
         }
@@ -119,11 +126,12 @@ class MainActivity : AppActivity() {
         if (intent.getBooleanExtra(SocialBadge.EXTRA_SHOW_ACTIVITY, false)) showActivity++
         if (intent.getBooleanExtra(ReleaseCheck.EXTRA_SHOW_RELEASE, false)) ReleaseUi.shown = true
         if (intent.getBooleanExtra(NodeService.EXTRA_SHOW_NODE, false)) showNode++
+        takeChat(intent)
     }
 }
 
 @Composable
-private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Modifier) {
+private fun MainScreen(showActivity: Int, showNode: Int, showChat: Pair<Int, String>?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     // Social is the app; the node (identity, validation, wallet, settings) is a panel from the right side, open at
     // the start while the phone has no key yet (B-101).
@@ -171,6 +179,12 @@ private fun MainScreen(showActivity: Int, showNode: Int, modifier: Modifier = Mo
     }
     LaunchedEffect(showNode) {
         if (showNode > 0) panel.open()
+    }
+    LaunchedEffect(showChat) {
+        showChat?.let {
+            panel.close()
+            social.showChat(it.second)
+        }
     }
     LaunchedEffect(social) {
         for (notice in social.notices) {
