@@ -488,7 +488,9 @@ private fun NodeScreen(model: NodeModel, people: Map<String, Person>, names: Map
                 AdvancedSettings(
                     state,
                     delegation = { DelegationSection(it, mining) },
-                    routerPort = { RouterPortRow(routerPort, state.syncEnabled, ready?.let { parseValidationTime(it.nextValidation) }) },
+                    routerPort = { onUsePort ->
+                        RouterPortRow(routerPort, state.syncEnabled, ready?.let { parseValidationTime(it.nextValidation) }, onUsePort)
+                    },
                     onChanged = { model.optionsChanged() },
                     onRestart = { NodeService.restart(context) },
                 )

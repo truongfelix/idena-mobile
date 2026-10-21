@@ -92,7 +92,7 @@ class RouterPortTest {
 
     @Test
     fun theOpeningRequestNamesThePortThePhoneAndTheLease() {
-        val envelope = soapEnvelope(livebox.service, "AddPortMapping", addPortMappingArgs("192.168.1.45", 21600))
+        val envelope = soapEnvelope(livebox.service, "AddPortMapping", addPortMappingArgs(40405, "192.168.1.45", 21600))
         assertTrue(envelope.contains("<u:AddPortMapping xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:2\">"))
         assertTrue(
             envelope.contains(
@@ -103,11 +103,15 @@ class RouterPortTest {
             ),
         )
         assertTrue(soapEnvelope("s", "A", listOf("X" to "a<b&c")).contains("<X>a&lt;b&amp;c</X>"))
+        // Another node port: the same number outside and on the phone, the port the node tells its peers.
+        val other = soapEnvelope(livebox.service, "AddPortMapping", addPortMappingArgs(40406, "192.168.1.45", 60))
+        assertTrue(other.contains("<NewExternalPort>40406</NewExternalPort>") && other.contains("<NewInternalPort>40406</NewInternalPort>"))
+        assertEquals(listOf("NewRemoteHost" to "", "NewExternalPort" to "40407", "NewProtocol" to "TCP"), portArgs(40407))
     }
 
     @Test
     fun theLiveboxMappingAnswerGivesThePhoneAndTheLease() {
-        val mapping = portMapping(parseSoap(200, sample("livebox-mapping.xml")))!!
+        val mapping = portMapping(parseSoap(200, sample("livebox-mapping.xml")), 40405)!!
         assertEquals(PortMapping("192.168.1.45", 40405, "idena-mobile node", enabled = true, leaseSeconds = 0), mapping)
         assertEquals("203.0.113.7", parseSoap(200, sample("livebox-external-ip.xml")).fields["NewExternalIPAddress"])
     }
@@ -117,7 +121,7 @@ class RouterPortTest {
         val none = parseSoap(500, sample("livebox-no-mapping.xml"))
         assertEquals(UPNP_NO_SUCH_ENTRY, none.errorCode)
         assertEquals("NoSuchEntryInArray", none.errorText)
-        assertNull(portMapping(none))
+        assertNull(portMapping(none, 40405))
         assertEquals(-1, parseSoap(404, "<html>not found</html>").errorCode)
     }
 
@@ -143,11 +147,11 @@ class RouterPortTest {
         assertNull(PortDuration.UntilValidation.end(now, now.minusSeconds(60)))
     }
 
-    private fun opening(endMs: Long, changedAtMs: Long = 0, retried: Boolean = false, client: String = "192.168.1.45") =
-        RouterOpening(livebox, client, endMs, changedAtMs, retried)
+    private fun opening(endMs: Long, changedAtMs: Long = 0, retried: Boolean = false, client: String = "192.168.1.45", port: Int = DEFAULT_NODE_PORT) =
+        RouterOpening(livebox, client, endMs, changedAtMs, retried, port)
 
-    private fun mapping(client: String = "192.168.1.45", lease: Long = 0, description: String = PORT_MAPPING_DESCRIPTION) =
-        PortMapping(client, NODE_PORT, description, enabled = true, leaseSeconds = lease)
+    private fun mapping(client: String = "192.168.1.45", lease: Long = 0, description: String = PORT_MAPPING_DESCRIPTION, port: Int = DEFAULT_NODE_PORT) =
+        PortMapping(client, port, description, enabled = true, leaseSeconds = lease)
 
     @Test
     fun theForwardingIsThePhonesItsFormerAddressOrAnotherDevices() {
@@ -167,12 +171,12 @@ class RouterPortTest {
     fun upkeepClosesAtTheEndAndOpensAgainForANewAddressOrALostForwarding() {
         val hour = 3_600_000L
         val now = 10 * hour
-        assertEquals(UpkeepAction.Close, upkeepAction(opening(endMs = now), mapping(), "192.168.1.45", now, false, 3))
-        assertEquals(UpkeepAction.Close, upkeepAction(opening(endMs = now), null, "192.168.1.45", now, false, 3))
-        assertEquals(UpkeepAction.Forget, upkeepAction(opening(endMs = now), mapping(client = "192.168.1.9", description = "x"), "192.168.1.45", now, false, 3))
-        assertEquals(UpkeepAction.Open, upkeepAction(opening(endMs = now + hour), null, "192.168.1.45", now, false, 3))
-        assertEquals(UpkeepAction.Open, upkeepAction(opening(endMs = now + hour, client = "192.168.1.30"), mapping(client = "192.168.1.30"), "192.168.1.45", now, false, 3))
-        assertEquals(UpkeepAction.Nothing, upkeepAction(opening(endMs = now + hour), mapping(client = "192.168.1.9", description = "x"), "192.168.1.45", now, false, 3))
+        assertEquals(UpkeepAction.Close, upkeepAction(opening(endMs = now), mapping(), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 3))
+        assertEquals(UpkeepAction.Close, upkeepAction(opening(endMs = now), null, "192.168.1.45", DEFAULT_NODE_PORT, now, false, 3))
+        assertEquals(UpkeepAction.Forget, upkeepAction(opening(endMs = now), mapping(client = "192.168.1.9", description = "x"), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 3))
+        assertEquals(UpkeepAction.Open, upkeepAction(opening(endMs = now + hour), null, "192.168.1.45", DEFAULT_NODE_PORT, now, false, 3))
+        assertEquals(UpkeepAction.Open, upkeepAction(opening(endMs = now + hour, client = "192.168.1.30"), mapping(client = "192.168.1.30"), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 3))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(opening(endMs = now + hour), mapping(client = "192.168.1.9", description = "x"), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 3))
     }
 
     @Test
@@ -180,13 +184,13 @@ class RouterPortTest {
         val day = 86_400_000L
         val now = 10 * day
         val long = opening(endMs = now + 20 * day, changedAtMs = now - day)
-        assertEquals(UpkeepAction.Nothing, upkeepAction(long, mapping(lease = 3_600), "192.168.1.45", now, false, 2))
-        assertEquals(UpkeepAction.Renew, upkeepAction(long, mapping(lease = 1_200), "192.168.1.45", now, false, 2))
-        assertEquals(UpkeepAction.Nothing, upkeepAction(long, mapping(lease = 1_200), "192.168.1.45", now, true, 2))
-        assertEquals(UpkeepAction.Renew, upkeepAction(long, mapping(lease = 120), "192.168.1.45", now, true, 2))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(long, mapping(lease = 3_600), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 2))
+        assertEquals(UpkeepAction.Renew, upkeepAction(long, mapping(lease = 1_200), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 2))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(long, mapping(lease = 1_200), "192.168.1.45", DEFAULT_NODE_PORT, now, true, 2))
+        assertEquals(UpkeepAction.Renew, upkeepAction(long, mapping(lease = 120), "192.168.1.45", DEFAULT_NODE_PORT, now, true, 2))
         // The router's lease ends with the user's choice (it closes the opening itself), or never: no renewal.
-        assertEquals(UpkeepAction.Nothing, upkeepAction(opening(endMs = now + 600_000, changedAtMs = now - day), mapping(lease = 600), "192.168.1.45", now, false, 2))
-        assertEquals(UpkeepAction.Nothing, upkeepAction(long, mapping(lease = 0), "192.168.1.45", now, false, 2))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(opening(endMs = now + 600_000, changedAtMs = now - day), mapping(lease = 600), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 2))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(long, mapping(lease = 0), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 2))
     }
 
     @Test
@@ -194,11 +198,23 @@ class RouterPortTest {
         val now = 100 * 60_000L
         val fresh = opening(endMs = now + 3_600_000, changedAtMs = now - 2 * 60_000)
         val old = opening(endMs = now + 3_600_000, changedAtMs = now - RETRY_AFTER_MS)
-        assertEquals(UpkeepAction.Nothing, upkeepAction(fresh, mapping(), "192.168.1.45", now, false, 0))
-        assertEquals(UpkeepAction.Retry, upkeepAction(old, mapping(), "192.168.1.45", now, false, 0))
-        assertEquals(UpkeepAction.Nothing, upkeepAction(old, mapping(), "192.168.1.45", now, false, 1))
-        assertEquals(UpkeepAction.Nothing, upkeepAction(old, mapping(), "192.168.1.45", now, false, null))
-        assertEquals(UpkeepAction.Nothing, upkeepAction(old.copy(retried = true), mapping(), "192.168.1.45", now, false, 0))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(fresh, mapping(), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 0))
+        assertEquals(UpkeepAction.Retry, upkeepAction(old, mapping(), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 0))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(old, mapping(), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 1))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(old, mapping(), "192.168.1.45", DEFAULT_NODE_PORT, now, false, null))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(old.copy(retried = true), mapping(), "192.168.1.45", DEFAULT_NODE_PORT, now, false, 0))
+    }
+
+    @Test
+    fun upkeepMovesTheOpeningToThePortTheNodeRunsOn() {
+        val hour = 3_600_000L
+        val now = 10 * hour
+        val open = opening(endMs = now + hour)
+        assertEquals(UpkeepAction.Move, upkeepAction(open, mapping(), "192.168.1.45", 40406, now, false, 3))
+        assertEquals(UpkeepAction.Move, upkeepAction(open, null, "192.168.1.45", 40406, now, false, 3))
+        assertEquals(UpkeepAction.Nothing, upkeepAction(open.copy(port = 40406), mapping(port = 40406), "192.168.1.45", 40406, now, false, 3))
+        // At the user's end the opening closes where it is, whatever the node's port.
+        assertEquals(UpkeepAction.Close, upkeepAction(opening(endMs = now), mapping(), "192.168.1.45", 40406, now, false, 3))
     }
 
     @Test
@@ -224,6 +240,15 @@ class RouterPortTest {
         assertEquals(7_200L - 1, opening.leaseSeconds(1_000))
         assertEquals(60L, opening.leaseSeconds(7_190_000))
         assertNull(RouterOpening.fromJson(JSONObject("{}")))
+        val moved = opening(endMs = 7_200_000, port = 40407)
+        assertEquals(moved, RouterOpening.fromJson(JSONObject(moved.toJson().toString())))
+    }
+
+    @Test
+    fun anOpeningSavedBeforeThePortSettingIsOnTheDefaultPort() {
+        // The file of v0.2.1 and earlier: no "port".
+        val earlier = JSONObject(opening(endMs = 7_200_000, changedAtMs = 1_000).toJson().toString()).apply { remove("port") }
+        assertEquals(DEFAULT_NODE_PORT, RouterOpening.fromJson(earlier)!!.port)
     }
 
     @Test
@@ -247,6 +272,13 @@ class RouterPortTest {
         val other = routerPortView(found(mapping(client = "192.168.1.9", description = "game")), now, ZoneOffset.UTC)
         assertEquals("Port 40405 on Orange Livebox goes to another device (192.168.1.9)", other.text)
         assertFalse(other.canOpen || other.canClose)
+        assertNull(other.usePort)
+        val taken = found(mapping(client = "192.168.1.9", description = "game")).copy(freePort = 40406)
+        val offer = routerPortView(taken, now, ZoneOffset.UTC)
+        assertEquals("Port 40405 on Orange Livebox goes to another device (192.168.1.9). Port 40406 is free there", offer.text)
+        assertEquals(40406, offer.usePort)
+        val elsewhere = found(mapping(client = "192.168.1.9", port = 40406)).copy(port = 40406)
+        assertEquals("Port 40406 on Orange Livebox goes to another device (192.168.1.9)", routerPortView(elsewhere, now, ZoneOffset.UTC).text)
     }
 
     @Test

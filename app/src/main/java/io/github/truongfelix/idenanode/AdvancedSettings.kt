@@ -36,7 +36,8 @@ import java.time.Instant
 
 /**
  * Advanced settings in the Node card, folded until opened, in four groups: Mining (the [delegation], once the node has
- * the account), Connections (the [routerPort] on Wi-Fi, the direct peers ([DirectPeersSection]), the peer level
+ * the account), Connections (the [routerPort] on Wi-Fi, given what its "Use port" does, the node port ([NODE_PORTS]),
+ * the direct peers ([DirectPeersSection]), the peer level
  * ([PeerLevel]) and the IPFS connection limit ([IpfsConnections])), Storage (the write buffer of each database,
  * [WriteBuffer]) and the [NodeReportsSection]. The node takes the connection and storage settings at its start: while it runs with others, a line
  * under the title, shown folded too, offers the restart that applies them. [onChanged] runs after a choice is saved.
@@ -45,7 +46,7 @@ import java.time.Instant
 fun AdvancedSettings(
     state: ScreenState,
     delegation: @Composable (NodeStatus) -> Unit,
-    routerPort: @Composable () -> Unit,
+    routerPort: @Composable (onUsePort: (Int) -> Unit) -> Unit,
     onChanged: () -> Unit,
     onRestart: () -> Unit,
 ) {
@@ -89,7 +90,22 @@ fun AdvancedSettings(
             delegation(it)
         }
         GroupTitle(t(R.string.node_group_connections))
-        routerPort()
+        routerPort { port ->
+            NodeSettings.setNodePort(context, port)
+            saved(NODE_PORT_TITLE)
+        }
+        ChoiceRow(
+            title = NODE_PORT_TITLE,
+            info = { NODE_PORT_INFO },
+            choices = NODE_PORTS,
+            chosen = options.nodePort,
+            label = { it.toString() },
+            note = { if (it == DEFAULT_NODE_PORT) t(R.string.node_default) else null },
+            onChange = {
+                NodeSettings.setNodePort(context, it)
+                saved(NODE_PORT_TITLE)
+            },
+        )
         DirectPeersSection(state) { saved(DIRECT_PEERS_TITLE) }
         ChoiceRow(
             title = PEER_LEVEL_TITLE,

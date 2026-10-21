@@ -16,9 +16,6 @@ import java.time.format.DateTimeFormatter
  * opening while the node runs.
  */
 
-/** The node's IPFS port, fixed (`IpfsConf.StaticPort`), which the opening forwards to the phone. */
-const val NODE_PORT = 40405
-
 /** How the app names its opening on the router, where the router lists its port forwardings. */
 const val PORT_MAPPING_DESCRIPTION = "idena-mobile node"
 
@@ -163,30 +160,31 @@ fun parseSoap(httpStatus: Int, xml: String): SoapAnswer {
     return SoapAnswer(fields)
 }
 
-fun addPortMappingArgs(client: String, leaseSeconds: Long): List<Pair<String, String>> = listOf(
+/** AddPortMapping's arguments: [port] on the router to the same port on [client] (the node announces that port). */
+fun addPortMappingArgs(port: Int, client: String, leaseSeconds: Long): List<Pair<String, String>> = listOf(
     "NewRemoteHost" to "",
-    "NewExternalPort" to NODE_PORT.toString(),
+    "NewExternalPort" to port.toString(),
     "NewProtocol" to "TCP",
-    "NewInternalPort" to NODE_PORT.toString(),
+    "NewInternalPort" to port.toString(),
     "NewInternalClient" to client,
     "NewEnabled" to "1",
     "NewPortMappingDescription" to PORT_MAPPING_DESCRIPTION,
     "NewLeaseDuration" to leaseSeconds.toString(),
 )
 
-/** The arguments that name the node's port (GetSpecificPortMappingEntry, DeletePortMapping). */
-val NODE_PORT_ARGS = listOf("NewRemoteHost" to "", "NewExternalPort" to NODE_PORT.toString(), "NewProtocol" to "TCP")
+/** The arguments that name [port] on the router (GetSpecificPortMappingEntry, DeletePortMapping). */
+fun portArgs(port: Int) = listOf("NewRemoteHost" to "", "NewExternalPort" to port.toString(), "NewProtocol" to "TCP")
 
 /** The router's forwarding of the node's port: to which device, named how, and the lease left (0 = no end). */
 data class PortMapping(val client: String, val port: Int, val description: String, val enabled: Boolean, val leaseSeconds: Long)
 
-/** The forwarding in a GetSpecificPortMappingEntry answer. */
-fun portMapping(answer: SoapAnswer): PortMapping? {
+/** The forwarding in a GetSpecificPortMappingEntry answer for [port]. */
+fun portMapping(answer: SoapAnswer, port: Int): PortMapping? {
     if (!answer.ok) return null
     val client = answer.fields["NewInternalClient"] ?: return null
     return PortMapping(
         client = client,
-        port = answer.fields["NewInternalPort"]?.toIntOrNull() ?: NODE_PORT,
+        port = answer.fields["NewInternalPort"]?.toIntOrNull() ?: port,
         description = answer.fields["NewPortMappingDescription"].orEmpty(),
         enabled = answer.fields["NewEnabled"] != "0",
         leaseSeconds = answer.fields["NewLeaseDuration"]?.toLongOrNull() ?: 0L,
@@ -216,8 +214,9 @@ enum class PortDuration(@StringRes private val labelId: Int, val hours: Long?) {
 
 /**
  * The opening the app made: on which router ([gateway]), for which address of the phone ([client]), until when
- * the user chose ([endMs]), when the router's forwarding last changed ([changedAtMs]) and whether it was made
- * again once because no incoming peer came ([retried]).
+ * the user chose ([endMs]), when the router's forwarding last changed ([changedAtMs]), whether it was made
+ * again once because no incoming peer came ([retried]) and which [port] it forwards (an opening saved before the
+ * port could be chosen has none: [DEFAULT_NODE_PORT]).
  */
 data class RouterOpening(
     val gateway: Gateway,
@@ -225,10 +224,11 @@ data class RouterOpening(
     val endMs: Long,
     val changedAtMs: Long,
     val retried: Boolean = false,
+    val port: Int = DEFAULT_NODE_PORT,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("gateway", gateway.toJson()).put("client", client).put("endMs", endMs)
-        .put("changedAtMs", changedAtMs).put("retried", retried)
+        .put("changedAtMs", changedAtMs).put("retried", retried).put("port", port)
 
     /** The lease to ask the router for at [nowMs]: the time left, at least a minute. */
     fun leaseSeconds(nowMs: Long): Long = maxOf(60L, (endMs - nowMs) / 1000)
@@ -237,7 +237,7 @@ data class RouterOpening(
         fun fromJson(json: JSONObject): RouterOpening? = runCatching {
             RouterOpening(
                 Gateway.fromJson(json.getJSONObject("gateway"))!!, json.getString("client"), json.getLong("endMs"),
-                json.getLong("changedAtMs"), json.optBoolean("retried"),
+                json.getLong("changedAtMs"), json.optBoolean("retried"), json.optInt("port", DEFAULT_NODE_PORT),
             )
         }.getOrNull()
     }
@@ -255,22 +255,26 @@ fun mappingOwner(mapping: PortMapping?, phoneIp: String, opening: RouterOpening?
 }
 
 /**
- * What the upkeep does with the app's [opening] at [nowMs], given the router's forwarding ([mapping]) and the
- * phone's address on the router's network ([phoneIp]): the router's lease is the time left to the user's end,
- * so that the router closes it by itself; a router that keeps it shorter gets it again near its end, never
- * during a validation unless it would end first ([validationRuns]); [inboundSinceChange] null when unknown.
+ * What the upkeep does with the app's [opening] at [nowMs], given the router's forwarding of the opening's port
+ * ([mapping]), the phone's address on the router's network ([phoneIp]) and the port the node runs on
+ * ([nodePort]): the router's lease is the time left to the user's end, so that the router closes it by itself; a
+ * router that keeps it shorter gets it again near its end, never during a validation unless it would end first
+ * ([validationRuns]); [inboundSinceChange] null when unknown. A node restarted on another port gets the opening
+ * moved there (Move).
  */
-enum class UpkeepAction { Nothing, Close, Forget, Open, Renew, Retry }
+enum class UpkeepAction { Nothing, Close, Forget, Open, Renew, Retry, Move }
 
 fun upkeepAction(
     opening: RouterOpening,
     mapping: PortMapping?,
     phoneIp: String,
+    nodePort: Int,
     nowMs: Long,
     validationRuns: Boolean,
     inboundSinceChange: Int?,
 ): UpkeepAction {
     if (nowMs >= opening.endMs) return if (mappingOwner(mapping, phoneIp, opening) == MappingOwner.Other) UpkeepAction.Forget else UpkeepAction.Close
+    if (nodePort != opening.port) return UpkeepAction.Move
     val owner = mappingOwner(mapping, phoneIp, opening)
     if (owner == MappingOwner.Other) return UpkeepAction.Nothing
     if (owner == MappingOwner.None || owner == MappingOwner.PhoneBefore) return UpkeepAction.Open

@@ -57,6 +57,9 @@ data class PendingChange(val title: String, val value: String)
 
 /** The settings of [chosen] the node runs without ([settingPending]), in the order of Advanced settings. */
 fun pendingChanges(syncEnabled: Boolean, chosen: NodeOptions, running: RunningOptions): List<PendingChange> = buildList {
+    if (settingPending(syncEnabled, running.nodePort, chosen.nodePort)) {
+        add(PendingChange(NODE_PORT_TITLE, chosen.nodePort.toString()))
+    }
     if (settingPending(syncEnabled, running.peerLevel, chosen.peerLevel)) {
         add(PendingChange(PEER_LEVEL_TITLE, chosen.peerLevel.label))
     }

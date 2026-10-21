@@ -193,6 +193,10 @@
     </plurals>
     <string name="router_open_former_address">Ouvert sur %1$s pour l\'ancienne adresse du téléphone ; le nœud le déplace vers la nouvelle</string>
     <string name="router_other_device">Le port %1$d sur %2$s va vers un autre appareil (%3$s)</string>
+    <string name="node_port_title">Port du nœud</string>
+    <string name="node_port_info">Le port sur lequel le nœud attend les nœuds Idena qui se connectent au téléphone (par défaut %1$d). Derrière un même routeur, chaque appareil a besoin de son propre port : un routeur ne redirige un port que vers un seul appareil. Choisissez-en un autre pour un deuxième téléphone ou un ordinateur sur le même Wi-Fi, puis ouvrez-le dans Port du routeur.\n\nLe nœud prend le port à son démarrage.</string>
+    <string name="router_port_free">Le port %1$d y est libre</string>
+    <string name="router_use_port">Utiliser le port %1$d</string>
     <string name="router_closed_on">Fermé sur %1$s</string>
     <string name="router_port_title">Port du routeur</string>
     <string name="router_port_info">Ouvre le port du nœud (%1$d) sur le routeur de ce Wi-Fi (UPnP), pour que des nœuds Idena extérieurs puissent se connecter au téléphone. Le routeur le garde ouvert jusqu\'à la fin choisie, même si le téléphone quitte ce Wi-Fi.\n\nN\'ouvrez un port que si vous savez ce que cela implique : le nœud est alors joignable depuis Internet.</string>
