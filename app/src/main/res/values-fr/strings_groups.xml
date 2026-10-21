@@ -31,6 +31,12 @@
     <string name="group_removed">%1$s a retiré %2$s</string>
     <string name="group_renamed">%1$s a renommé le groupe « %2$s »</string>
     <string name="group_new_key">%1$s a donné une nouvelle clé au groupe</string>
+    <string name="group_removed_you">%1$s vous a retiré du groupe</string>
+    <string name="group_removed_note">Vous avez été retiré de ce groupe : vous n\'en recevez plus la clé, et ce que vous enverriez ici ne compte plus.</string>
+    <string name="group_what_notice">Prévenir les personnes retirées</string>
+    <string name="group_notice_detail">Prévient les personnes retirées de « %1$s » : elles ne reçoivent pas la nouvelle clé, rien d\'autre ne le leur dirait</string>
+    <string name="group_reading">Lecture des derniers blocs d\'abord…</string>
+    <string name="group_behind">Non envoyé : les derniers blocs n\'ont pas pu être lus à temps, le groupe a peut-être une nouvelle clé. Réessayez.</string>
     <string name="group_admin">a créé le groupe</string>
     <string name="group_privacy_note">Seuls les membres du groupe peuvent lire ses messages. Qui écrit et quand est public, sur la chaîne pour toujours. Le nom du groupe et ses membres ne le sont pas ; leur nombre se voit chaque fois que son créateur donne une clé.</string>
     <string name="chat_hide">Masquer la discussion</string>

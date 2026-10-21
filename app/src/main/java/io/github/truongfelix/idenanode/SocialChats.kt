@@ -29,6 +29,11 @@ data class ChatStore(
     /** The one-part calls tried with every key of [groupKeys]: a new key tries only itself on them. */
     val groupTried: Set<String> = emptySet(),
     /**
+     * The groups' removal notices ([ChatMessage.REMOVED]), apart from [messages]: a build before them reads none of
+     * these (it would show an empty message).
+     */
+    val groupNotices: List<ChatMessage> = emptyList(),
+    /**
      * The block time before which every message counts as read, set when the account's messages are first kept on
      * this phone ([READ_ON_FIRST_LOAD] before then): a profile imported here does not show all its past as unread.
      * Null for the files of the builds before it, whose read points stay as they were.
@@ -50,6 +55,7 @@ data class ChatStore(
         memberNames.forEach { (key, names) -> memberJson.put(key, JSONObject(names)) }
         return JSONObject().put("tried", JSONArray(tried.sorted())).put("messages", JSONArray(messages.map { it.toJson() })).put("seen", seenJson)
             .put("groupKeys", JSONArray(groupKeys.map { it.toJson() })).put("groupTried", JSONArray(groupTried.sorted()))
+            .put("groupNotices", JSONArray(groupNotices.map { it.toJson() }))
             .put("hiddenChats", JSONArray(hiddenChats.sorted())).put("groupNames", JSONObject(groupNames)).put("memberNames", memberJson)
             .put("sharedKeys", JSONObject(sharedKeys))
             .also { json -> readBefore?.let { json.put("readBefore", it) } }
@@ -66,6 +72,7 @@ data class ChatStore(
             val seen = json.optJSONObject("seen") ?: JSONObject()
             val keys = json.optJSONArray("groupKeys") ?: JSONArray()
             val members = json.optJSONObject("memberNames") ?: JSONObject()
+            val notices = json.optJSONArray("groupNotices")
             val read = (0 until messages.length()).map { ChatMessage.fromJson(messages.getJSONObject(it)) }
             // A store of a version without groups tried their key messages as messages, and failed: tried again.
             val tried = strings(json.optJSONArray("tried")).toSet()
@@ -75,7 +82,9 @@ data class ChatStore(
                 messages = read,
                 seen = seen.keys().asSequence().associateWith { key -> seen.getJSONArray(key).let { it.getLong(0) to it.getInt(1) } },
                 groupKeys = (0 until keys.length()).map { GroupKey.fromJson(keys.getJSONObject(it)) },
-                groupTried = strings(json.optJSONArray("groupTried")).toSet(),
+                // A store of a build before the removal notices dropped them: its one-part calls are tried again.
+                groupTried = if (notices == null) emptySet() else strings(json.optJSONArray("groupTried")).toSet(),
+                groupNotices = notices?.let { a -> (0 until a.length()).map { ChatMessage.fromJson(a.getJSONObject(it)) } }.orEmpty(),
                 readBefore = if (json.has("readBefore")) json.getLong("readBefore") else null,
                 hiddenChats = strings(json.optJSONArray("hiddenChats")).toSet(),
                 groupNames = stringMap(json.optJSONObject("groupNames")),
@@ -85,6 +94,10 @@ data class ChatStore(
         }
     }
 }
+
+/** Every line of the conversations: the messages and the groups' removal notices. */
+val ChatStore.chatLines: List<ChatMessage>
+    get() = messages + groupNotices
 
 /** The unread messages of [conversation] for [me] on this phone ([unreadMessages] with its read point). */
 fun ChatStore.unreadMessages(conversation: Conversation, me: String): List<ChatMessage> =
@@ -150,17 +163,23 @@ fun readNewMessages(
 
 /**
  * [store] with the one-part calls of [calls] opened by one of its groups' keys ([acceptGroupMessage]): those not
- * tried yet with every key, and those tried before with the keys just read ([newKeys]) only.
+ * tried yet with every key, and those tried before with the keys just read ([newKeys]) only. The removal notices go
+ * to [ChatStore.groupNotices].
  */
 fun readGroupMessages(store: ChatStore, calls: List<MessageCall>, newKeys: List<GroupKey>): ChatStore {
     if (store.groupKeys.isEmpty()) return store
-    val known = store.messages.mapTo(HashSet()) { it.hash }
+    val known = store.chatLines.mapTo(HashSet()) { it.hash }
     val single = calls.filter { it.parts.size == 1 && it.hash !in known }
     val (before, todo) = single.partition { it.hash in store.groupTried }
     val found = todo.mapNotNull { call -> store.groupKeys.firstNotNullOfOrNull { acceptGroupMessage(call, it) } } +
         (if (newKeys.isEmpty()) emptyList() else before.mapNotNull { call -> newKeys.firstNotNullOfOrNull { acceptGroupMessage(call, it) } })
     if (found.isEmpty() && todo.isEmpty()) return store
-    return store.copy(messages = store.messages + found, groupTried = store.groupTried + todo.map { it.hash })
+    val (notices, messages) = found.partition { it.kind == ChatMessage.REMOVED }
+    return store.copy(
+        messages = store.messages + messages,
+        groupTried = store.groupTried + todo.map { it.hash },
+        groupNotices = store.groupNotices + notices,
+    )
 }
 
 /** The account's messages for the Social tab: read from the scan's calls with the node's key, kept on the phone. */
@@ -168,6 +187,11 @@ class SocialChats(private val context: Context) {
     var store by mutableStateOf(ChatStore())
         private set
     private var account: String? = null
+
+    /** The last block whose calls were read ([update]): a group message waits for the node's last one. */
+    @Volatile
+    var readThrough = 0L
+        private set
 
     private fun file(address: String) = file(context, address)
 
@@ -178,6 +202,7 @@ class SocialChats(private val context: Context) {
     fun load(address: String) {
         if (account == address) return
         account = address
+        readThrough = 0L
         val f = file(address)
         if (!f.exists()) {
             synchronized(lock) { save(address, firstStore(System.currentTimeMillis() / 1000)) }
@@ -187,16 +212,17 @@ class SocialChats(private val context: Context) {
     }
 
     /**
-     * Tries the calls not tried yet with the node's key and saves what changed. Call off the main thread. What was
-     * read is merged into the store as it is once the node answered ([withOpened]): a conversation hidden, renamed or
-     * read meanwhile stays so.
+     * Tries the calls not tried yet with the node's key and saves what changed: [calls] are those of the blocks
+     * through [high]. Call off the main thread. What was read is merged into the store as it is once the node answered
+     * ([withOpened]): a conversation hidden, renamed or read meanwhile stays so.
      */
-    fun update(calls: List<MessageCall>, rpc: NodeRpc) {
+    fun update(calls: List<MessageCall>, high: Long, rpc: NodeRpc) {
         val address = account ?: return
         val read = readNewMessages(store, calls, address) { chunk ->
             rpc.batch("social_decrypt", chunk.map { JSONArray().put(JSONObject().put("parts", JSONArray(it.parts))) }).map { it as? JSONObject }
         }
         change { if (account == address) withOpened(it, read) else it }
+        if (account == address) readThrough = maxOf(readThrough, high)
     }
 
     /** Marks [conversation] read up to its last message. */

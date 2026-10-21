@@ -209,9 +209,11 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
     LaunchedEffect(key) { if (!isGroupKey(key)) model.lookUpKeys(others) }
     val noKey = if (isGroupKey(key)) emptyList() else others.filter { model.messageKeys[it] == "" }
     val looking = !isGroupKey(key) && others.any { it !in model.messageKeys }
-    // A group hidden on this phone (shown again from Social settings). A member removed cannot tell: the newer key
-    // never reaches them.
+    // A group hidden on this phone (shown again from Social settings).
     val outOfGroup = isGroupKey(key) && group == null
+    // Removed by the group's admin: told by a notice under the key before the change.
+    val removedMe = conversation?.removedMe == true
+    val groupSend = model.groupSend?.takeIf { it.first == key }?.second
     LaunchedEffect(conversation?.last?.hash) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size)
         conversation?.let { model.chats.markSeen(it) }
@@ -268,13 +270,23 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
         Column(Modifier.padding(horizontal = 16.dp)) {
             when {
                 outOfGroup -> Text(t(R.string.chat_hidden), Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
+                removedMe -> Text(
+                    t(R.string.group_removed_note),
+                    Modifier.padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                groupSend == GroupSendStep.Reading ->
+                    Text(t(R.string.group_reading), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                groupSend == GroupSendStep.Behind ->
+                    Text(t(R.string.group_behind), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 noKey.isNotEmpty() -> {
                     Text(noKeyText(noKey, model.names), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     if (noKey.size == 1) TextButton(onClick = { addingCode = noKey.first() }) { Text(t(R.string.msgcode_add)) }
                 }
                 looking -> Text(t(R.string.socialb_looking_up_keys), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (!outOfGroup) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (!outOfGroup && !removedMe) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { setDraft(it.take(MAX_MESSAGE)) },
@@ -288,7 +300,7 @@ fun ChatView(model: SocialModel, key: String, listState: LazyListState, canSend:
                 // account's and leaves Requests ([conversations]); a send that fails leaves it there.
                 FilledIconButton(
                     onClick = { if (conversation?.group != null) model.sendGroupMessage(conversation, draft.trim()) else model.sendMessage(others, draft.trim(), key) },
-                    enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking,
+                    enabled = canSend && draft.isNotBlank() && noKey.isEmpty() && !looking && groupSend != GroupSendStep.Reading,
                     modifier = Modifier.padding(bottom = 4.dp).size(SEND_BUTTON),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.common_send)) }
             }

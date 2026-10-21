@@ -30,6 +30,17 @@ fun SocialSending.prepareGroupKey(group: GroupKey?, name: String, members: List<
         PendingPost(what, call, from, posting.estimate(from, call), tp(R.plurals.group_key_detail, others.size, others.size), onSent = onSent)
     }
 
+/**
+ * The removal notice of a change of the group of [key] (the key before the change) that removed [removed], named
+ * [title] on this phone: one part sealed with that key, which the people removed hold.
+ */
+fun SocialSending.prepareGroupNotice(key: GroupKey, removed: List<String>, title: String) =
+    prepareWith(t(R.string.group_what_notice)) { posting, from ->
+        val parts = listOf(encryptGroupPart(groupNoticePlain(key.admin, key.group, key.keyId, removed), key.key))
+        val call = SocialPosting.message(sendMessageArgument(parts, groupMessageHash(parts)))
+        PendingPost(t(R.string.group_what_notice), call, from, posting.estimate(from, call), t(R.string.group_notice_detail, title))
+    }
+
 /** A message [text] to the group of [key] (its current key), named [title] on this phone. */
 fun SocialSending.prepareGroupMessage(key: GroupKey, text: String, title: String, onSent: () -> Unit = {}) =
     prepareWith(t(R.string.social_what_message)) { posting, from ->

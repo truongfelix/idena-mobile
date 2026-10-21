@@ -22,6 +22,12 @@ const val GROUP_FORMAT = 1
 /** The most members of a group besides its admin: the node encrypts one message for at most 64 keys. */
 const val MAX_GROUP_MEMBERS = 64
 
+/** How long a group message waits for the blocks up to the node's last one to be read: 90 seconds. */
+const val GROUP_CATCH_UP_MS = 90_000L
+
+/** A group message reading the newest blocks first, or not sent because they could not be read in time. */
+enum class GroupSendStep { Reading, Behind }
+
 /** The longest group name. */
 const val MAX_GROUP_NAME = 40
 
@@ -100,6 +106,14 @@ fun groupMessagePlain(admin: String, group: String, keyId: Int, text: String): S
     JSONObject().put("idenaGroup", GROUP_FORMAT).put("type", "message").put("admin", admin).put("group", group).put("keyId", keyId)
         .put("text", text).toString()
 
+/**
+ * The plain text of a removal notice: sent by the admin right after a change that removes [removed], sealed with the
+ * key before it ([keyId]), so that the people removed, who never get the new key, read that they were.
+ */
+fun groupNoticePlain(admin: String, group: String, keyId: Int, removed: List<String>): String =
+    JSONObject().put("idenaGroup", GROUP_FORMAT).put("type", "removed").put("admin", admin).put("group", group).put("keyId", keyId)
+        .put("removed", JSONArray(removed)).toString()
+
 /** [plain] encrypted with the group's [key]: `iv(12) || ciphertext+tag`, base64 (one part). */
 fun encryptGroupPart(plain: String, key: String): String {
     val iv = randomBytes(12)
@@ -143,15 +157,28 @@ fun acceptGroupKey(call: MessageCall, plain: String, indexes: List<Int>, me: Str
 
 /**
  * [call] as a group message under [key]: one part that [key] opens, naming its group and key, from one of the key's
- * members, with a text; null otherwise.
+ * members, with a text; or the admin's removal notice ([ChatMessage.REMOVED]), naming members of the key other than
+ * the admin. Null otherwise.
  */
 fun acceptGroupMessage(call: MessageCall, key: GroupKey): ChatMessage? {
     if (call.parts.size != 1 || call.messageHash != groupMessageHash(call.parts)) return null
     val plain = decryptGroupPart(call.parts[0], key.key) ?: return null
     val json = runCatching { JSONObject(plain) }.getOrNull() ?: return null
-    if (!json.isGroupFormat("message")) return null
+    val notice = json.isGroupFormat("removed")
+    if (!notice && !json.isGroupFormat("message")) return null
     if (json.optString("admin") != key.admin || json.optString("group") != key.group || json.opt("keyId") != key.keyId) return null
     if (call.from !in key.members) return null
+    if (notice) {
+        if (call.from != key.admin) return null
+        val array = json.optJSONArray("removed") ?: return null
+        val removed = (0 until array.length()).map { array.opt(it) as? String ?: return null }
+        if (removed.isEmpty() || removed.distinct().size != removed.size) return null
+        if (removed.any { it == key.admin || it !in key.members }) return null
+        return ChatMessage(
+            call.hash, call.height, call.time, call.index, call.from, key.members, "", group = key.conversation,
+            kind = ChatMessage.REMOVED, removed = removed,
+        )
+    }
     val text = json.optString("text").ifEmpty { return null }
     return ChatMessage(call.hash, call.height, call.time, call.index, call.from, key.members, text, group = key.conversation)
 }
@@ -205,16 +232,22 @@ fun groupLines(keys: List<GroupKey>, messages: List<ChatMessage>): Pair<List<Cha
 /**
  * The groups of [keys] with their [messages] ([groupLines]), as conversations for [me]: the others are its members
  * ([me] left out). One waits in Requests until [me] wrote in it or its admin is followed or marked to message, as a
- * stranger's conversation.
+ * stranger's conversation. A removal notice shows only to the people it names (the others read the change in its key
+ * message), and one naming [me] after the last key [me] holds marks the group [Conversation.removedMe].
  */
 fun groupConversations(messages: List<ChatMessage>, keys: List<GroupKey>, me: String, people: Map<String, Person>): List<Conversation> {
     val byGroup = messages.groupBy { it.group }
     return keys.groupBy { it.conversation }.mapNotNull { (key, groupKeys) ->
-        val (lines, state) = groupLines(groupKeys, byGroup[key].orEmpty())
+        val (all, state) = groupLines(groupKeys, byGroup[key].orEmpty())
+        val lines = all.filter { it.kind != ChatMessage.REMOVED || me in it.removed }
         if (state == null || lines.isEmpty()) return@mapNotNull null
+        // Every key [me] holds names [me]: one after the notice means added again.
+        val removedMe = lines.lastOrNull { it.kind.isNotEmpty() }?.kind == ChatMessage.REMOVED
         val others = state.members.filter { it != me }.ifEmpty { listOf(me) }
         val admin = state.key.admin
         val known = admin == me || people[admin]?.let { it.following || it.message } == true
-        Conversation(key, others, lines, isRequest = !known && lines.none { it.from == me && it.kind.isEmpty() }, group = state)
+        Conversation(
+            key, others, lines, isRequest = !known && lines.none { it.from == me && it.kind.isEmpty() }, group = state, removedMe = removedMe,
+        )
     }
 }

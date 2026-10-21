@@ -30,6 +30,12 @@
     <string name="group_removed">%1$s removed %2$s</string>
     <string name="group_renamed">%1$s renamed the group “%2$s”</string>
     <string name="group_new_key">%1$s gave the group a new key</string>
+    <string name="group_removed_you">%1$s removed you from the group</string>
+    <string name="group_removed_note">You were removed from this group: you no longer get its key, and what you would send here no longer counts.</string>
+    <string name="group_what_notice">Tell the people removed</string>
+    <string name="group_notice_detail">Tells the people removed from “%1$s” that they were: they do not get the new key, so nothing else would</string>
+    <string name="group_reading">Reading the latest blocks first…</string>
+    <string name="group_behind">Not sent: the latest blocks could not be read in time, so the group may have a newer key. Try again.</string>
     <string name="group_admin">created the group</string>
     <string name="group_privacy_note">Only the group\'s members can read its messages. Who writes and when is public, on the chain for good. The group\'s name and members are not; how many they are shows each time its creator hands out a key.</string>
     <string name="chat_hide">Hide the conversation</string>

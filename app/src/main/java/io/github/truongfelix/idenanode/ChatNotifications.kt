@@ -48,7 +48,7 @@ fun messagePreview(message: ChatMessage): String = when {
 fun chatNotices(store: ChatStore, me: String, people: Map<String, Person>): List<ChatNotice> {
     val names = peopleNames(people)
     val blocked = people.values.filter { it.blocked }.mapTo(HashSet()) { it.address }
-    return visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked)
+    return visibleConversations(conversations(store.chatLines, me, people, store.groupKeys), blocked)
         .filter { !it.isRequest && it.key !in store.hiddenChats }
         .mapNotNull { conversation ->
             val unread = store.unreadMessages(conversation, me)
@@ -79,11 +79,13 @@ fun withOpened(store: ChatStore, opened: ChatStore?): ChatStore {
     if (opened == null) return store
     val known = store.messages.mapTo(HashSet()) { it.hash }
     val keys = store.groupKeys.mapTo(HashSet()) { it.hash }
+    val notices = store.groupNotices.mapTo(HashSet()) { it.hash }
     return store.copy(
         tried = store.tried + opened.tried,
         messages = store.messages + opened.messages.filter { it.hash !in known },
         groupKeys = store.groupKeys + opened.groupKeys.filter { it.hash !in keys },
         groupTried = store.groupTried + opened.groupTried,
+        groupNotices = store.groupNotices + opened.groupNotices.filter { it.hash !in notices },
     )
 }
 

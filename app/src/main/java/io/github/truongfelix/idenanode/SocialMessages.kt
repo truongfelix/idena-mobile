@@ -90,8 +90,13 @@ data class ChatMessage(
     val isReply: Boolean = false,
     /** The group's conversation ([groupConversationKey]) for a group's line; empty for idena.social's messages. */
     val group: String = "",
-    /** What a group's line is: a message (empty) or a key message ([KEY]: [text] is the group's name). */
+    /**
+     * What a group's line is: a message (empty), a key message ([KEY]: [text] is the group's name) or its admin's
+     * removal notice ([REMOVED]).
+     */
     val kind: String = "",
+    /** Who a removal notice ([REMOVED]) names. */
+    val removed: List<String> = emptyList(),
 ) {
     /** The conversation it belongs to: its group, or its participants sorted and distinct. */
     val conversation: String
@@ -101,13 +106,18 @@ data class ChatMessage(
         .put("hash", hash).put("height", height).put("time", time).put("index", index).put("from", from)
         .put("participants", JSONArray(participants)).put("text", text).put("textPassword", textPassword)
         .put("hasMedia", hasMedia).put("isReply", isReply).put("group", group).put("kind", kind)
+        .also { json -> if (removed.isNotEmpty()) json.put("removed", JSONArray(removed)) }
 
     companion object {
         /** A group's key message ([kind]). */
         const val KEY = "key"
 
+        /** A group's removal notice ([kind]). */
+        const val REMOVED = "removed"
+
         fun fromJson(json: JSONObject): ChatMessage {
             val participants = json.getJSONArray("participants")
+            val removed = json.optJSONArray("removed") ?: JSONArray()
             return ChatMessage(
                 hash = json.getString("hash"),
                 height = json.getLong("height"),
@@ -121,6 +131,7 @@ data class ChatMessage(
                 isReply = json.optBoolean("isReply"),
                 group = json.optString("group"),
                 kind = json.optString("kind"),
+                removed = (0 until removed.length()).map { removed.getString(it) },
             )
         }
     }
@@ -198,6 +209,8 @@ data class Conversation(
     val messages: List<ChatMessage>,
     val isRequest: Boolean,
     val group: GroupState? = null,
+    /** A group whose admin removed the account since the last key it holds: no Send there. */
+    val removedMe: Boolean = false,
 ) {
     val last: ChatMessage
         get() = messages.last()
