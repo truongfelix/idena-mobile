@@ -80,10 +80,11 @@ fun groupTitle(group: GroupState, me: String, names: Map<String, String>, local:
 
 /**
  * A group's key message as a line of its conversation: who made the group, who was added or removed, a new name or a
- * new key alone, against [previous], the key message before it.
+ * new key alone, against [previous], the key message before it; or its admin's removal notice.
  */
 fun groupEventText(line: ChatMessage, previous: ChatMessage?, me: String, names: Map<String, String>): String {
     val who = { address: String -> if (address == me) t(R.string.group_you) else displayName(address, names) }
+    if (line.kind == ChatMessage.REMOVED) return t(R.string.group_removed_you, who(line.from))
     // The first key message [me] holds: the group made, or [me] added later (the older keys never reach a new member).
     if (previous == null) return if (line.from == me) t(R.string.group_created, line.text) else t(R.string.group_added_you, who(line.from), line.text)
     val parts = ArrayList<String>()

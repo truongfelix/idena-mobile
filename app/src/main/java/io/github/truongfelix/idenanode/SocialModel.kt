@@ -18,6 +18,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -514,7 +515,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     private val allConversations: List<Conversation> by derivedStateOf {
         myAddress?.let { me ->
             val store = chats.store
-            visibleConversations(conversations(store.messages, me, people, store.groupKeys), blocked)
+            visibleConversations(conversations(store.chatLines, me, people, store.groupKeys), blocked)
         }.orEmpty()
     }
 
@@ -538,11 +539,12 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     private suspend fun updateChats() {
         val me = myAddress ?: return
-        val calls = cache?.messages ?: return
+        val current = cache ?: return
+        val calls = current.messages
         withContext(Dispatchers.IO) {
             chats.load(me)
             // A node that does not answer, or without social_decrypt: tried again after the next scan step.
-            runCatching { chats.update(calls, rpc(context)) }
+            runCatching { chats.update(calls, current.high, rpc(context)) }
         }
     }
 
@@ -600,10 +602,39 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         (conversation.group?.let { listOf(it.key.admin) } ?: conversation.others).forEach { setPerson(person(it).copy(message = true)) }
     }
 
-    /** Sends [text] to the group of [conversation], under its current key. */
+    /** Where a group message stands while the newest blocks are read first ([sendGroupMessage]), by conversation key. */
+    var groupSend by mutableStateOf<Pair<String, GroupSendStep>?>(null)
+        private set
+
+    /**
+     * Sends [text] to the group of [conversation] with its newest key: the blocks up to the node's last one are read
+     * first, so that a key message of a change is never missed (whoever it removed could read a message sealed with
+     * the key before it). Not sent when they cannot be read in [GROUP_CATCH_UP_MS], or the account was removed.
+     */
     fun sendGroupMessage(conversation: Conversation, text: String) {
-        val key = conversation.group?.key ?: return
-        sending.prepareGroupMessage(key, text, chatTitle(conversation)) { chatDrafts.remove(conversation.key) }
+        if (conversation.group == null || groupSend?.second == GroupSendStep.Reading) return
+        val key = conversation.key
+        groupSend = key to GroupSendStep.Reading
+        scope.launch {
+            val caughtUp = runCatching {
+                val last = withContext(Dispatchers.IO) { NodeSocialSource(rpc(context)).headBlock().first }
+                scanNewOnce.set(true)
+                wake++
+                withTimeoutOrNull(GROUP_CATCH_UP_MS) {
+                    while (chats.readThrough < last) delay(1_000)
+                    true
+                } ?: false
+            }.getOrDefault(false)
+            if (!caughtUp) {
+                groupSend = key to GroupSendStep.Behind
+                return@launch
+            }
+            groupSend = null
+            val latest = allConversations.firstOrNull { it.key == key }
+            val group = latest?.group?.key
+            if (group == null || latest.removedMe) return@launch
+            sending.prepareGroupMessage(group, text, chatTitle(latest)) { chatDrafts.remove(key) }
+        }
     }
 
     /**
@@ -623,7 +654,14 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     fun saveGroup(group: GroupKey?, name: String, members: List<String>) {
         val keys = members.map { messageKeys[it].orEmpty() }
         if (keys.any { it.isEmpty() }) return
-        sending.prepareGroupKey(group, name, members, keys) { back() }
+        // The people removed never get the new key: once the change is sent, a notice under the key before it tells
+        // them (its own fee to confirm). Someone who leaves on their own needs none.
+        val removed = group?.members?.filter { it != group.admin && it !in members }.orEmpty()
+        val title = name.trim().ifEmpty { group?.name.orEmpty() }
+        sending.prepareGroupKey(group, name, members, keys) {
+            back()
+            if (group != null && removed.isNotEmpty()) sending.prepareGroupNotice(group, removed, title)
+        }
     }
 
     /**
