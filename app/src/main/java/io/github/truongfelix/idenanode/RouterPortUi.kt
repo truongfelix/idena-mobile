@@ -52,6 +52,10 @@ sealed interface RouterPortState {
         val opening: RouterOpening?,
         /** Peers that connected from outside since the opening's last change; null without an opening. */
         val inbound: Int?,
+        /** The port read: the opening's, else the node's. */
+        val port: Int = DEFAULT_NODE_PORT,
+        /** When another device holds [port]: a node port free on this router ([nextFreePort]), or null. */
+        val freePort: Int? = null,
     ) : RouterPortState {
         val owner: MappingOwner get() = mappingOwner(mapping, phoneIp, opening)
     }
@@ -123,14 +127,21 @@ class RouterPortModel(private val context: Context) {
 
     private fun read(gateway: Gateway, syncEnabled: Boolean) {
         state = try {
-            val (mapping, phoneIp) = RouterNet.mapping(gateway)
             val opening = RouterFiles.opening(context)?.takeIf { it.gateway.udn == gateway.udn }
+            val port = opening?.port ?: NodeSettings.routerPort(context)
+            val (mapping, phoneIp) = RouterNet.mapping(gateway, port)
             val now = Instant.now()
             val found = RouterPortState.Found(
                 gateway, phoneIp, mapping, opening,
                 inbound = opening?.let { inboundPeersSince(RouterFiles.nodeLogTail(context), Instant.ofEpochMilli(it.changedAtMs), now) },
+                port = port,
             )
-            if (!syncEnabled && found.owner == MappingOwner.None) RouterPortState.Hidden else found
+            when {
+                !syncEnabled && found.owner == MappingOwner.None -> RouterPortState.Hidden
+                found.owner == MappingOwner.Other ->
+                    found.copy(freePort = nextFreePort(port) { mappingOwner(RouterNet.mapping(gateway, it).first, phoneIp, opening) })
+                else -> found
+            }
         } catch (e: Exception) {
             // The router stopped answering: maybe the phone moved to another network.
             this.gateway = null
@@ -138,17 +149,28 @@ class RouterPortModel(private val context: Context) {
         }
     }
 
-    /** Opens the node's port for the phone until [end], replacing a forwarding the phone has. */
+    /**
+     * Opens the node's port for the phone until [end], replacing a forwarding the phone has; the app's opening of
+     * a port the node left is closed first.
+     */
     suspend fun open(found: RouterPortState.Found, end: Instant) = act(found) {
-        val opening = RouterOpening(found.gateway, found.phoneIp, end.toEpochMilli(), System.currentTimeMillis())
-        val replace = found.owner == MappingOwner.Phone || found.owner == MappingOwner.PhoneBefore
-        RouterNet.open(found.gateway, found.phoneIp, opening.leaseSeconds(opening.changedAtMs), replace)
+        val port = NodeSettings.routerPort(context)
+        val (mapping, phoneIp) = if (port == found.port) found.mapping to found.phoneIp else RouterNet.mapping(found.gateway, port)
+        val owner = mappingOwner(mapping, phoneIp, found.opening)
+        check(owner != MappingOwner.Other) { t(R.string.router_other_device, port, found.gateway.name, mapping!!.client) }
+        found.opening?.takeIf { it.port != port }?.let { before ->
+            val old = RouterNet.mapping(found.gateway, before.port).first
+            if (mappingOwner(old, phoneIp, before) != MappingOwner.Other) RouterNet.delete(found.gateway, before.port)
+        }
+        val opening = RouterOpening(found.gateway, phoneIp, end.toEpochMilli(), System.currentTimeMillis(), port = port)
+        val replace = owner == MappingOwner.Phone || owner == MappingOwner.PhoneBefore
+        RouterNet.open(found.gateway, port, phoneIp, opening.leaseSeconds(opening.changedAtMs), replace)
         RouterFiles.setOpening(context, opening)
     }
 
     /** Closes the node's port at once. */
     suspend fun close(found: RouterPortState.Found) = act(found) {
-        RouterNet.delete(found.gateway)
+        RouterNet.delete(found.gateway, found.port)
         RouterFiles.setOpening(context, null)
     }
 
@@ -178,8 +200,8 @@ fun routerNotFoundText(heard: String?): String =
     heard?.let { t(R.string.router_no_upnp_on, it) }
         ?: t(R.string.router_none_heard)
 
-/** What the row says about a found router, and which buttons it offers. */
-data class RouterPortView(val text: String, val canOpen: Boolean, val canClose: Boolean)
+/** What the row says about a found router, and which buttons it offers ([usePort]: "Use port", or null). */
+data class RouterPortView(val text: String, val canOpen: Boolean, val canClose: Boolean, val usePort: Int? = null)
 
 /** An opening's end as the app shows dates: the phone's format and time zone. */
 fun formatOpeningEnd(end: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
@@ -198,23 +220,27 @@ fun routerPortView(found: RouterPortState.Found, now: Instant, zone: ZoneId = Zo
         }
         MappingOwner.PhoneBefore ->
             RouterPortView(t(R.string.router_open_former_address, name), canOpen = false, canClose = true)
-        MappingOwner.Other ->
-            RouterPortView(t(R.string.router_other_device, NODE_PORT, name, found.mapping!!.client), canOpen = false, canClose = false)
+        MappingOwner.Other -> {
+            val taken = t(R.string.router_other_device, found.port, name, found.mapping!!.client)
+            val free = found.freePort?.let { t(R.string.router_port_free, it) }
+            RouterPortView(listOfNotNull(taken, free).joinToString(". "), canOpen = false, canClose = false, usePort = found.freePort)
+        }
         MappingOwner.None -> RouterPortView(t(R.string.router_closed_on, name), canOpen = true, canClose = false)
     }
 }
 
 val ROUTER_PORT_TITLE: String get() = t(R.string.router_port_title)
 
-val ROUTER_PORT_INFO: String
-    get() = t(R.string.router_port_info, NODE_PORT)
+/** The Router port row's info, for the node's [port]. */
+fun routerPortInfo(port: Int): String = t(R.string.router_port_info, port)
 
 /**
  * The Router port row of the advanced settings, on Wi-Fi: the search, a found router's state, and the Open and
- * Close buttons. [validation] gives the "until the validation" choice its date.
+ * Close buttons; when another device holds the port, "Use port" for a free one ([onUsePort]: the node port setting,
+ * taken at the next start). [validation] gives the "until the validation" choice its date.
  */
 @Composable
-fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Instant?) {
+fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Instant?, onUsePort: (Int) -> Unit) {
     val scope = rememberCoroutineScope()
     var showInfo by remember { mutableStateOf(false) }
     var choose by remember { mutableStateOf(false) }
@@ -252,6 +278,7 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
                 val view = routerPortView(state, Instant.now())
                 Text(view.text, style = small, color = muted)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    view.usePort?.let { port -> TextButton(onClick = { onUsePort(port) }) { Text(t(R.string.router_use_port, port)) } }
                     if (view.canOpen) TextButton(enabled = !model.busy, onClick = { choose = true }) { Text(t(R.string.router_open_ellipsis)) }
                     if (view.canClose) TextButton(enabled = !model.busy, onClick = { confirmClose = true }) { Text(t(R.string.common_close)) }
                 }
@@ -281,7 +308,7 @@ fun RouterPortRow(model: RouterPortModel, syncEnabled: Boolean, validation: Inst
         AlertDialog(
             onDismissRequest = { showInfo = false },
             title = { Text(ROUTER_PORT_TITLE) },
-            text = { Text(ROUTER_PORT_INFO) },
+            text = { Text(routerPortInfo((state as? RouterPortState.Found)?.port ?: DEFAULT_NODE_PORT)) },
             confirmButton = { TextButton(onClick = { showInfo = false }) { Text(t(R.string.common_ok)) } },
         )
     }

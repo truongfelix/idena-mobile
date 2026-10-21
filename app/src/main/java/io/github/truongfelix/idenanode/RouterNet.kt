@@ -179,33 +179,33 @@ object RouterNet {
         return parseSoap(response.status, response.body) to localIp
     }
 
-    /** The router's forwarding of the node's port and the phone's address; the forwarding null when none. */
-    fun mapping(gateway: Gateway): Pair<PortMapping?, String> {
-        val (answer, phoneIp) = soap(gateway, "GetSpecificPortMappingEntry", NODE_PORT_ARGS)
+    /** The router's forwarding of [port] and the phone's address; the forwarding null when none. */
+    fun mapping(gateway: Gateway, port: Int): Pair<PortMapping?, String> {
+        val (answer, phoneIp) = soap(gateway, "GetSpecificPortMappingEntry", portArgs(port))
         if (!answer.ok && answer.errorCode != UPNP_NO_SUCH_ENTRY) throw RouterError(answer)
-        return portMapping(answer) to phoneIp
+        return portMapping(answer, port) to phoneIp
     }
 
     /**
-     * Forwards the node's port to [client] for [leaseSeconds] (0 = no end), replacing a forwarding the phone has
-     * there: deleted first, since the measured router (Livebox) once left a forwarding replaced in place
-     * unreachable. A router that refuses a long lease gets the standard longest; one that only keeps leases with
-     * no end gets that, and the upkeep closes it at the user's end.
+     * Forwards [port] to [client] for [leaseSeconds] (0 = no end), replacing a forwarding the phone has there:
+     * deleted first, since the measured router (Livebox) once left a forwarding replaced in place unreachable. A
+     * router that refuses a long lease gets the standard longest; one that only keeps leases with no end gets
+     * that, and the upkeep closes it at the user's end.
      */
-    fun open(gateway: Gateway, client: String, leaseSeconds: Long, replace: Boolean) {
-        if (replace) delete(gateway)
-        var answer = soap(gateway, "AddPortMapping", addPortMappingArgs(client, leaseSeconds)).first
+    fun open(gateway: Gateway, port: Int, client: String, leaseSeconds: Long, replace: Boolean) {
+        if (replace) delete(gateway, port)
+        var answer = soap(gateway, "AddPortMapping", addPortMappingArgs(port, client, leaseSeconds)).first
         if (!answer.ok && answer.errorCode == UPNP_ONLY_PERMANENT_LEASES) {
-            answer = soap(gateway, "AddPortMapping", addPortMappingArgs(client, 0)).first
+            answer = soap(gateway, "AddPortMapping", addPortMappingArgs(port, client, 0)).first
         } else if (!answer.ok && answer.errorCode != UPNP_CONFLICT && leaseSeconds > MAX_STANDARD_LEASE_SECONDS) {
-            answer = soap(gateway, "AddPortMapping", addPortMappingArgs(client, MAX_STANDARD_LEASE_SECONDS)).first
+            answer = soap(gateway, "AddPortMapping", addPortMappingArgs(port, client, MAX_STANDARD_LEASE_SECONDS)).first
         }
         if (!answer.ok) throw RouterError(answer)
     }
 
-    /** Removes the forwarding of the node's port; none there is fine. */
-    fun delete(gateway: Gateway) {
-        val answer = soap(gateway, "DeletePortMapping", NODE_PORT_ARGS).first
+    /** Removes the forwarding of [port]; none there is fine. */
+    fun delete(gateway: Gateway, port: Int) {
+        val answer = soap(gateway, "DeletePortMapping", portArgs(port)).first
         if (!answer.ok && answer.errorCode != UPNP_NO_SUCH_ENTRY) throw RouterError(answer)
     }
 

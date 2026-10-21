@@ -43,6 +43,8 @@ object NodeSettings {
     private fun directPeersFile(context: Context) = File(nodeDir(context), "direct_peers")
     private fun runningDirectPeersFile(context: Context) = File(nodeDir(context), "direct_peers_running")
     private fun ownPeerNameFile(context: Context) = File(nodeDir(context), "own_peer_name")
+    private fun nodePortFile(context: Context) = File(nodeDir(context), "node_port")
+    private fun runningNodePortFile(context: Context) = File(nodeDir(context), "node_port_running")
 
     // The chain database's files keep the names they had before the IPFS database got its own setting.
     private fun filePrefix(database: NodeDatabase) = when (database) {
@@ -89,8 +91,18 @@ object NodeSettings {
             peerLevel = peerLevel,
             ipfsConnections = IpfsConnections.parse(read(ipfsConnectionsFile(context))).atLeastFor(peerLevel),
             directPeers = parseDirectPeers(read(directPeersFile(context))),
+            nodePort = parseNodePort(read(nodePortFile(context))),
         )
     }
+
+    fun setNodePort(context: Context, port: Int) = writeAtomically(nodePortFile(context), port.toString())
+
+    /**
+     * The port the router opening forwards: the one the node runs on, else (no start recorded it yet) the one
+     * chosen.
+     */
+    fun routerPort(context: Context): Int =
+        read(runningNodePortFile(context))?.let { parseNodePort(it) } ?: parseNodePort(read(nodePortFile(context)))
 
     fun setDirectPeers(context: Context, peers: List<DirectPeer>) =
         writeAtomically(directPeersFile(context), directPeersJson(peers))
@@ -121,6 +133,7 @@ object NodeSettings {
         peerLevel = read(runningPeerLevelFile(context))?.let { PeerLevel.parse(it) },
         ipfsConnections = read(runningIpfsConnectionsFile(context))?.let { IpfsConnections.parse(it) },
         directPeers = read(runningDirectPeersFile(context))?.let { text -> parseDirectPeers(text).map { it.id } },
+        nodePort = read(runningNodePortFile(context))?.let { parseNodePort(it) },
     )
 
     /** Records [options] as the node's start settings, for the screen to compare with the user's choices. */
@@ -131,6 +144,7 @@ object NodeSettings {
         runCatching { writeAtomically(runningPeerLevelFile(context), options.peerLevel.key) }
         runCatching { writeAtomically(runningIpfsConnectionsFile(context), options.ipfsConnections.high.toString()) }
         runCatching { writeAtomically(runningDirectPeersFile(context), directPeersJson(options.directPeers)) }
+        runCatching { writeAtomically(runningNodePortFile(context), options.nodePort.toString()) }
     }
 
     /**
@@ -166,6 +180,7 @@ object NodeSettings {
             .put(
                 "IpfsConf", JSONObject()
                     .put("Profile", "")
+                    .put("IpfsPort", options.nodePort)
                     .put("StaticPort", true)
                     .put("DatastoreWriteBufferMiB", (options.writeBuffers[NodeDatabase.Ipfs] ?: WriteBuffer.DEFAULT).mib)
                     .put("LowWater", limit.low)
@@ -183,6 +198,8 @@ data class NodeOptions(
     val peerLevel: PeerLevel = PeerLevel.DEFAULT,
     val ipfsConnections: IpfsConnections = IpfsConnections.DEFAULT,
     val directPeers: List<DirectPeer> = emptyList(),
+    /** The node's IPFS port, one of [NODE_PORTS]. */
+    val nodePort: Int = DEFAULT_NODE_PORT,
 )
 
 /** The [NodeOptions] of the node's last start; a setting is null when no start recorded it (an older app). */
@@ -192,4 +209,5 @@ data class RunningOptions(
     val ipfsConnections: IpfsConnections? = null,
     /** The peer ids of the direct peers. */
     val directPeers: List<String>? = null,
+    val nodePort: Int? = null,
 )
