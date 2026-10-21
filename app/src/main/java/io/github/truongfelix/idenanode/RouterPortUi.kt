@@ -138,8 +138,12 @@ class RouterPortModel(private val context: Context) {
             )
             when {
                 !syncEnabled && found.owner == MappingOwner.None -> RouterPortState.Hidden
-                found.owner == MappingOwner.Other ->
-                    found.copy(freePort = nextFreePort(port) { mappingOwner(RouterNet.mapping(gateway, it).first, phoneIp, opening) })
+                // A port the router does not answer for counts as held: the row stays as read.
+                found.owner == MappingOwner.Other -> found.copy(
+                    freePort = nextFreePort(port) {
+                        runCatching { mappingOwner(RouterNet.mapping(gateway, it).first, phoneIp, opening) }.getOrDefault(MappingOwner.Other)
+                    },
+                )
                 else -> found
             }
         } catch (e: Exception) {
