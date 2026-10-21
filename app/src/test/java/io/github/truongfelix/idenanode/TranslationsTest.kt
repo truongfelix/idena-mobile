@@ -54,6 +54,15 @@ class TranslationsTest {
         assertEquals("texts whose French version has other placeholders", emptyMap<String, String>(), wrong)
     }
 
+    // The texts name the social network "Idena Social", never by the website's address (owner 2026-10-21).
+    @Test
+    fun theSocialNetworkIsIdenaSocialInTheTexts() {
+        for (folder in listOf("values", "values-fr")) {
+            val wrong = texts(folder).filter { (_, text) -> text.contains("idena.social", ignoreCase = true) }
+            assertEquals("texts of $folder naming idena.social", emptyMap<String, String>(), wrong)
+        }
+    }
+
     @Test
     fun everyPlaceholderIsNumbered() {
         val wrong = (texts("values") + texts("values-fr")).filter { (_, text) -> unnumbered.containsMatchIn(text) }
