@@ -50,8 +50,11 @@ import java.math.RoundingMode
 
 private fun rpc(context: Context) = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
 
-/** A transfer or a stake replenishment waiting for the user's confirmation, with the node's fee. */
-private data class PendingTx(val type: Int, val to: String, val amount: BigDecimal, val title: String, val summary: String, val fee: BigDecimal = BigDecimal.ZERO)
+/** A transfer (with its comment's [payload], if any) or a stake replenishment waiting for the user's confirmation, with the node's fee. */
+private data class PendingTx(
+    val type: Int, val to: String, val amount: BigDecimal, val title: String, val summary: String,
+    val payload: String? = null, val fee: BigDecimal = BigDecimal.ZERO,
+)
 
 private enum class WalletDialog { Send, Receive, Stake }
 
@@ -76,7 +79,7 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
         busy = true
         message = null
         scope.launch {
-            val fee = withContext(Dispatchers.IO) { runCatching { rpc(context).estimateTx(tx.type, status.address, tx.to, tx.amount) } }
+            val fee = withContext(Dispatchers.IO) { runCatching { rpc(context).estimateTx(tx.type, status.address, tx.to, tx.amount, tx.payload) } }
             busy = false
             fee.onSuccess { confirm = tx.copy(fee = it) }.onFailure { message = t(R.string.wallet_node_refused, it.message.toString()) }
         }
@@ -85,7 +88,7 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
     fun send(tx: PendingTx) {
         busy = true
         scope.launch {
-            val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).sendTx(tx.type, status.address, tx.to, tx.amount) } }
+            val hash = withContext(Dispatchers.IO) { runCatching { rpc(context).sendTx(tx.type, status.address, tx.to, tx.amount, tx.payload) } }
                 .getOrElse {
                     busy = false
                     message = t(R.string.wallet_node_refused, it.message.toString())
@@ -142,10 +145,13 @@ fun WalletCard(status: NodeStatus, people: Map<String, Person>, names: Map<Strin
 
     when (dialog) {
         WalletDialog.Receive -> ReceiveDialog(status.address) { dialog = null }
-        WalletDialog.Send -> SendDialog(status, people, names, onDismiss = { dialog = null }) { to, name, amount ->
+        WalletDialog.Send -> SendDialog(status, people, names, onDismiss = { dialog = null }) { to, name, amount, comment ->
             dialog = null
             val shown = name?.let { "@$it ($to)" } ?: recipientText(to, names)
-            prepare(PendingTx(SEND_TX, to, amount, t(R.string.common_send), t(R.string.wallet_send_summary, idna(amount.toPlainString()), shown)))
+            var summary = t(R.string.wallet_send_summary, idna(amount.toPlainString()), shown)
+            val bytes = commentBytes(comment)
+            if (bytes != null) summary += "\n\n" + t(R.string.wallet_send_comment_line, comment.trim())
+            prepare(PendingTx(SEND_TX, to, amount, t(R.string.common_send), summary, commentPayload(bytes)))
         }
         WalletDialog.Stake -> StakeDialog(status, onDismiss = { dialog = null }) { amount ->
             dialog = null
@@ -213,16 +219,25 @@ internal fun qrCode(text: String): ImageBitmap {
 /**
  * The recipient (typed, pasted or picked among the named people of the Social tab's People list; "@name" sends to
  * the holder of a name in the profiles contract, shown with its robot, address and state) and the amount; checked
- * here, then by the node's fee estimate. [onNext] gets the address and, for "@name", the name.
+ * here, then by the node's fee estimate; an optional comment. [onNext] gets the address, for "@name" the name, the
+ * amount and the comment as typed.
  */
 @Composable
-private fun SendDialog(status: NodeStatus, people: Map<String, Person>, names: Map<String, String>, onDismiss: () -> Unit, onNext: (String, String?, BigDecimal) -> Unit) {
+private fun SendDialog(
+    status: NodeStatus,
+    people: Map<String, Person>,
+    names: Map<String, String>,
+    onDismiss: () -> Unit,
+    onNext: (String, String?, BigDecimal, String) -> Unit,
+) {
     val context = LocalContext.current
     var to by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf(false) }
     val named = remember(people, names) { pickablePeople(people, names, status.address) }
     var amountText by remember { mutableStateOf("") }
     val amount = parseIdna(amountText)
+    var comment by remember { mutableStateOf("") }
+    val commentTooLong = (commentBytes(comment)?.size ?: 0) > MAX_COMMENT_BYTES
     val balance = status.balance.toBigDecimalOrNull() ?: BigDecimal.ZERO
     val recipient = parseRecipient(to)
     val name = (recipient as? Recipient.Name)?.name
@@ -276,11 +291,26 @@ private fun SendDialog(status: NodeStatus, people: Map<String, Person>, names: M
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 if (tooMuch) Text(t(R.string.wallet_too_much), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    label = { Text(t(R.string.wallet_comment)) },
+                    placeholder = { Text(t(R.string.wallet_comment_example)) },
+                    isError = commentTooLong,
+                )
+                Text(
+                    t(if (commentTooLong) R.string.wallet_comment_too_long else R.string.wallet_comment_note, MAX_COMMENT_BYTES),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (commentTooLong) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(t(R.string.wallet_send_final), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (address != null && amount != null) onNext(address, name, amount) }, enabled = toValid && amount != null && !tooMuch) { Text(t(R.string.common_next)) }
+            TextButton(
+                onClick = { if (address != null && amount != null) onNext(address, name, amount, comment) },
+                enabled = toValid && amount != null && !tooMuch && !commentTooLong,
+            ) { Text(t(R.string.common_next)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(t(R.string.common_cancel)) } },
     )

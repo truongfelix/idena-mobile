@@ -96,6 +96,11 @@
     <string name="wallet_amount">Montant (iDNA)</string>
     <string name="wallet_too_much">Plus que votre solde.</string>
     <string name="wallet_send_final">Un transfert est irréversible : vérifiez l\'adresse.</string>
+    <string name="wallet_comment">Commentaire (facultatif)</string>
+    <string name="wallet_comment_example">Par exemple, un numéro de facture</string>
+    <string name="wallet_comment_note">Tout le monde peut le lire sur la chaîne. Un commentaire plus long coûte des frais un peu plus élevés.</string>
+    <string name="wallet_comment_too_long">Le commentaire est trop long : %1$d octets au maximum.</string>
+    <string name="wallet_send_comment_line">Commentaire : %1$s</string>
     <string name="wallet_name_looking">Recherche de @%1$s…</string>
     <string name="wallet_name_no_answer">Le nœud n\'a pas répondu pour @%1$s.</string>
     <string name="wallet_name_nobody">Personne ne détient @%1$s.</string>
