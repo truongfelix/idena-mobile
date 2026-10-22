@@ -47,7 +47,7 @@ The first sync takes a few hours: keep the phone on Wi-Fi and charging.
 
 ## Build from source
 
-You need the Android SDK (platform and build tools 35), Android NDK r27d (27.3.13750724), JDK 17 or newer, Go 1.26.9
+You need the Android SDK (platform and build tools 35), Android NDK r27d (27.3.13750724), JDK 17 or newer, Go 1.26.10
 or newer, and Rust through rustup.
 
 ```sh
