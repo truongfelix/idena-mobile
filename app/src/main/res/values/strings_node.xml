@@ -196,7 +196,7 @@
     <string name="router_use_port">Use port %1$d</string>
     <string name="router_closed_on">Closed on %1$s</string>
     <string name="router_port_title">Router port</string>
-    <string name="router_port_info">Opens the node\'s port (%1$d) on this Wi-Fi\'s router (UPnP), so that outside Idena nodes can connect to the phone. The router keeps it open until the end you choose, even if the phone leaves this Wi-Fi.\n\nOpen a port only if you know what it means: the node can then be reached from the internet.</string>
+    <string name="router_port_info">Opens the node\'s port (%1$d) on this Wi-Fi\'s router (UPnP), so that outside Idena nodes can connect to the phone. The router keeps it open until the end you choose, even if the phone leaves this Wi-Fi.\n\nOpen a port only if you know what it means: the node can then be reached from the internet.\n\nSome routers announce themselves only every 15 minutes: finding one can take that long. Keep the screen on meanwhile, and check that the phone\'s battery settings do not stop the app in the background (on Samsung: Auto restart, in the battery settings).</string>
     <string name="router_search_again">Search again</string>
     <string name="router_failed">Router: %1$s</string>
     <string name="router_open_ellipsis">Open…</string>

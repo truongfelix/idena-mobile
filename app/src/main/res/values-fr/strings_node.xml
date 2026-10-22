@@ -199,7 +199,7 @@
     <string name="router_use_port">Utiliser le port %1$d</string>
     <string name="router_closed_on">Fermé sur %1$s</string>
     <string name="router_port_title">Port du routeur</string>
-    <string name="router_port_info">Ouvre le port du nœud (%1$d) sur le routeur de ce Wi-Fi (UPnP), pour que des nœuds Idena extérieurs puissent se connecter au téléphone. Le routeur le garde ouvert jusqu\'à la fin choisie, même si le téléphone quitte ce Wi-Fi.\n\nN\'ouvrez un port que si vous savez ce que cela implique : le nœud est alors joignable depuis Internet.</string>
+    <string name="router_port_info">Ouvre le port du nœud (%1$d) sur le routeur de ce Wi-Fi (UPnP), pour que des nœuds Idena extérieurs puissent se connecter au téléphone. Le routeur le garde ouvert jusqu\'à la fin choisie, même si le téléphone quitte ce Wi-Fi.\n\nN\'ouvrez un port que si vous savez ce que cela implique : le nœud est alors joignable depuis Internet.\n\nCertains routeurs ne s\'annoncent que toutes les 15 minutes : le trouver peut prendre ce temps. Gardez l\'écran allumé pendant ce temps, et vérifiez que les réglages de batterie du téléphone n\'arrêtent pas l\'application en arrière-plan (sur Samsung : le redémarrage automatique, dans les réglages de la batterie).</string>
     <string name="router_search_again">Chercher à nouveau</string>
     <string name="router_failed">Routeur : %1$s</string>
     <string name="router_open_ellipsis">Ouvrir…</string>
