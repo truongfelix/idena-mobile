@@ -96,6 +96,11 @@
     <string name="wallet_amount">Amount (iDNA)</string>
     <string name="wallet_too_much">More than your balance.</string>
     <string name="wallet_send_final">A transfer cannot be undone: check the address.</string>
+    <string name="wallet_comment">Comment (optional)</string>
+    <string name="wallet_comment_example">For example, an invoice number</string>
+    <string name="wallet_comment_note">Anyone can read it on the chain. A longer comment costs a slightly higher fee.</string>
+    <string name="wallet_comment_too_long">The comment is too long: %1$d bytes at most.</string>
+    <string name="wallet_send_comment_line">Comment: %1$s</string>
     <string name="wallet_name_looking">Looking up @%1$s…</string>
     <string name="wallet_name_no_answer">The node did not answer for @%1$s.</string>
     <string name="wallet_name_nobody">Nobody holds @%1$s.</string>

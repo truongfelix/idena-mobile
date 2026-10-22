@@ -79,3 +79,16 @@ fun pickablePeople(people: Map<String, Person>, names: Map<String, String>, me: 
         .filter { it != me.lowercase() }
         .mapNotNull { address -> names[address]?.let { address to it } }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.second })
+
+/**
+ * A transfer's comment travels in its payload as UTF-8 bytes, as the desktop writes it (its send form and its
+ * dna://send link): a reference for the recipient (an invoice id), public on the chain. The node takes far more; the
+ * fee grows with the size.
+ */
+const val MAX_COMMENT_BYTES = 256
+
+/** The comment's bytes, trimmed; null when there is nothing to send. */
+fun commentBytes(comment: String): ByteArray? = comment.trim().takeIf { it.isNotEmpty() }?.toByteArray(Charsets.UTF_8)
+
+/** The payload for dna_sendTransaction and bcn_estimateTx, or null to send none. */
+fun commentPayload(bytes: ByteArray?): String? = bytes?.let { bytesToHex(it) }

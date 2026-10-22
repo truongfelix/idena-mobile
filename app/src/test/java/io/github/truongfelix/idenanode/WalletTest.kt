@@ -67,4 +67,24 @@ class WalletTest {
         assertFalse(canReceiveStake("Undefined"))
         assertFalse(canReceiveStake("Killed"))
     }
+
+    @Test
+    fun anEmptyCommentSendsNoPayload() {
+        assertNull(commentPayload(commentBytes("")))
+        assertNull(commentPayload(commentBytes("  \n ")))
+    }
+
+    @Test
+    fun aCommentIsItsTrimmedUtf8BytesAsTheDesktopWritesThem() {
+        val invoice = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+        // The desktop's test of the same comment (renderer/screens/wallets/utils.test.js), in lower case.
+        assertEquals("0x" + invoice.toByteArray().joinToString("") { "%02x".format(it) }, commentPayload(commentBytes(" $invoice ")))
+        assertEquals("0x636166c3a9", commentPayload(commentBytes("café")))
+    }
+
+    @Test
+    fun aCommentsSizeIsCountedInBytes() {
+        assertEquals(MAX_COMMENT_BYTES, commentBytes("é".repeat(MAX_COMMENT_BYTES / 2))!!.size)
+        assertEquals(MAX_COMMENT_BYTES + 2, commentBytes("é".repeat(MAX_COMMENT_BYTES / 2 + 1))!!.size)
+    }
 }

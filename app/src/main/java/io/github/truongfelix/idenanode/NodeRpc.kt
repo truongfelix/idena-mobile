@@ -207,11 +207,11 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
 
     /**
      * The fee of a transaction of [type] ([SEND_TX], [REPLENISH_STAKE_TX]) sending [amount] iDNA from
-     * [from] to [to], from bcn_estimateTx, which checks it as the mempool would (balance, rules) and sends
-     * nothing. Throws with the node's reason.
+     * [from] to [to] with [payload] ("0x…", null for none), from bcn_estimateTx, which checks it as the mempool
+     * would (balance, rules) and sends nothing. Throws with the node's reason.
      */
-    fun estimateTx(type: Int, from: String, to: String, amount: BigDecimal): BigDecimal {
-        val result = call("bcn_estimateTx", JSONArray().put(txArgs(type, from, to, amount))) as JSONObject
+    fun estimateTx(type: Int, from: String, to: String, amount: BigDecimal, payload: String? = null): BigDecimal {
+        val result = call("bcn_estimateTx", JSONArray().put(txArgs(type, from, to, amount, payload))) as JSONObject
         return BigDecimal(result.optString("txFee", "0"))
     }
 
@@ -219,11 +219,12 @@ class NodeRpc(private val port: Int, private val apiKey: String) {
      * Sends a transaction of [type] with dna_sendTransaction; the node signs it and sets its max fee (twice
      * the fee). Returns the transaction hash.
      */
-    fun sendTx(type: Int, from: String, to: String, amount: BigDecimal): String =
-        call("dna_sendTransaction", JSONArray().put(txArgs(type, from, to, amount))) as String
+    fun sendTx(type: Int, from: String, to: String, amount: BigDecimal, payload: String? = null): String =
+        call("dna_sendTransaction", JSONArray().put(txArgs(type, from, to, amount, payload))) as String
 
-    private fun txArgs(type: Int, from: String, to: String, amount: BigDecimal) = JSONObject()
+    private fun txArgs(type: Int, from: String, to: String, amount: BigDecimal, payload: String?) = JSONObject()
         .put("type", type).put("from", from).put("to", to).put("amount", amount.toPlainString())
+        .apply { payload?.let { put("payload", it) } }
 
     /** The stake below which a validated identity is discriminated (dna_globalState); null if unset. */
     fun discriminationThreshold(): BigDecimal? {
