@@ -42,6 +42,14 @@ class HistoryTest {
     )
 
     @Test
+    fun showsACeremonyUnderScanIdenaIosNumber() {
+        // The node's epoch 229 ceremony opens epoch 230: scan.idena.io shows it as 230.
+        val last = parseIdentityHistory(history).ceremonies[0]
+        assertEquals(229, last.epoch)
+        assertEquals(230, last.shownEpoch)
+    }
+
+    @Test
     fun listsPastCeremoniesDownToTheFirstWithActivity() {
         val parsed = parseIdentityHistory(history)
         assertEquals(listOf(229, 228, 227), parsed.ceremonies.map { it.epoch })

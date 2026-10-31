@@ -188,7 +188,7 @@ private fun CeremonyCard(row: CeremonyRow, expanded: Boolean, onClick: () -> Uni
     Card(Modifier.fillMaxWidth().then(if (report != null) Modifier.clickable(onClick = onClick) else Modifier)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t(R.string.wallet_history_epoch, row.epoch), fontWeight = FontWeight.Medium)
+                Text(t(R.string.wallet_history_epoch, row.shownEpoch), fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
                 Text(row.time?.let { dayFormat.format(Instant.ofEpochSecond(it)) } ?: "", style = MaterialTheme.typography.bodySmall)
             }
