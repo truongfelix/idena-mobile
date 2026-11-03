@@ -92,6 +92,8 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
     var deleting by remember { mutableStateOf(setOf<String>()) }
     var pending by remember { mutableStateOf<PendingDelete?>(null) }
     var shown by remember { mutableStateOf<Flip?>(null) }
+    // The picture of the flip shown, full screen (B-164).
+    var zoomed by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(reads) { state = withContext(Dispatchers.IO) { runCatching { readMyFlips(context) } } }
@@ -226,13 +228,14 @@ fun MyFlipsScreen(onMake: () -> Unit, onClose: () -> Unit, modifier: Modifier = 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t(R.string.flip_as_validators_see), style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().height(440.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Story(flip, flip.leftOrder, selected = false, modifier = Modifier.weight(1f), onClick = null)
-                        Story(flip, flip.rightOrder, selected = false, modifier = Modifier.weight(1f), onClick = null)
+                        Story(flip, flip.leftOrder, selected = false, modifier = Modifier.weight(1f), onImageClick = { zoomed = it }, onClick = null)
+                        Story(flip, flip.rightOrder, selected = false, modifier = Modifier.weight(1f), onImageClick = { zoomed = it }, onClick = null)
                     }
                 }
             },
             confirmButton = { TextButton(onClick = { shown = null }) { Text(t(R.string.common_close)) } },
         )
+        zoomed?.let { ZoomedImage(flip, it) { zoomed = null } }
     }
 }
 

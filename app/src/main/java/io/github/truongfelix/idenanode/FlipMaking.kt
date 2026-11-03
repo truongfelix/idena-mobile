@@ -90,6 +90,16 @@ fun isValidShuffle(shuffled: List<Int>, adversarial: Int?): Boolean {
     return true
 }
 
+/** The story order of the frames: where the shuffle starts (B-205). */
+val STORY_ORDER: List<Int> = (0 until FLIP_FRAMES).toList()
+
+/** [order] with its picture at [index] moved one place by [by] (-1 up, 1 down); unchanged at an end. */
+fun movedInOrder(order: List<Int>, index: Int, by: Int): List<Int> {
+    val to = index + by
+    if (index !in order.indices || to !in order.indices) return order
+    return order.toMutableList().also { it[index] = order[to]; it[to] = order[index] }
+}
+
 /** A random order that breaks the story ([isValidShuffle]). */
 fun randomShuffle(adversarial: Int?, random: Random = Random.Default): List<Int> {
     while (true) {

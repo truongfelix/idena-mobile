@@ -101,4 +101,67 @@ class FlipDraftsTest {
         assertNull(draftPair(emptyList(), b.words))
         assertEquals("3-4", draftKey(b.words))
     }
+
+    @Test
+    fun eachPictureKeepsItsOriginalAndEdit() {
+        val drafts = FlipDrafts(folder.root)
+        val edit = FrameEdit(zoom = 2f, panX = 0.5f, turns = 1, keepProportions = false, brightness = 1.4f)
+        val draft = drafts.open(listOf(a))!!.withPicture(0, "frame".toByteArray(), "original".toByteArray(), edit).copy(ownPicture = true)
+        drafts.save(draft)
+        val back = drafts.load(a)!!
+        assertArrayEquals("original".toByteArray(), back.originals[0])
+        assertEquals(edit, back.edits[0])
+        assertNull(back.originals[1])
+        assertEquals(FrameEdit(), back.edits[1])
+        assertTrue(back.ownPicture)
+        assertEquals("four own pictures: no anti-AI frame", null, back.antiAi)
+    }
+
+    @Test
+    fun aDraftOfAnOlderBuildStillOpens() {
+        val drafts = FlipDrafts(folder.root)
+        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a"))
+        // 0.3.0 wrote draft.json without the pictures' originals and edits.
+        val dir = File(folder.root, "drafts/${draftKey(a.words)}")
+        File(dir, "draft.json").writeText("""{"adversarial":3,"sources":0}""")
+        val back = drafts.load(a)!!
+        assertArrayEquals("a".toByteArray(), back.frames[0])
+        assertNull("no original: the editor starts from the frame", back.originals[0])
+        assertFalse(back.ownPicture)
+        assertEquals(3, back.antiAi)
+    }
+
+    @Test
+    fun anOriginalLeftByAnOlderBuildOverAnotherPictureIsDropped() {
+        val drafts = FlipDrafts(folder.root)
+        val draft = drafts.open(listOf(a))!!.withPicture(0, "frame".toByteArray(), "original".toByteArray(), FrameEdit(zoom = 2f))
+        drafts.save(draft)
+        // An older build put another picture in the frame and kept the new keys' file beside it.
+        val dir = File(folder.root, "drafts/${draftKey(a.words)}")
+        File(dir, "frame0.jpg").writeBytes("other".toByteArray())
+        val back = drafts.load(a)!!
+        assertArrayEquals("other".toByteArray(), back.frames[0])
+        assertNull("the original was of the old picture", back.originals[0])
+        assertEquals(FrameEdit(), back.edits[0])
+    }
+
+    @Test
+    fun anOlderBuildReadsTheNewDraft() {
+        val drafts = FlipDrafts(folder.root)
+        val draft = drafts.open(listOf(a))!!.withPicture(1, "frame".toByteArray(), "original".toByteArray(), FrameEdit(brightness = 0.5f))
+        drafts.save(draft.copy(shuffled = listOf(1, 0, 2, 3)))
+        val json = org.json.JSONObject(File(folder.root, "drafts/${draftKey(a.words)}/draft.json").readText())
+        // The keys 0.3.0 reads, with their types.
+        assertEquals(draft.adversarial, json.getInt("adversarial"))
+        assertEquals(0, json.getInt("sources"))
+        assertEquals(4, json.getJSONArray("shuffled").length())
+    }
+
+    @Test
+    fun anOriginalGoesWithItsFrame() {
+        val drafts = FlipDrafts(folder.root)
+        val draft = drafts.open(listOf(a))!!.withPicture(0, "frame".toByteArray(), "original".toByteArray(), FrameEdit())
+        drafts.save(draft.copy(frames = draft.frames.toMutableList().also { it[0] = null }, originals = draft.originals.toMutableList().also { it[0] = null }))
+        assertFalse("no original left without its frame", File(folder.root, "drafts/${draftKey(a.words)}/original0.jpg").exists())
+    }
 }
