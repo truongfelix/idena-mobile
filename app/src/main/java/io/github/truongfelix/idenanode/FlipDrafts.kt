@@ -30,27 +30,57 @@ class FlipDrafts(private val flipsDir: File) {
         val dir = dir(pair.words)
         val json = JSONObject(File(dir, "draft.json").readText())
         val shuffled = json.optJSONArray("shuffled")?.let { a -> (0 until a.length()).map { a.getInt(it) } }
+        val frames = (0 until FLIP_FRAMES).map { File(dir, "frame$it.jpg").takeIf { f -> f.exists() }?.readBytes() }
+        // An original and its edit count only for the frame they made: a build of 0.3.0 or earlier ignores them and
+        // may have put another picture in the frame since (it rewrites draft.json without them, too).
+        val pictures = json.optJSONArray("pictures")
+        val kept = (0 until FLIP_FRAMES).map { i ->
+            val picture = pictures?.optJSONObject(i)
+            val frame = frames[i]
+            val original = File(dir, "original$i.jpg").takeIf { it.exists() }?.readBytes()
+            if (picture == null || frame == null || original == null || picture.optString("frame") != frameTag(frame)) null
+            else original to FrameEdit.fromJson(picture.optJSONObject("edit"))
+        }
         FlipDraft(
             pairId = pair.id,
             words = pair.words,
-            frames = (0 until FLIP_FRAMES).map { File(dir, "frame$it.jpg").takeIf { f -> f.exists() }?.readBytes() },
+            frames = frames,
             adversarial = json.getInt("adversarial"),
             sources = (0 until json.optInt("sources")).mapNotNull { File(dir, "source$it.jpg").takeIf { f -> f.exists() }?.readBytes() },
             shuffled = shuffled?.takeIf { it.sorted() == (0 until FLIP_FRAMES).toList() },
+            originals = kept.map { it?.first },
+            edits = kept.map { it?.second ?: FrameEdit() },
+            ownPicture = json.optBoolean("ownPicture", false),
         )
     }.getOrNull()
 
     fun save(draft: FlipDraft) {
         val dir = dir(draft.words).also { it.mkdirs() }
-        draft.frames.forEachIndexed { i, bytes ->
-            val file = File(dir, "frame$i.jpg")
-            if (bytes == null) file.delete() else file.writeBytes(bytes)
-        }
+        draft.frames.forEachIndexed { i, bytes -> writeOrDelete(File(dir, "frame$i.jpg"), bytes) }
+        draft.originals.forEachIndexed { i, bytes -> writeOrDelete(File(dir, "original$i.jpg"), bytes?.takeIf { draft.frames[i] != null }) }
         dir.listFiles { f -> f.name.startsWith("source") }?.forEach { it.delete() }
         draft.sources.forEachIndexed { i, bytes -> File(dir, "source$i.jpg").writeBytes(bytes) }
+        // The keys of 0.3.0 and earlier stay as they were: such a build still opens the draft (without its originals).
         val json = JSONObject().put("adversarial", draft.adversarial).put("sources", draft.sources.size)
         draft.shuffled?.let { json.put("shuffled", JSONArray(it)) }
+        if (draft.ownPicture) json.put("ownPicture", true)
+        val pictures = JSONArray()
+        (0 until FLIP_FRAMES).forEach { i ->
+            val frame = draft.frames[i]
+            pictures.put(
+                if (frame == null || draft.originals.getOrNull(i) == null) JSONObject.NULL
+                else JSONObject().put("frame", frameTag(frame)).put("edit", draft.edits[i].toJson()),
+            )
+        }
+        json.put("pictures", pictures)
         File(dir, "draft.json").writeText(json.toString())
+    }
+
+    /** Writes [bytes] to [file] unless it holds them already (each change saves the draft); deletes it for null. */
+    private fun writeOrDelete(file: File, bytes: ByteArray?) {
+        if (bytes == null) { file.delete(); return }
+        if (file.length() == bytes.size.toLong() && file.readBytes().contentEquals(bytes)) return
+        file.writeBytes(bytes)
     }
 
     /** Forgets the draft of the pair [words]. */
@@ -99,3 +129,7 @@ class FlipDrafts(private val flipsDir: File) {
         oldDir.deleteRecursively()
     }
 }
+
+/** A short mark of a frame's bytes: an original and its edit belong to the frame with this mark. */
+fun frameTag(frame: ByteArray): String =
+    bytesToHex(java.security.MessageDigest.getInstance("SHA-256").digest(frame)).take(16)

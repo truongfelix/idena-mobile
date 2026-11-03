@@ -93,9 +93,12 @@ fun saveImageToGallery(context: Context, key: String, bytes: ByteArray): String 
     return name
 }
 
-/** [bitmap] full screen over the app, from the post's file [bytes] (saved as they are) known by [key]. */
+/**
+ * [bitmap] full screen over the app, from the post's file [bytes] (saved as they are) known by [key]; without
+ * [bytes] there is nothing to save (a flip frame).
+ */
 @Composable
-fun ImageViewer(key: String, bitmap: ImageBitmap, bytes: ByteArray, onClose: () -> Unit) {
+fun ImageViewer(key: String?, bitmap: ImageBitmap, bytes: ByteArray?, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var scale by remember { mutableFloatStateOf(1f) }
@@ -141,7 +144,7 @@ fun ImageViewer(key: String, bitmap: ImageBitmap, bytes: ByteArray, onClose: () 
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-                Button(
+                if (key != null && bytes != null) Button(
                     enabled = !saving,
                     onClick = {
                         saving = true
