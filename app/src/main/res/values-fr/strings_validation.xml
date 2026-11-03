@@ -166,6 +166,10 @@
     <string name="flip_editor_proportions_stretched">Toute l\'image est écrasée ou étirée pour remplir le cadre.</string>
     <string name="flip_editor_brightness">Luminosité : %1$d %%</string>
     <string name="flip_shuffle_reset">Réinitialiser</string>
+    <string name="flip_back_ask_title">Retirer votre 4e image ?</string>
+    <string name="flip_back_ask_text">Votre propre image dans ce cadre est retirée, et une nouvelle image anti-IA est créée à sa place.</string>
+    <string name="flip_back_confirm">Oui, retirer mon image</string>
+    <string name="flip_back_keep_mine">Garder mon image</string>
     <string name="flip_new_anti_ai">Créer une nouvelle image anti-IA</string>
     <string name="flip_picture_n">Image %1$d :</string>
     <string name="flip_camera">Appareil photo</string>

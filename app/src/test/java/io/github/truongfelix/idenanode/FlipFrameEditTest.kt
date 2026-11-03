@@ -88,8 +88,7 @@ class FlipFrameEditTest {
         val e = FrameEdit(zoom = 9f, panX = -3f, panY = Float.NaN, turns = -1, brightness = 5f).normalized()
         assertEquals(FrameEdit(zoom = MAX_FRAME_ZOOM, panX = -1f, panY = 0f, turns = 3, brightness = MAX_FRAME_BRIGHTNESS), e)
         assertEquals(MIN_FRAME_BRIGHTNESS, FrameEdit(brightness = 0f).normalized().brightness)
-        assertTrue(FrameEdit(turns = 4).isPlain)
-        assertFalse(FrameEdit(brightness = 1.2f).isPlain)
+        assertEquals(FrameEdit(), FrameEdit(turns = 4).normalized())
     }
 
     @Test

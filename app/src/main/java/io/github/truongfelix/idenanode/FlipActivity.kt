@@ -427,12 +427,6 @@ internal fun FrameImage(bytes: ByteArray?, modifier: Modifier, selected: Boolean
     }
 }
 
-/** A picture (camera, gallery or search) as a frame: work size, JPEG. */
-private fun frameJpeg(bytes: ByteArray): ByteArray {
-    val pixels = framePixels(bytes) ?: throw java.io.IOException(t(R.string.flip_android_cannot_read))
-    return jpeg(pixels, WORK_WIDTH, WORK_HEIGHT)
-}
-
 /** The anti-AI frame of [draft] from its search pictures, its story pictures or both, by [source] ([adversarialSources]). */
 private fun makeAdversarial(draft: FlipDraft, source: AdversarialSource): ByteArray? {
     val random = kotlin.random.Random(java.security.SecureRandom().nextLong())
@@ -457,6 +451,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     var askSearch by remember { mutableStateOf(false) }
     var source by remember { mutableStateOf(FlipDraftStore.adversarialSource(context)) }
     var askOwn by remember { mutableStateOf(false) }
+    var askBack by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Int?>(null) }
     var viewing by remember { mutableStateOf<ByteArray?>(null) }
 
@@ -464,7 +459,8 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     fun refreshed(next: FlipDraft) = if (next.antiAiUsesStory(source)) next.withoutAntiAi() else next
 
     // A new picture at [slot], or the picture there edited: the frame is made from the original with the edit.
-    fun setPicture(slot: Int, original: () -> ByteArray, edit: FrameEdit) {
+    // Only a new picture moves the selection on, to the next empty frame.
+    fun setPicture(slot: Int, original: () -> ByteArray, edit: FrameEdit, isNew: Boolean) {
         note = t(R.string.flip_preparing_picture)
         scope.launch {
             val made = withContext(Dispatchers.Default) { runCatching { original().let { o -> o to editedFrame(o, edit) } } }
@@ -472,12 +468,12 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
                 val next = refreshed(latest.withPicture(slot, frame, o, edit))
                 update(next)
                 note = null
-                if (selected == slot) selected = (0 until FLIP_FRAMES).firstOrNull { next.isOwn(it) && next.frames[it] == null } ?: slot
+                if (isNew && selected == slot) selected = (0 until FLIP_FRAMES).firstOrNull { next.isOwn(it) && next.frames[it] == null } ?: slot
             }.onFailure { note = it.message }
         }
     }
 
-    fun setFrame(slot: Int, bytes: ByteArray) = setPicture(slot, { originalJpeg(bytes) }, FrameEdit())
+    fun setFrame(slot: Int, bytes: ByteArray) = setPicture(slot, { originalJpeg(bytes) }, FrameEdit(), isNew = true)
 
     val cameraFile = remember { File(context.cacheDir, "camera/flip.jpg") }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
@@ -500,6 +496,21 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
                 update(now.copy(frames = now.frames.toMutableList().also { it[slot] = made }))
             }
         }
+    }
+
+    /** The anti-AI picture again in its place: the own picture there is dropped. */
+    fun backToAntiAi() {
+        val now = latest
+        val slot = now.adversarial
+        update(
+            now.copy(
+                ownPicture = false,
+                frames = now.frames.toMutableList().also { it[slot] = null },
+                originals = now.originals.toMutableList().also { it[slot] = null },
+                edits = now.edits.toMutableList().also { it[slot] = FrameEdit() },
+                shuffled = null,
+            ),
+        )
     }
 
     /** A tap on a frame selects it; a tap on the frame selected opens it: in the editor for an own picture. */
@@ -530,7 +541,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
         if (selected == draft.antiAi) {
             Text(t(R.string.flip_adversarial_info), style = MaterialTheme.typography.bodySmall)
             Text(t(R.string.flip_made_from), style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(
                     AdversarialSource.Both to R.string.flip_source_both,
                     AdversarialSource.Story to R.string.flip_source_story,
@@ -568,18 +579,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
                 if (draft.frames[selected] != null) Button(onClick = { editing = selected }) { Text(t(R.string.flip_edit_picture)) }
             }
             if (draft.ownPicture && selected == draft.adversarial) {
-                TextButton(onClick = {
-                    val slot = draft.adversarial
-                    update(
-                        draft.copy(
-                            ownPicture = false,
-                            frames = draft.frames.toMutableList().also { it[slot] = null },
-                            originals = draft.originals.toMutableList().also { it[slot] = null },
-                            edits = draft.edits.toMutableList().also { it[slot] = FrameEdit() },
-                            shuffled = null,
-                        ),
-                    )
-                }) { Text(t(R.string.flip_back_to_anti_ai)) }
+                TextButton(onClick = { if (draft.frames[selected] == null) backToAntiAi() else askBack = true }) { Text(t(R.string.flip_back_to_anti_ai)) }
             }
         }
         HorizontalDivider()
@@ -637,11 +637,25 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
             },
         )
     }
+    if (askBack) {
+        AlertDialog(
+            onDismissRequest = { askBack = false },
+            title = { Text(t(R.string.flip_back_ask_title)) },
+            text = { Text(t(R.string.flip_back_ask_text)) },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = { askBack = false; backToAntiAi() }) { Text(t(R.string.flip_back_confirm)) }
+                    TextButton(onClick = { askBack = false }) { Text(t(R.string.flip_back_keep_mine)) }
+                }
+            },
+        )
+    }
     editing?.let { slot ->
         val original = draft.originals[slot] ?: draft.frames[slot] ?: return@let
         FrameEditor(slot + 1, original, draft.edits[slot], onClose = { editing = null }) { edit ->
             editing = null
-            setPicture(slot, { original }, edit)
+            // Done without a change keeps the frame, and the anti-AI picture made from it.
+            if (edit != draft.edits[slot].normalized() || draft.originals[slot] == null) setPicture(slot, { original }, edit, isNew = false)
         }
     }
     viewing?.let { FrameViewer(it) { viewing = null } }

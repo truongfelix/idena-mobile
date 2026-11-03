@@ -193,7 +193,10 @@ class FlipMakingTest {
             adversarialSources(listOf("s1"), story, AdversarialSource.Both).toSet(),
         )
         assertEquals("both, one story picture: it and three search pictures", 3, adversarialSources(listOf("s1", "s2", "s3", "s4"), listOf("p1"), AdversarialSource.Both).count { it.startsWith("s") })
-        assertEquals("search, two found: the story fills in", listOf("s1", "s2", "p1", "p2"), adversarialSources(listOf("s1", "s2"), story, AdversarialSource.Search))
+        // Search, two found: the story fills in, any of its pictures (desktop: joined, then shuffled).
+        val filled = (0 until 50).map { adversarialSources(listOf("s1", "s2"), story, AdversarialSource.Search, Random(it)) }
+        assertTrue("four from the joined pictures", filled.all { it.size == FLIP_FRAMES && (listOf("s1", "s2") + story).containsAll(it) })
+        assertEquals("every story picture is used at times", setOf("s1", "s2") + story, filled.flatten().toSet())
         assertEquals("my pictures, none yet: the search's", setOf("s1", "s2"), adversarialSources(listOf("s1", "s2"), emptyList(), AdversarialSource.Story).toSet())
         assertEquals(AdversarialSource.Both, AdversarialSource.of(null))
         assertEquals("a choice of a later build", AdversarialSource.Both, AdversarialSource.of("ai"))

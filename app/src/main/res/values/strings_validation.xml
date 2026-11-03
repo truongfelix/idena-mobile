@@ -163,6 +163,10 @@
     <string name="flip_editor_proportions_stretched">The whole picture is squeezed or stretched to fill the frame.</string>
     <string name="flip_editor_brightness">Brightness: %1$d%%</string>
     <string name="flip_shuffle_reset">Reset</string>
+    <string name="flip_back_ask_title">Remove your 4th picture?</string>
+    <string name="flip_back_ask_text">Your own picture in this frame is removed, and a new anti-AI picture is made in its place.</string>
+    <string name="flip_back_confirm">Yes, remove my picture</string>
+    <string name="flip_back_keep_mine">Keep my picture</string>
     <string name="flip_new_anti_ai">Make a new anti-AI picture</string>
     <string name="flip_picture_n">Picture %1$d:</string>
     <string name="flip_camera">Camera</string>

@@ -41,10 +41,6 @@ data class FrameEdit(
         brightness.finiteOr(1f).coerceIn(MIN_FRAME_BRIGHTNESS, MAX_FRAME_BRIGHTNESS),
     )
 
-    /** The picture as it comes: nothing to apply. */
-    val isPlain: Boolean
-        get() = normalized() == FrameEdit()
-
     fun toJson(): JSONObject = JSONObject()
         .put("zoom", zoom.toDouble()).put("panX", panX.toDouble()).put("panY", panY.toDouble())
         .put("turns", turns).put("keepProportions", keepProportions).put("brightness", brightness.toDouble())
@@ -148,7 +144,7 @@ enum class AdversarialSource(val key: String) {
  * the story pictures. At most four; fewer when there are not enough (the caller mirrors copies to make four).
  */
 fun <T> adversarialSources(found: List<T>, story: List<T>, source: AdversarialSource, random: Random = Random.Default): List<T> = when (source) {
-    AdversarialSource.Search -> if (found.size >= FLIP_FRAMES) found.shuffled(random).take(FLIP_FRAMES) else (found + story).take(FLIP_FRAMES)
+    AdversarialSource.Search -> (if (found.size >= FLIP_FRAMES) found else found + story).shuffled(random).take(FLIP_FRAMES)
     AdversarialSource.Story -> (story.ifEmpty { found }).shuffled(random).take(FLIP_FRAMES)
     AdversarialSource.Both -> {
         val search = found.shuffled(random)

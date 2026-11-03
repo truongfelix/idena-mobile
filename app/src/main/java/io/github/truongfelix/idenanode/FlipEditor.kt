@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,19 +72,19 @@ private fun framePaint(brightness: Float): Paint = Paint(Paint.FILTER_BITMAP_FLA
     if (brightness != 1f) colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(brightness, brightness, brightness, 1f) })
 }
 
-/** Draws [source] into [canvas] ([width] x [height]) as [edit] places it. */
-private fun drawFramed(canvas: Canvas, source: Bitmap, width: Float, height: Float, edit: FrameEdit) {
-    val matrix = Matrix().apply { setValues(frameTransform(source.width, source.height, width, height, edit).matrixValues()) }
-    canvas.drawBitmap(source, matrix, framePaint(edit.normalized().brightness))
+/** Draws [source] into [canvas] ([width] x [height]) as [edit] places it, with [paint] ([framePaint] of its brightness). */
+private fun drawFramed(canvas: Canvas, source: Bitmap, width: Float, height: Float, edit: FrameEdit, paint: Paint, matrix: Matrix = Matrix()) {
+    matrix.setValues(frameTransform(source.width, source.height, width, height, edit).matrixValues())
+    canvas.drawBitmap(source, matrix, paint)
 }
 
 /** The frame made from [original] with [edit]: [WORK_WIDTH] x [WORK_HEIGHT], JPEG. */
 fun editedFrame(original: ByteArray, edit: FrameEdit): ByteArray {
     val source = BitmapFactory.decodeByteArray(original, 0, original.size) ?: throw IOException(t(R.string.flip_android_cannot_read))
     val out = Bitmap.createBitmap(WORK_WIDTH, WORK_HEIGHT, Bitmap.Config.ARGB_8888)
-    drawFramed(Canvas(out), source, WORK_WIDTH.toFloat(), WORK_HEIGHT.toFloat(), edit)
-    val pixels = IntArray(WORK_WIDTH * WORK_HEIGHT).also { out.getPixels(it, 0, WORK_WIDTH, 0, 0, WORK_WIDTH, WORK_HEIGHT) }
-    return jpeg(pixels, WORK_WIDTH, WORK_HEIGHT)
+    drawFramed(Canvas(out), source, WORK_WIDTH.toFloat(), WORK_HEIGHT.toFloat(), edit, framePaint(edit.normalized().brightness))
+    // As [jpeg] encodes a frame.
+    return ByteArrayOutputStream().also { out.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
 }
 
 /**
@@ -98,7 +97,9 @@ fun FrameEditor(number: Int, original: ByteArray, start: FrameEdit, onClose: () 
         value = withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(original, 0, original.size) }
     }
     var edit by remember { mutableStateOf(start.normalized()) }
-    val current by rememberUpdatedState(edit)
+    // The preview's paint and matrix, made again only when the brightness changes.
+    val paint = remember(edit.brightness) { framePaint(edit.brightness) }
+    val matrix = remember { Matrix() }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
             Column(
@@ -122,7 +123,7 @@ fun FrameEditor(number: Int, original: ByteArray, start: FrameEdit, onClose: () 
                         .pointerInput(bitmap) {
                             if (bitmap == null) return@pointerInput
                             detectTransformGestures { _, pan, zoom, _ ->
-                                val e = current.copy(zoom = current.zoom * zoom).normalized()
+                                val e = edit.copy(zoom = edit.zoom * zoom).normalized()
                                 // A drag moves the picture with the finger: the pan is the share of the room it has.
                                 val (roomX, roomY) = frameRoom(bitmap.width, bitmap.height, size.width.toFloat(), size.height.toFloat(), e)
                                 edit = e.copy(
@@ -132,7 +133,7 @@ fun FrameEditor(number: Int, original: ByteArray, start: FrameEdit, onClose: () 
                             }
                         }
                         .drawBehind {
-                            bitmap?.let { b -> drawIntoCanvas { drawFramed(it.nativeCanvas, b, size.width, size.height, edit) } }
+                            bitmap?.let { b -> drawIntoCanvas { drawFramed(it.nativeCanvas, b, size.width, size.height, edit, paint, matrix) } }
                         },
                     contentAlignment = Alignment.Center,
                 ) {
