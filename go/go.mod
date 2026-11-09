@@ -2,7 +2,7 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.10
 
-// The node: truongfelix/idena-go master c5410ae (2026-10-31, the compatibility pin after #50):
+// The node: truongfelix/idena-go master f23eb89 (2026-11-09, the compatibility pin after #60 and #52):
 // ubiubi18/idena-go ef2107e with our pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for
 // the Social tab and #50 the consensus version on mobile) and truongfelix #1-#29 (--dbwritebuffer, read-only
 // consensus-version read, OpenTelemetry 1.45.0, push tracker, own dependency forks, dna_validationSummary,
@@ -12,8 +12,9 @@ go 1.26.10
 // dna_identityHistory, iavl from truongfelix/iavl, bcn_contractCalls with each call's success, a peer kept
 // dialable beside another connection, direct peers, the official node's IPFS folder and key file, the node key
 // given in memory, Go 1.26.10, a wait for a peer above a stale head instead of consensus at that height,
-// dna_ceremonySummary, the official IPFS folder converted without the two config keys kubo 0.42 refuses).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.3.0.20261103134956-85cdb99ec018
+// dna_ceremonySummary, the official IPFS folder converted without the two config keys kubo 0.42 refuses, a stoppable tx keeper,
+// go-jose 4.1.6 and klauspost/compress 1.20.2).
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261109104443-f23eb89d9e40
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
@@ -86,7 +87,7 @@ require (
 	github.com/gammazero/chanqueue v1.1.2 // indirect
 	github.com/gammazero/deque v1.2.1 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
@@ -143,7 +144,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
-	github.com/klauspost/compress v1.19.0 // indirect
+	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/koron/go-ssdp v0.0.6 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
