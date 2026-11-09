@@ -53,7 +53,8 @@ fun flipFrameJpeg(protectedPixels: IntArray): ByteArray =
 /**
  * The flip being made for a keyword pair, kept in the app's files ([FlipDrafts]) so that it survives the app: the
  * pair, the frames in story order (JPEG at [WORK_WIDTH] x [WORK_HEIGHT]; the anti-AI one made from [sources]),
- * which frame is the anti-AI one, and the shuffled order.
+ * which frame is the anti-AI one, and the shuffled order. Each own picture keeps its original ([originals], at most
+ * [ORIGINAL_MAX_SIDE]) and how it fills its frame ([edits]), so that it can be edited again.
  */
 data class FlipDraft(
     val pairId: Int,
@@ -64,11 +65,43 @@ data class FlipDraft(
     /** The pictures the anti-AI frame is made from (JPEG, work size), at most 8. */
     val sources: List<ByteArray> = emptyList(),
     val shuffled: List<Int>? = null,
+    /** The picture each frame was made from (JPEG); null where there is none, or for a draft of 0.3.0 and earlier. */
+    val originals: List<ByteArray?> = List(FLIP_FRAMES) { null },
+    val edits: List<FrameEdit> = List(FLIP_FRAMES) { FrameEdit() },
+    /** The anti-AI frame's place holds an own picture instead (B-163): the flip has four own pictures. */
+    val ownPicture: Boolean = false,
 ) {
     /** Whether every story frame is chosen and the anti-AI frame is made. */
     val complete: Boolean
         get() = frames.all { it != null }
+
+    /** The anti-AI frame's place, or null when the flip has four own pictures. */
+    val antiAi: Int?
+        get() = if (ownPicture) null else adversarial
+
+    /** Whether [slot] holds an own picture (one the user chose), not the anti-AI picture. */
+    fun isOwn(slot: Int): Boolean = slot != antiAi
+
+    /** The pictures of the story, the anti-AI frame left out. */
+    val storyFrames: List<ByteArray>
+        get() = frames.filterIndexed { i, f -> isOwn(i) && f != null }.map { it!! }
+
+    /** Whether the anti-AI picture made from [source] takes story pictures: it is made again when one changes. */
+    fun antiAiUsesStory(source: AdversarialSource): Boolean = source != AdversarialSource.Search || sources.size < FLIP_FRAMES
+
+    /** This draft with no anti-AI picture yet (made again from its pictures); unchanged with four own pictures. */
+    fun withoutAntiAi(): FlipDraft = if (ownPicture) this else copy(frames = frames.toMutableList().also { it[adversarial] = null })
+
+    /** This draft with [frame] at [slot], made from [original] with [edit]. */
+    fun withPicture(slot: Int, frame: ByteArray, original: ByteArray, edit: FrameEdit): FlipDraft = copy(
+        frames = frames.toMutableList().also { it[slot] = frame },
+        originals = originals.toMutableList().also { it[slot] = original },
+        edits = edits.toMutableList().also { it[slot] = edit },
+    )
 }
+
+/** The longer side of a picture kept as a frame's original. */
+const val ORIGINAL_MAX_SIDE = 1280
 
 /** The flips being made ([FlipDrafts], one per keyword pair), the flip sent last, and the image search choice. */
 object FlipDraftStore {
@@ -104,6 +137,16 @@ object FlipDraftStore {
     fun setSent(context: Context, sent: SentFlip?) {
         val file = sentFile(context)
         if (sent == null) file.delete() else { file.parentFile?.mkdirs(); file.writeText(sent.toJson().toString()) }
+    }
+
+    /** What the anti-AI picture is made from (B-200); [AdversarialSource.Both] until chosen. */
+    fun adversarialSource(context: Context): AdversarialSource =
+        AdversarialSource.of(runCatching { File(context.filesDir, "flips/adversarial_source").readText().trim() }.getOrNull())
+
+    fun setAdversarialSource(context: Context, source: AdversarialSource) {
+        val file = File(context.filesDir, "flips/adversarial_source")
+        file.parentFile?.mkdirs()
+        file.writeText(source.key)
     }
 
     private const val SEARCH_ON = "picture_search_on"

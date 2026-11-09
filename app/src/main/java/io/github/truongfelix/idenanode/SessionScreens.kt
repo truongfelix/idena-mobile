@@ -403,7 +403,7 @@ private fun NextStep(ready: Boolean, label: String, waiting: String, modifier: M
 
 /** One image of a flip over the whole screen; a tap closes it. */
 @Composable
-private fun ZoomedImage(flip: Flip, image: Int, onClose: () -> Unit) {
+internal fun ZoomedImage(flip: Flip, image: Int, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onClose)) {
             FlipImage(flip, image, Modifier.fillMaxSize(), background = Color.Black)

@@ -155,4 +155,51 @@ class FlipMakingTest {
         assertFalse("a write asked before the flip was sent", order.claim(beforeSend))
         assertTrue("the next draft is written", order.claim(order.next()))
     }
+
+    @Test
+    fun theArrowsMoveOnePictureOnePlace() {
+        assertEquals(listOf(1, 0, 2, 3), movedInOrder(STORY_ORDER, 1, -1))
+        assertEquals(listOf(0, 1, 3, 2), movedInOrder(STORY_ORDER, 2, 1))
+        assertEquals("the first cannot go up", STORY_ORDER, movedInOrder(STORY_ORDER, 0, -1))
+        assertEquals("the last cannot go down", STORY_ORDER, movedInOrder(STORY_ORDER, 3, 1))
+        // The shuffle starts as the story, which does not break it: Next waits for a move.
+        assertFalse(isValidShuffle(STORY_ORDER, 3))
+        assertTrue(isValidShuffle(movedInOrder(STORY_ORDER, 0, 1), 3))
+    }
+
+    @Test
+    fun theAntiAiPictureIsMadeFromTheChosenSource() {
+        val found = listOf("s1", "s2", "s3", "s4", "s5")
+        val story = listOf("p1", "p2", "p3")
+        repeat(50) { seed ->
+            val random = Random(seed)
+            val both = adversarialSources(found, story, AdversarialSource.Both, random)
+            assertEquals("both: two search pictures", 2, both.count { it.startsWith("s") })
+            assertEquals("both: two story pictures", 2, both.count { it.startsWith("p") })
+            assertEquals(both.toSet().size, both.size)
+            assertTrue("search", adversarialSources(found, story, AdversarialSource.Search, random).all { it.startsWith("s") })
+            assertEquals(4, adversarialSources(found, story, AdversarialSource.Search, random).size)
+            assertEquals("my pictures", story.toSet(), adversarialSources(found, story, AdversarialSource.Story, random).toSet())
+        }
+    }
+
+    @Test
+    fun aSourceThatLacksPicturesTakesThemFromTheOther() {
+        val story = listOf("p1", "p2", "p3")
+        assertEquals("both, no search: the story alone", story.toSet(), adversarialSources(emptyList(), story, AdversarialSource.Both).toSet())
+        assertEquals(
+            "both, one search picture: it and three story pictures",
+            setOf("s1") + story,
+            adversarialSources(listOf("s1"), story, AdversarialSource.Both).toSet(),
+        )
+        assertEquals("both, one story picture: it and three search pictures", 3, adversarialSources(listOf("s1", "s2", "s3", "s4"), listOf("p1"), AdversarialSource.Both).count { it.startsWith("s") })
+        // Search, two found: the story fills in, any of its pictures (desktop: joined, then shuffled).
+        val filled = (0 until 50).map { adversarialSources(listOf("s1", "s2"), story, AdversarialSource.Search, Random(it)) }
+        assertTrue("four from the joined pictures", filled.all { it.size == FLIP_FRAMES && (listOf("s1", "s2") + story).containsAll(it) })
+        assertEquals("every story picture is used at times", setOf("s1", "s2") + story, filled.flatten().toSet())
+        assertEquals("my pictures, none yet: the search's", setOf("s1", "s2"), adversarialSources(listOf("s1", "s2"), emptyList(), AdversarialSource.Story).toSet())
+        assertEquals(AdversarialSource.Both, AdversarialSource.of(null))
+        assertEquals("a choice of a later build", AdversarialSource.Both, AdversarialSource.of("ai"))
+        assertEquals(AdversarialSource.Story, AdversarialSource.of("story"))
+    }
 }

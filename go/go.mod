@@ -2,7 +2,7 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.10
 
-// The node: truongfelix/idena-go master 73ab054 (2026-10-22, the compatibility pin after #47):
+// The node: truongfelix/idena-go master c5410ae (2026-10-31, the compatibility pin after #50):
 // ubiubi18/idena-go ef2107e with our pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for
 // the Social tab and #50 the consensus version on mobile) and truongfelix #1-#29 (--dbwritebuffer, read-only
 // consensus-version read, OpenTelemetry 1.45.0, push tracker, own dependency forks, dna_validationSummary,
@@ -13,7 +13,7 @@ go 1.26.10
 // dialable beside another connection, direct peers, the official node's IPFS folder and key file, the node key
 // given in memory, Go 1.26.10, a wait for a peer above a stale head instead of consensus at that height,
 // dna_ceremonySummary, the official IPFS folder converted without the two config keys kubo 0.42 refuses).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.3.0.20261022095616-73ab05417154
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.3.0.20261103134956-85cdb99ec018
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
@@ -264,16 +264,16 @@ require (
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260924152758-ed294f943157 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.50.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gonum.org/v1/gonum v0.17.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect

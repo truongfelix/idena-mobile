@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package io.github.truongfelix.idenanode
 
 import android.content.Context
@@ -18,6 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -249,7 +253,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                 }, onNext = { step = FlipStep.Frames })
                 FlipStep.Frames -> FramesStep(current, words, ::update, onNext = {
                     working = t(R.string.flip_protecting)
-                    val fingerprint = draftFingerprint(current.frames, current.adversarial)
+                    val fingerprint = draftFingerprint(current.frames, current.antiAi ?: -1)
                     scope.launch {
                         protectedFor = null
                         protected = withContext(Dispatchers.Default) {
@@ -263,8 +267,9 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                         working = null
                         if (protected != null) {
                             protectedFor = fingerprint
-                            if (current.shuffled == null || !isValidShuffle(current.shuffled, current.adversarial)) {
-                                update(current.copy(shuffled = randomShuffle(current.adversarial)))
+                            // The shuffle starts from the story order, as on the desktop (B-205).
+                            if (current.shuffled == null || current.shuffled.sorted() != STORY_ORDER) {
+                                update(current.copy(shuffled = STORY_ORDER))
                             }
                             step = FlipStep.Shuffle
                         }
@@ -272,7 +277,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                 })
                 FlipStep.Shuffle, FlipStep.Submit -> {
                     // Pictures changed since they were protected (or never protected): back to the pictures.
-                    if (protected == null || protectedFor != draftFingerprint(current.frames, current.adversarial)) {
+                    if (protected == null || protectedFor != draftFingerprint(current.frames, current.antiAi ?: -1)) {
                         LaunchedEffect(Unit) { step = FlipStep.Frames }
                         return@Box
                     }
@@ -282,7 +287,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                     }
                     SubmitStep(current, words, protected.orEmpty(), nodeState.deadline, enabled = !sending && sent == null && nodeState.synced) {
                     val frames = protected ?: return@SubmitStep
-                    val shuffled = current.shuffled?.takeIf { isValidShuffle(it, current.adversarial) } ?: return@SubmitStep
+                    val shuffled = current.shuffled?.takeIf { isValidShuffle(it, current.antiAi) } ?: return@SubmitStep
                     // One send at a time, and none while the last one is not counted.
                     if (sending || sent != null || !nodeState.synced || !nodeState.quota.canMake || pairs.none { it.id == current.pairId && !it.used }) return@SubmitStep
                     sending = true
@@ -422,19 +427,12 @@ internal fun FrameImage(bytes: ByteArray?, modifier: Modifier, selected: Boolean
     }
 }
 
-/** A picture (camera, gallery or search) as a frame: work size, JPEG. */
-private fun frameJpeg(bytes: ByteArray): ByteArray {
-    val pixels = framePixels(bytes) ?: throw java.io.IOException(t(R.string.flip_android_cannot_read))
-    return jpeg(pixels, WORK_WIDTH, WORK_HEIGHT)
-}
-
-/** The anti-AI frame of [draft] from four of its sources (at random), or from its story pictures without sources. */
-private fun makeAdversarial(draft: FlipDraft): ByteArray? {
-    val story = draft.frames.filterIndexed { i, f -> i != draft.adversarial && f != null }.map { it!! }
-    val pool = draft.sources.ifEmpty { story }
-    if (pool.isEmpty()) return null
+/** The anti-AI frame of [draft] from its search pictures, its story pictures or both, by [source] ([adversarialSources]). */
+private fun makeAdversarial(draft: FlipDraft, source: AdversarialSource): ByteArray? {
     val random = kotlin.random.Random(java.security.SecureRandom().nextLong())
-    val chosen = pool.shuffled(random).let { list -> List(FLIP_FRAMES) { list[it % list.size] } }
+    val pool = adversarialSources(draft.sources, draft.storyFrames, source, random)
+    if (pool.isEmpty()) return null
+    val chosen = List(FLIP_FRAMES) { pool[it % pool.size] }
     val pixels = chosen.map { framePixels(it) ?: return null }
     // A picture used twice is mirrored the second time, so that the four differ.
     val four = pixels.mapIndexed { i, p -> if (i >= pool.size) mirrored(p, WORK_WIDTH) else p }
@@ -447,25 +445,35 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     // The draft as it is when a picture is ready (it may have changed while the picture was prepared).
     val latest by rememberUpdatedState(draft)
     val scope = rememberCoroutineScope()
-    var selected by remember { mutableIntStateOf(draft.frames.indexOfFirst { it == null }.let { if (it < 0 || it == draft.adversarial) (draft.adversarial + 1) % FLIP_FRAMES else it }) }
+    var selected by remember { mutableIntStateOf(draft.frames.indexOfFirst { it == null }.let { if (it < 0 || it == draft.antiAi) (draft.adversarial + 1) % FLIP_FRAMES else it }) }
     var note by remember { mutableStateOf<String?>(null) }
     var searchOn by remember { mutableStateOf(FlipDraftStore.searchOn(context)) }
     var askSearch by remember { mutableStateOf(false) }
+    var source by remember { mutableStateOf(FlipDraftStore.adversarialSource(context)) }
+    var askOwn by remember { mutableStateOf(false) }
+    var askBack by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    var viewing by remember { mutableStateOf<ByteArray?>(null) }
 
-    fun setFrame(slot: Int, bytes: ByteArray) {
+    /** [next] with its anti-AI picture to make again when it takes the story pictures. */
+    fun refreshed(next: FlipDraft) = if (next.antiAiUsesStory(source)) next.withoutAntiAi() else next
+
+    // A new picture at [slot], or the picture there edited: the frame is made from the original with the edit.
+    // Only a new picture moves the selection on, to the next empty frame.
+    fun setPicture(slot: Int, original: () -> ByteArray, edit: FrameEdit, isNew: Boolean) {
         note = t(R.string.flip_preparing_picture)
         scope.launch {
-            val frame = withContext(Dispatchers.Default) { runCatching { frameJpeg(bytes) } }
-            frame.onSuccess { f ->
-                var next = latest.copy(frames = latest.frames.toMutableList().also { it[slot] = f })
-                // Without search pictures, the anti-AI frame follows the story pictures.
-                if (next.sources.isEmpty()) next = next.copy(frames = next.frames.toMutableList().also { it[next.adversarial] = null })
+            val made = withContext(Dispatchers.Default) { runCatching { original().let { o -> o to editedFrame(o, edit) } } }
+            made.onSuccess { (o, frame) ->
+                val next = refreshed(latest.withPicture(slot, frame, o, edit))
                 update(next)
                 note = null
-                if (selected == slot) selected = (0 until FLIP_FRAMES).firstOrNull { it != next.adversarial && next.frames[it] == null } ?: slot
+                if (isNew && selected == slot) selected = (0 until FLIP_FRAMES).firstOrNull { next.isOwn(it) && next.frames[it] == null } ?: slot
             }.onFailure { note = it.message }
         }
     }
+
+    fun setFrame(slot: Int, bytes: ByteArray) = setPicture(slot, { originalJpeg(bytes) }, FrameEdit(), isNew = true)
 
     val cameraFile = remember { File(context.cacheDir, "camera/flip.jpg") }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
@@ -477,16 +485,38 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
         }
     }
 
-    // The anti-AI frame is made once the story pictures (or search pictures) are there.
-    LaunchedEffect(draft.frames, draft.sources, draft.adversarial) {
-        val storyDone = (0 until FLIP_FRAMES).all { it == draft.adversarial || draft.frames[it] != null }
-        if (draft.frames[draft.adversarial] == null && (storyDone || draft.sources.size >= FLIP_FRAMES)) {
-            val made = withContext(Dispatchers.Default) { runCatching { makeAdversarial(draft) }.getOrNull() }
+    // The anti-AI frame is made once the pictures it takes are there.
+    LaunchedEffect(draft.frames, draft.sources, draft.adversarial, draft.ownPicture, source) {
+        val slot = draft.antiAi ?: return@LaunchedEffect
+        val storyDone = (0 until FLIP_FRAMES).all { it == slot || draft.frames[it] != null }
+        if (draft.frames[slot] == null && (storyDone || !draft.antiAiUsesStory(source))) {
+            val made = withContext(Dispatchers.Default) { runCatching { makeAdversarial(draft, source) }.getOrNull() }
             val now = latest
-            if (made != null && now.adversarial == draft.adversarial && now.frames[now.adversarial] == null) {
-                update(now.copy(frames = now.frames.toMutableList().also { it[now.adversarial] = made }))
+            if (made != null && now.antiAi == slot && now.frames[slot] == null) {
+                update(now.copy(frames = now.frames.toMutableList().also { it[slot] = made }))
             }
         }
+    }
+
+    /** The anti-AI picture again in its place: the own picture there is dropped. */
+    fun backToAntiAi() {
+        val now = latest
+        val slot = now.adversarial
+        update(
+            now.copy(
+                ownPicture = false,
+                frames = now.frames.toMutableList().also { it[slot] = null },
+                originals = now.originals.toMutableList().also { it[slot] = null },
+                edits = now.edits.toMutableList().also { it[slot] = FrameEdit() },
+                shuffled = null,
+            ),
+        )
+    }
+
+    /** A tap on a frame selects it; a tap on the frame selected opens it: in the editor for an own picture. */
+    fun open(slot: Int) {
+        val frame = draft.frames[slot] ?: return
+        if (draft.isOwn(slot)) editing = slot else viewing = frame
     }
 
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -496,9 +526,9 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     FrameImage(
                         draft.frames[slot],
-                        Modifier.fillMaxWidth().clickable { selected = slot },
+                        Modifier.fillMaxWidth().clickable { if (selected == slot) open(slot) else selected = slot },
                         selected = slot == selected,
-                        label = if (slot == draft.adversarial) t(R.string.flip_anti_ai) else "${slot + 1}",
+                        label = if (slot == draft.antiAi) t(R.string.flip_anti_ai) else "${slot + 1}",
                     )
                     Row {
                         TextButton(onClick = { update(moveFrame(draft, slot, -1)); if (selected == slot) selected = slot - 1 }, enabled = slot > 0) { Text("◀") }
@@ -508,22 +538,48 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
             }
         }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-        if (selected == draft.adversarial) {
-            Text(
-                if (draft.sources.isEmpty()) t(R.string.flip_adversarial_from_story) else t(R.string.flip_adversarial_from_search, draft.sources.size),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            OutlinedButton(onClick = { update(draft.copy(frames = draft.frames.toMutableList().also { it[draft.adversarial] = null })) }) {
-                Text(t(R.string.flip_new_anti_ai))
+        if (selected == draft.antiAi) {
+            Text(t(R.string.flip_adversarial_info), style = MaterialTheme.typography.bodySmall)
+            Text(t(R.string.flip_made_from), style = MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    AdversarialSource.Both to R.string.flip_source_both,
+                    AdversarialSource.Story to R.string.flip_source_story,
+                    AdversarialSource.Search to R.string.flip_source_search,
+                ).forEach { (choice, label) ->
+                    FilterChip(selected = source == choice, onClick = {
+                        if (source != choice) {
+                            source = choice
+                            FlipDraftStore.setAdversarialSource(context, choice)
+                            update(latest.withoutAntiAi())
+                        }
+                    }, label = { Text(t(label)) })
+                }
+            }
+            if (source != AdversarialSource.Story) {
+                Text(
+                    if (draft.sources.isEmpty()) t(R.string.flip_no_search_pictures) else t(R.string.flip_search_pictures_ready, draft.sources.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { update(draft.withoutAntiAi()) }) { Text(t(R.string.flip_new_anti_ai)) }
+                draft.frames[selected]?.let { frame -> OutlinedButton(onClick = { viewing = frame }) { Text(t(R.string.flip_full_size)) } }
+                TextButton(onClick = { askOwn = true }) { Text(t(R.string.flip_use_own_picture)) }
             }
         } else {
             Text(t(R.string.flip_picture_n, selected + 1), style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     cameraFile.parentFile?.mkdirs()
                     camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.files", cameraFile))
                 }) { Text(t(R.string.flip_camera)) }
                 OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text(t(R.string.flip_gallery)) }
+                if (draft.frames[selected] != null) Button(onClick = { editing = selected }) { Text(t(R.string.flip_edit_picture)) }
+            }
+            if (draft.ownPicture && selected == draft.adversarial) {
+                TextButton(onClick = { if (draft.frames[selected] == null) backToAntiAi() else askBack = true }) { Text(t(R.string.flip_back_to_anti_ai)) }
             }
         }
         HorizontalDivider()
@@ -537,14 +593,15 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
             })
         }
         if (searchOn) {
-            SearchPanel(words, onPick = { bytes ->
-                if (selected != draft.adversarial) setFrame(selected, bytes)
+            SearchPanel(words, canUseForAntiAi = !draft.ownPicture && source != AdversarialSource.Story, onPick = { bytes ->
+                if (draft.isOwn(selected)) setFrame(selected, bytes)
             }, onSources = { sources ->
-                update(latest.copy(sources = sources.take(8), frames = latest.frames.toMutableList().also { it[latest.adversarial] = null }))
+                update(latest.copy(sources = sources.take(8)).withoutAntiAi())
             })
         }
+        val needed = if (draft.ownPicture) FLIP_FRAMES else FLIP_FRAMES - 1
         Button(onClick = onNext, enabled = draft.complete, modifier = Modifier.fillMaxWidth()) {
-            Text(if (draft.complete) t(R.string.flip_next_protect) else t(R.string.flip_choose_pictures, FLIP_FRAMES - 1))
+            Text(if (draft.complete) t(R.string.flip_next_protect) else t(R.string.flip_choose_pictures, needed))
         }
     }
 
@@ -561,20 +618,66 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
             dismissButton = { TextButton(onClick = { askSearch = false }) { Text(t(R.string.common_cancel)) } },
         )
     }
+    if (askOwn) {
+        // The desktop's "Unlock image": the anti-AI picture stays the advice. Actions one per line (L-65).
+        AlertDialog(
+            onDismissRequest = { askOwn = false },
+            title = { Text(t(R.string.flip_own_ask_title)) },
+            text = { Text(t(R.string.flip_own_ask_text)) },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        askOwn = false
+                        val slot = latest.adversarial
+                        update(latest.copy(ownPicture = true, frames = latest.frames.toMutableList().also { it[slot] = null }, shuffled = null))
+                        selected = slot
+                    }) { Text(t(R.string.flip_own_confirm)) }
+                    TextButton(onClick = { askOwn = false }) { Text(t(R.string.flip_own_keep_anti_ai)) }
+                }
+            },
+        )
+    }
+    if (askBack) {
+        AlertDialog(
+            onDismissRequest = { askBack = false },
+            title = { Text(t(R.string.flip_back_ask_title)) },
+            text = { Text(t(R.string.flip_back_ask_text)) },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = { askBack = false; backToAntiAi() }) { Text(t(R.string.flip_back_confirm)) }
+                    TextButton(onClick = { askBack = false }) { Text(t(R.string.flip_back_keep_mine)) }
+                }
+            },
+        )
+    }
+    editing?.let { slot ->
+        val original = draft.originals[slot] ?: draft.frames[slot] ?: return@let
+        FrameEditor(slot + 1, original, draft.edits[slot], onClose = { editing = null }) { edit ->
+            editing = null
+            // Done without a change keeps the frame, and the anti-AI picture made from it.
+            if (edit != draft.edits[slot].normalized() || draft.originals[slot] == null) setPicture(slot, { original }, edit, isNew = false)
+        }
+    }
+    viewing?.let { FrameViewer(it) { viewing = null } }
 }
 
-/** [draft] with the frame at [slot] moved one place by [by] (the anti-AI mark moves with its frame). */
+/** [draft] with the frame at [slot] moved one place by [by] (the anti-AI mark, the originals and edits move with it). */
 private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
     val to = slot + by
     if (to !in 0 until FLIP_FRAMES) return draft
-    val frames = draft.frames.toMutableList()
-    frames[slot] = draft.frames[to].also { frames[to] = draft.frames[slot] }
+    fun <T> swapped(list: List<T>) = list.toMutableList().also { it[slot] = list[to]; it[to] = list[slot] }
     val adversarial = when (draft.adversarial) {
         slot -> to
         to -> slot
         else -> draft.adversarial
     }
-    return draft.copy(frames = frames, adversarial = adversarial, shuffled = null)
+    return draft.copy(
+        frames = swapped(draft.frames),
+        originals = swapped(draft.originals),
+        edits = swapped(draft.edits),
+        adversarial = adversarial,
+        shuffled = null,
+    )
 }
 
 /**
@@ -582,7 +685,7 @@ private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
  * each answers; a tap takes one for the selected frame.
  */
 @Composable
-private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSources: (List<ByteArray>) -> Unit) {
+private fun SearchPanel(words: List<Keyword>, canUseForAntiAi: Boolean, onPick: (ByteArray) -> Unit, onSources: (List<ByteArray>) -> Unit) {
     val context = LocalContext.current
     val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "0" }
     val scope = rememberCoroutineScope()
@@ -628,7 +731,7 @@ private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSou
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (results.isNotEmpty()) {
             Text(t(R.string.flip_search_tap), style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = {
+            if (canUseForAntiAi) TextButton(onClick = {
                 status = t(R.string.flip_getting_anti_ai)
                 scope.launch {
                     val picked = withContext(Dispatchers.IO) {
@@ -655,51 +758,56 @@ private fun SearchPanel(words: List<Keyword>, onPick: (ByteArray) -> Unit, onSou
     }
 }
 
-/** The protected frames in story order and in the shuffled order; a tap on two shuffled frames swaps them. */
+/**
+ * The protected frames in story order and in the shuffled order (B-205): it starts as the story; ▲ ▼ move a picture
+ * of the shuffled order one place, Shuffle mixes all four, Reset goes back to the story. A tap opens a frame full size.
+ */
 @Composable
 private fun ShuffleStep(draft: FlipDraft, frames: List<ByteArray>, update: (FlipDraft) -> Unit, onNext: () -> Unit) {
     val shuffled = draft.shuffled ?: return
-    var picked by remember { mutableStateOf<Int?>(null) }
-    val valid = isValidShuffle(shuffled, draft.adversarial)
+    var viewing by remember { mutableStateOf<ByteArray?>(null) }
+    val valid = isValidShuffle(shuffled, draft.antiAi)
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             t(R.string.flip_shuffle_help),
             style = MaterialTheme.typography.bodySmall,
         )
         (0 until FLIP_FRAMES).forEach { i ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FrameImage(frames.getOrNull(i), Modifier.weight(1f), label = if (i == draft.adversarial) t(R.string.flip_anti_ai) else null)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FrameImage(
+                    frames.getOrNull(i),
+                    Modifier.weight(1f).clickable { frames.getOrNull(i)?.let { viewing = it } },
+                    label = if (i == draft.antiAi) t(R.string.flip_anti_ai) else null,
+                )
                 FrameImage(
                     frames.getOrNull(shuffled[i]),
-                    Modifier.weight(1f).clickable {
-                        val first = picked
-                        if (first == null) picked = i
-                        else {
-                            picked = null
-                            val next = shuffled.toMutableList()
-                            next[first] = shuffled[i].also { next[i] = shuffled[first] }
-                            update(draft.copy(shuffled = next))
-                        }
-                    },
-                    selected = picked == i,
-                    label = if (shuffled[i] == draft.adversarial) t(R.string.flip_anti_ai) else null,
+                    Modifier.weight(1f).clickable { frames.getOrNull(shuffled[i])?.let { viewing = it } },
+                    label = if (shuffled[i] == draft.antiAi) t(R.string.flip_anti_ai) else null,
                 )
+                Column {
+                    TextButton(onClick = { update(draft.copy(shuffled = movedInOrder(shuffled, i, -1))) }, enabled = i > 0) { Text("▲") }
+                    TextButton(onClick = { update(draft.copy(shuffled = movedInOrder(shuffled, i, 1))) }, enabled = i < FLIP_FRAMES - 1) { Text("▼") }
+                }
             }
         }
         if (!valid) Text(t(R.string.flip_shuffle_more), color = MaterialTheme.colorScheme.error)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { update(draft.copy(shuffled = randomShuffle(draft.adversarial))) }) { Text(t(R.string.flip_shuffle)) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { update(draft.copy(shuffled = randomShuffle(draft.antiAi))) }) { Text(t(R.string.flip_shuffle)) }
+            OutlinedButton(onClick = { update(draft.copy(shuffled = STORY_ORDER)) }, enabled = shuffled != STORY_ORDER) { Text(t(R.string.flip_shuffle_reset)) }
             Button(onClick = onNext, enabled = valid) { Text(t(R.string.common_next)) }
         }
     }
+    viewing?.let { FrameViewer(it) { viewing = null } }
 }
 
 @Composable
 private fun SubmitStep(draft: FlipDraft, words: List<Keyword>, frames: List<ByteArray>, deadline: Instant?, enabled: Boolean, onSubmit: () -> Unit) {
+    var viewing by remember { mutableStateOf<ByteArray?>(null) }
+    viewing?.let { FrameViewer(it) { viewing = null } }
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(words.joinToString(" / ") { it.name.uppercase() }, style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            frames.forEachIndexed { i, f -> FrameImage(f, Modifier.weight(1f), label = if (i == draft.adversarial) t(R.string.flip_anti_ai) else null) }
+            frames.forEachIndexed { i, f -> FrameImage(f, Modifier.weight(1f).clickable { viewing = f }, label = if (i == draft.antiAi) t(R.string.flip_anti_ai) else null) }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
