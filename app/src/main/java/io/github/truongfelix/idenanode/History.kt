@@ -51,7 +51,13 @@ data class CeremonyRow(
     val shortAnswersSent: Boolean,
     val longAnswersSent: Boolean,
     val report: ValidationReport?,
-)
+) {
+    /**
+     * The number scan.idena.io shows for this ceremony: the epoch it opens. The node numbers it by the epoch it ends
+     * ([epoch], one less), which the RPC calls keep.
+     */
+    val shownEpoch: Int get() = epoch + 1
+}
 
 data class MiningRow(
     val epoch: Int,
