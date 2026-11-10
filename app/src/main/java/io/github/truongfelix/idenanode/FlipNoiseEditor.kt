@@ -77,9 +77,16 @@ fun NoiseEditor(
     var touched by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Preview?>(null) }
-    // The sliders' values while dragged; back to the picture's once its noise is made (or failed).
+    // The sliders' values while dragged. Once a remake is done (or failed, or dropped), the window takes the picture's
+    // values and seed again, and drops its preview: the next drag starts from the picture shown.
     var shown by remember { mutableStateOf(effects.normalized()) }
-    LaunchedEffect(effects, busy) { if (!busy) shown = effects.normalized() }
+    LaunchedEffect(effects, frameSeed, busy) {
+        if (busy) return@LaunchedEffect
+        shown = effects.normalized()
+        frameSeed?.let { seed = it }
+        preview = null
+        touched = false
+    }
     // The preview follows the controls; a drawing still running when they move on is let finish, the moves meanwhile
     // drawn as one.
     LaunchedEffect(base) {

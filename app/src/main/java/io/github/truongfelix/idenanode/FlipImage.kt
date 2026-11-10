@@ -266,18 +266,9 @@ class NoiseBase(val pixels: IntArray, val width: Int, val height: Int) {
 }
 
 /**
- * [pixels] ([width] x [height]) with the automatic anti-AI noise (desktop protectFlipImage, owner 2026-11-10): 20 to
- * 30 % of the region border pixels recolored from its palette, the hue turned by 20 to 60 degrees, mirrored left to
- * right one time in two ([NoiseEffects.random]); with the effects it drew, for the controls (B-215).
- */
-fun protectFrame(pixels: IntArray, width: Int, height: Int, random: Random = Random.Default): ProtectedPixels {
-    val effects = NoiseEffects.random(random)
-    return ProtectedPixels(protectFrame(pixels, width, height, effects, random), effects)
-}
-
-/**
- * [pixels] ([width] x [height]) with the anti-AI noise of [effects] (B-215, [NoiseBase.protect]): the builds before
- * B-215 made the same pixels with a grain of 20 and their colour shift and mirror.
+ * [pixels] ([width] x [height]) with the anti-AI noise of [effects] (B-215, [NoiseBase.protect]); the automatic
+ * noise's are [NoiseEffects.random] (desktop protectFlipImage, owner 2026-11-10). The builds before B-215 made the
+ * same pixels with a grain of 20 and their colour shift and mirror.
  */
 fun protectFrame(pixels: IntArray, width: Int, height: Int, effects: NoiseEffects, random: Random = Random.Default): IntArray =
     NoiseBase(pixels, width, height).protect(effects, random)

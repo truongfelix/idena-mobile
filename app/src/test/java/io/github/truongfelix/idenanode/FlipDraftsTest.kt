@@ -215,4 +215,20 @@ class FlipDraftsTest {
         File(folder.root, "drafts/${draftKey(a.words)}/draft.json").writeText("""{"adversarial":3,"sources":0}""")
         assertEquals(List<SlotNoise?>(FLIP_FRAMES) { null }, drafts.load(a)!!.noise)
     }
+
+    @Test
+    fun aNoiseSavedWithoutItsSeedKeepsItsValues() {
+        val drafts = FlipDrafts(folder.root)
+        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a"))
+        // 0.4.1-beta.1 and beta.2 saved the values without the grain's seed.
+        val file = File(folder.root, "drafts/${draftKey(a.words)}/draft.json")
+        val json = org.json.JSONObject(file.readText())
+        val e = NoiseEffects(mirror = true, grain = 27, hue = 44)
+        json.put("noise", org.json.JSONArray().put(org.json.JSONObject().put("frame", frameTag("a".toByteArray())).put("effects", e.toJson())))
+        file.writeText(json.toString())
+        val back = drafts.load(a)!!
+        assertEquals(e, back.noiseOf(0))
+        assertNull("no seed: a new one at the next protection", back.noiseSeedOf(0))
+        assertNull(back.noiseOf(1))
+    }
 }

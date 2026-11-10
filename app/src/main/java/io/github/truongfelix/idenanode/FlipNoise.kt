@@ -57,6 +57,3 @@ data class NoiseEffects(
         }
     }
 }
-
-/** A picture with its noise, and the effects it was made with. */
-class ProtectedPixels(val pixels: IntArray, val effects: NoiseEffects)

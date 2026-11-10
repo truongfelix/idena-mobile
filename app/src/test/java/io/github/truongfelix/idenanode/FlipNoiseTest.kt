@@ -89,18 +89,6 @@ class FlipNoiseTest {
     }
 
     @Test
-    fun theAutomaticNoiseDrawsItsEffectsThenMakesThem() {
-        val pixels = IntArray(16 * 12) { p -> color(p % 256, 80, 200) }
-        for (seed in 0L until 20L) {
-            val made = protectFrame(pixels, 16, 12, Random(seed))
-            val random = Random(seed)
-            val effects = NoiseEffects.random(random)
-            assertEquals(effects, made.effects)
-            assertArrayEquals(protectFrame(pixels, 16, 12, effects, random), made.pixels)
-        }
-    }
-
-    @Test
     fun theAutomaticEffectsCoverTheirRangesAndNoMore() {
         val drawn = (0L until 3000L).map { NoiseEffects.random(Random(it)) }
         assertEquals("grain 20 to 30 %", (20..30).toSet(), drawn.map { it.grain }.toSet())
