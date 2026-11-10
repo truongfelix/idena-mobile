@@ -122,6 +122,7 @@
     <string name="flip_protecting">Protection des images contre l\'IA…</string>
     <string name="flip_picture_unreadable">une image est illisible</string>
     <string name="flip_prepare_failed">Les images n\'ont pas pu être préparées : %1$s</string>
+    <string name="flip_pictures_changed">Une image a changé pendant leur protection : touchez Suivant à nouveau.</string>
     <string name="flip_sending">Envoi du flip au nœud…</string>
     <string name="flip_too_large">le flip est trop volumineux</string>
     <string name="flip_submitted">Flip envoyé (%1$s…). Le nœud le garde sur IPFS et l\'envoie lors de la validation.</string>

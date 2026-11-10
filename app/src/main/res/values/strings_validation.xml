@@ -120,6 +120,7 @@
     <string name="flip_protecting">Protecting the pictures against AI…</string>
     <string name="flip_picture_unreadable">a picture cannot be read</string>
     <string name="flip_prepare_failed">The pictures could not be prepared: %1$s</string>
+    <string name="flip_pictures_changed">A picture changed while they were protected: tap Next again.</string>
     <string name="flip_sending">Sending the flip to the node…</string>
     <string name="flip_too_large">the flip is too large</string>
     <string name="flip_submitted">Flip submitted (%1$s…). The node keeps it on IPFS and sends it at the validation.</string>

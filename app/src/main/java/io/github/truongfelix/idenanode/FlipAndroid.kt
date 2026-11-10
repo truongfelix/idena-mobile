@@ -76,17 +76,17 @@ data class FlipDraft(
      */
     val noise: List<SlotNoise?> = List(FLIP_FRAMES) { null },
 ) {
-    /** The noise effects frame [slot] was protected with, or null when it has none (a new or changed picture). */
-    fun noiseOf(slot: Int): NoiseEffects? {
+    /** What frame [slot] was protected with, or null when it has none (a new or changed picture). */
+    fun slotNoise(slot: Int): SlotNoise? {
         val frame = frames.getOrNull(slot) ?: return null
-        return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }?.effects
+        return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }
     }
 
-    /** The seed frame [slot]'s grain was drawn with, or null when it has none. */
-    fun noiseSeedOf(slot: Int): Long? {
-        val frame = frames.getOrNull(slot) ?: return null
-        return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }?.seed
-    }
+    /** The noise effects frame [slot] was protected with ([slotNoise]). */
+    fun noiseOf(slot: Int): NoiseEffects? = slotNoise(slot)?.effects
+
+    /** The seed frame [slot]'s grain was drawn with ([slotNoise]). */
+    fun noiseSeedOf(slot: Int): Long? = slotNoise(slot)?.seed
 
     /** This draft with frame [slot] protected with [effects], its grain drawn with [seed]. */
     fun withNoise(slot: Int, effects: NoiseEffects, seed: Long): FlipDraft {

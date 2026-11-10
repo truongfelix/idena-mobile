@@ -92,7 +92,10 @@ fun NoiseEditor(
     LaunchedEffect(base) {
         val b = base ?: return@LaunchedEffect
         snapshotFlow { Triple(shown, seed, touched) }.conflate().collect { (e, s, moved) ->
-            if (moved) preview = Preview(withContext(Dispatchers.Default) { flipFrameJpeg(b.protect(e, Random(s))) }, e, s)
+            if (!moved) return@collect
+            val drawn = withContext(Dispatchers.Default) { flipFrameJpeg(b.protect(e, s)) }
+            // A drawing that ends after the window took the picture again (a remake done) is dropped.
+            if (touched && s == seed) preview = Preview(drawn, e, s)
         }
     }
     // [force]: made again even with the same values (Regenerate draws a new grain too).
@@ -111,7 +114,7 @@ fun NoiseEditor(
             ) {
                 Text(t(R.string.flip_noise_title, number), style = MaterialTheme.typography.titleMedium)
                 Box(contentAlignment = Alignment.Center) {
-                    val p = preview?.takeIf { dragging || (busy && it.effects == shown && it.seed == seed) }
+                    val p = preview?.takeIf { it.seed == seed && (dragging || (busy && it.effects == shown)) }
                     FrameImage(p?.bytes ?: frame, Modifier.fillMaxWidth())
                     if (busy) CircularProgressIndicator()
                 }
@@ -128,7 +131,7 @@ fun NoiseEditor(
                 // One action per line: French labels are cut side by side (L-65).
                 OutlinedButton(onClick = {
                     seed = SecureRandom().nextLong()
-                    commit(NoiseEffects.random(), force = true)
+                    commit(NoiseEffects.random(Random(SecureRandom().nextLong())), force = true)
                 }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text(t(R.string.flip_noise_regenerate))
                 }

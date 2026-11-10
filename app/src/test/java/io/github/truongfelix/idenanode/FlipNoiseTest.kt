@@ -55,32 +55,44 @@ class FlipNoiseTest {
     }
 
     /**
-     * The same draws as Random(seed) (XorWowRandom draws everything from nextBits and nextInt()), and what the old
-     * noise drew for its colour shift (nextInt(30)) and its mirror (the last nextBoolean).
+     * The old noise's draws as [NoiseBase.protect] draws them: each pixel's draw from Random(seed) and its colour from
+     * Random(seed.inv()), one each per pixel (the old code asks a colour only for a recoloured pixel: the one of that
+     * pixel is served); the colour shift (nextInt(30)) and the mirror from a third stream ([restSeed]), recorded. [choices]: the
+     * palette's size less one. The old code calls only nextDouble, nextInt(until) and nextBoolean.
      */
-    private class Recording(seed: Long) : Random() {
-        private val r = Random(seed)
+    private class Split(seed: Long, private val choices: Int, restSeed: Long) : Random() {
+        private val draws = Random(seed)
+        private val picks = Random(seed.inv())
+        private val rest = Random(restSeed)
+        private var pick = 0
         var shift: Int? = null
         var mirror: Boolean? = null
-        override fun nextBits(bitCount: Int): Int = r.nextBits(bitCount)
-        override fun nextInt(): Int = r.nextInt()
-        override fun nextInt(until: Int): Int = super.nextInt(until).also { if (until == 30) shift = it }
-        override fun nextBoolean(): Boolean = super.nextBoolean().also { mirror = it }
+        override fun nextBits(bitCount: Int): Int = error("not drawn by the old noise")
+        override fun nextDouble(): Double {
+            if (choices > 0) pick = picks.nextInt(choices)
+            return draws.nextDouble()
+        }
+        override fun nextInt(until: Int): Int = when (until) {
+            30 -> rest.nextInt(until).also { shift = it }
+            choices -> pick
+            else -> error("unexpected nextInt($until)")
+        }
+        override fun nextBoolean(): Boolean = rest.nextBoolean().also { mirror = it }
     }
 
     @Test
     fun theEffectsMakeTheOldNoisePixelForPixel() {
         var cases = 0
         val seen = mutableSetOf<Pair<Int, Boolean>>()
-        for ((name, w, pixels) in corpus()) {
+        for ((index, case) in corpus().withIndex()) {
+            val (name, w, pixels) = case
             val h = pixels.size / w
             for (seed in 0L until 12L) {
-                val old = oldProtectFrame(pixels, w, h, Random(seed))
-                val recording = Recording(seed)
-                assertArrayEquals("$name seed $seed: the recording draws as Random(seed)", old, oldProtectFrame(pixels, w, h, recording))
-                val effects = NoiseEffects(mirror = recording.mirror!!, grain = 20, hue = 20 + recording.shift!!)
+                val split = Split(seed, (palette(pixels).size - 1).coerceAtLeast(0), restSeed = index * 100L + seed)
+                val old = oldProtectFrame(pixels, w, h, split)
+                val effects = NoiseEffects(mirror = split.mirror!!, grain = 20, hue = 20 + split.shift!!)
                 seen += effects.hue to effects.mirror
-                assertArrayEquals("$name seed $seed, $effects", old, protectFrame(pixels, w, h, effects, Random(seed)))
+                assertArrayEquals("$name seed $seed, $effects", old, protectFrame(pixels, w, h, effects, seed))
                 cases++
             }
         }
@@ -102,7 +114,7 @@ class FlipNoiseTest {
     private val pixels = photo.third
     private val least = NoiseEffects(mirror = false, grain = MIN_NOISE_GRAIN, hue = MIN_NOISE_HUE)
 
-    private fun plain(e: NoiseEffects, seed: Long = 7) = protectFrame(pixels, pw, ph, e, Random(seed))
+    private fun plain(e: NoiseEffects, seed: Long = 7) = protectFrame(pixels, pw, ph, e, seed)
 
     @Test
     fun grainRecolorsOnlyBorderPixelsUpToItsShare() {
@@ -122,6 +134,21 @@ class FlipNoiseTest {
     }
 
     @Test
+    fun moreGrainOnlyAddsPixelsEachKeepingItsColour() {
+        // The grain slider keeps the pattern: every pixel recoloured at a lower grain is recoloured alike at a higher one.
+        val shiftedOnly = pixels.map { turnHue(it, MIN_NOISE_HUE.toFloat()) }.toIntArray()
+        for (seed in 0L until 5L) {
+            var before = plain(least, seed)
+            for (grain in MIN_NOISE_GRAIN + 1..MAX_NOISE_GRAIN) {
+                val now = plain(least.copy(grain = grain), seed)
+                val kept = pixels.indices.filter { before[it] != shiftedOnly[it] }
+                assertTrue("seed $seed grain $grain", kept.all { now[it] == before[it] })
+                before = now
+            }
+        }
+    }
+
+    @Test
     fun colorShiftTurnsTheHueByItsDegrees() {
         // With the same draws the grain falls on the same pixels: the outputs differ by the turn alone.
         val grainOnly = plain(least.copy(hue = MIN_NOISE_HUE))
@@ -137,7 +164,7 @@ class FlipNoiseTest {
         // The noise window cuts the picture once and redraws it for each slider position: as the full noise each time.
         val base = NoiseBase(pixels, pw, ph)
         for (e in listOf(least, least.copy(grain = 33, hue = 47), least.copy(mirror = true, grain = 40, hue = 60), least)) {
-            assertArrayEquals("$e", protectFrame(pixels, pw, ph, e, Random(99)), base.protect(e, Random(99)))
+            assertArrayEquals("$e", protectFrame(pixels, pw, ph, e, 99), base.protect(e, 99))
         }
         assertArrayEquals("the source is not changed", photo.third, base.pixels)
     }

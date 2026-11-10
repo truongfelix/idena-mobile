@@ -249,18 +249,22 @@ class NoiseBase(val pixels: IntArray, val width: Int, val height: Int) {
 
     /**
      * The picture with the noise of [effects]: [NoiseEffects.grain] % of the region border pixels recolored from its
-     * palette (not its main color when it has several), one draw of [random] per pixel, border or not, as the noise
-     * always drew them; the hue turned; maybe mirrored. The same [random] (seed) gives the same grain.
+     * palette (not its main color when it has several), the hue turned, maybe mirrored. [seed] draws the grain: for
+     * every pixel, border or not, one draw (as the noise always drew them) and one colour from a second stream, so
+     * that neither depends on the grain: a higher grain only adds pixels, each keeping its colour.
      */
-    fun protect(effects: NoiseEffects, random: Random): IntArray {
+    fun protect(effects: NoiseEffects, seed: Long): IntArray {
         val e = effects.normalized()
         val share = e.grain / 100.0
+        val draws = Random(seed)
+        val picks = Random(seed.inv())
         val out = pixels.copyOf()
-        for (p in out.indices) {
-            if (colors.isEmpty() || random.nextDouble() >= share || !border[p]) continue
-            out[p] = if (colors.size == 1) colors[0] else colors[1 + random.nextInt(colors.size - 1)]
+        if (colors.isNotEmpty()) for (p in out.indices) {
+            val draw = draws.nextDouble()
+            val pick = if (colors.size == 1) 0 else 1 + picks.nextInt(colors.size - 1)
+            if (draw < share && border[p]) out[p] = colors[pick]
         }
-        if (e.hue != 0) for (p in out.indices) out[p] = turnHue(out[p], e.hue.toFloat())
+        for (p in out.indices) out[p] = turnHue(out[p], e.hue.toFloat())
         return if (e.mirror) mirrored(out, width) else out
     }
 }
@@ -268,10 +272,10 @@ class NoiseBase(val pixels: IntArray, val width: Int, val height: Int) {
 /**
  * [pixels] ([width] x [height]) with the anti-AI noise of [effects] (B-215, [NoiseBase.protect]); the automatic
  * noise's are [NoiseEffects.random] (desktop protectFlipImage, owner 2026-11-10). The builds before B-215 made the
- * same pixels with a grain of 20 and their colour shift and mirror.
+ * same pixels with a grain of 20 and their colour shift and mirror (their draws split as [NoiseBase.protect] does).
  */
-fun protectFrame(pixels: IntArray, width: Int, height: Int, effects: NoiseEffects, random: Random = Random.Default): IntArray =
-    NoiseBase(pixels, width, height).protect(effects, random)
+fun protectFrame(pixels: IntArray, width: Int, height: Int, effects: NoiseEffects, seed: Long): IntArray =
+    NoiseBase(pixels, width, height).protect(effects, seed)
 
 /**
  * The nonsense frame from four pictures of the same size (desktop getAdversarialImage): one of them

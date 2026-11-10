@@ -120,7 +120,7 @@ private fun protectedFrame(bytes: ByteArray, effects: NoiseEffects?, seed: Long?
     val secure = java.security.SecureRandom()
     val e = (effects ?: NoiseEffects.random(kotlin.random.Random(secure.nextLong()))).normalized()
     val s = seed ?: secure.nextLong()
-    return MadeFrame(flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, e, kotlin.random.Random(s))), e, s)
+    return MadeFrame(flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, e, s)), e, s)
 }
 
 private enum class FlipStep(@StringRes val title: Int) {
@@ -276,6 +276,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                 FlipStep.Frames -> FramesStep(current, words, ::update, onNext = {
                     working = t(R.string.flip_protecting)
                     val fingerprint = fingerprintOf(current)
+                    noiseError = null
                     scope.launch {
                         protectedFor = null
                         // Each picture with the noise it had (B-215), else the automatic noise, whose effects are kept.
@@ -284,14 +285,19 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                                 current.frames.mapIndexed { i, bytes -> protectedFrame(bytes!!, current.noiseOf(i), current.noiseSeedOf(i)) }
                             }.onFailure { message = t(R.string.flip_prepare_failed, it.message.toString()) }.getOrNull()
                         }
-                        protected = made?.map { it.bytes }
                         working = null
-                        if (made != null) {
+                        // Kept only for the pictures it was made from: one still being prepared at the tap may have
+                        // changed the draft since (its picture is then protected at the next Next).
+                        val now = draft
+                        if (made != null && (now == null || fingerprintOf(now) != fingerprint)) {
+                            message = t(R.string.flip_pictures_changed)
+                        } else if (made != null) {
+                            protected = made.map { it.bytes }
                             protectedFor = fingerprint
-                            var next = made.foldIndexed(current) { i, d, m -> d.withNoise(i, m.effects, m.seed) }
+                            var next = made.foldIndexed(now!!) { i, d, m -> d.withNoise(i, m.effects, m.seed) }
                             // The shuffle starts from the story order, as on the desktop (B-205).
                             if (next.shuffled == null || next.shuffled!!.sorted() != STORY_ORDER) next = next.copy(shuffled = STORY_ORDER)
-                            if (next != current) update(next)
+                            if (next != now) update(next)
                             step = FlipStep.Shuffle
                         }
                     }
@@ -320,7 +326,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                                 }.onFailure { noiseError = slot to t(R.string.flip_prepare_failed, it.message.toString()) }
                                 noiseBusy = false
                             }
-                        }, onNext = { step = FlipStep.Submit })
+                        }, onNoiseClosed = { noiseError = null }, onNext = { step = FlipStep.Submit })
                         return@Box
                     }
                     SubmitStep(current, words, protected.orEmpty(), nodeState.deadline, enabled = !sending && sent == null && nodeState.synced) {
@@ -809,6 +815,7 @@ private fun ShuffleStep(
     noiseBusy: Boolean,
     noiseError: Pair<Int, String>?,
     onNoise: (Int, NoiseEffects, Long) -> Unit,
+    onNoiseClosed: () -> Unit,
     onNext: () -> Unit,
 ) {
     val shuffled = draft.shuffled ?: return
@@ -859,7 +866,10 @@ private fun ShuffleStep(
             noiseBusy,
             noiseError?.takeIf { it.first == slot }?.second,
             onChange = { effects, seed -> onNoise(slot, effects, seed) },
-            onClose = { noiseOf = null },
+            onClose = {
+                noiseOf = null
+                onNoiseClosed()
+            },
         )
     }
 }
