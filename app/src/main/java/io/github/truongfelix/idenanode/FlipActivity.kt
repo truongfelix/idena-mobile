@@ -109,11 +109,11 @@ private fun fingerprintOf(draft: FlipDraft) = draftFingerprint(draft.frames, dra
 
 /**
  * The frame [bytes] protected as sent ([flipFrameJpeg]): with [effects] when it has some, else with the automatic
- * noise; with the effects used.
+ * noise; with the effects used. [seed] draws the grain (the noise window's, so that it is the picture it showed).
  */
-private fun protectedFrame(bytes: ByteArray, effects: NoiseEffects?): Pair<ByteArray, NoiseEffects> {
+private fun protectedFrame(bytes: ByteArray, effects: NoiseEffects?, seed: Long = java.security.SecureRandom().nextLong()): Pair<ByteArray, NoiseEffects> {
     val pixels = framePixels(bytes) ?: error(t(R.string.flip_picture_unreadable))
-    val random = kotlin.random.Random(java.security.SecureRandom().nextLong())
+    val random = kotlin.random.Random(seed)
     if (effects != null) return flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, effects, random)) to effects.normalized()
     val made = protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, random)
     return flipFrameJpeg(made.pixels) to made.effects
@@ -299,13 +299,13 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                         return@Box
                     }
                     if (step == FlipStep.Shuffle) {
-                        ShuffleStep(current, protected.orEmpty(), ::update, noiseBusy, noiseError, onNoise = { slot, effects ->
+                        ShuffleStep(current, protected.orEmpty(), ::update, noiseBusy, noiseError, onNoise = { slot, effects, seed ->
                             val bytes = current.frames[slot] ?: return@ShuffleStep
                             if (noiseBusy) return@ShuffleStep
                             noiseBusy = true
                             noiseError = null
                             scope.launch {
-                                val made = withContext(Dispatchers.Default) { runCatching { protectedFrame(bytes, effects) } }
+                                val made = withContext(Dispatchers.Default) { runCatching { protectedFrame(bytes, effects, seed) } }
                                 made.onSuccess { (frame, used) ->
                                     // Kept only while the pictures are still those protected.
                                     val now = draft ?: return@onSuccess
@@ -804,7 +804,7 @@ private fun ShuffleStep(
     update: (FlipDraft) -> Unit,
     noiseBusy: Boolean,
     noiseError: Pair<Int, String>?,
-    onNoise: (Int, NoiseEffects) -> Unit,
+    onNoise: (Int, NoiseEffects, Long) -> Unit,
     onNext: () -> Unit,
 ) {
     val shuffled = draft.shuffled ?: return
@@ -819,14 +819,11 @@ private fun ShuffleStep(
         )
         (0 until FLIP_FRAMES).forEach { i ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    FrameImage(
-                        frames.getOrNull(i),
-                        Modifier.fillMaxWidth().clickable { frames.getOrNull(i)?.let { viewing = it } },
-                        label = if (i == draft.antiAi) t(R.string.flip_anti_ai) else null,
-                    )
-                    TextButton(onClick = { noiseOf = i }) { Text(t(R.string.flip_noise_open)) }
-                }
+                FrameImage(
+                    frames.getOrNull(i),
+                    Modifier.weight(1f).clickable { frames.getOrNull(i)?.let { viewing = it } },
+                    label = if (i == draft.antiAi) t(R.string.flip_anti_ai) else null,
+                )
                 FrameImage(
                     frames.getOrNull(shuffled[i]),
                     Modifier.weight(1f).clickable { frames.getOrNull(shuffled[i])?.let { viewing = it } },
@@ -837,6 +834,8 @@ private fun ShuffleStep(
                     TextButton(onClick = { update(draft.copy(shuffled = movedInOrder(shuffled, i, 1))) }, enabled = i < FLIP_FRAMES - 1) { Text("▼") }
                 }
             }
+            // On a line of its own, so that both columns stay level (owner 2026-11-10).
+            TextButton(onClick = { noiseOf = i }) { Text(t(R.string.flip_noise_open, i + 1)) }
         }
         if (!valid) Text(t(R.string.flip_shuffle_more), color = MaterialTheme.colorScheme.error)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -849,11 +848,12 @@ private fun ShuffleStep(
     noiseOf?.let { slot ->
         NoiseEditor(
             slot + 1,
+            draft.frames.getOrNull(slot),
             frames.getOrNull(slot),
             draft.noiseOf(slot) ?: NoiseEffects(),
             noiseBusy,
             noiseError?.takeIf { it.first == slot }?.second,
-            onChange = { onNoise(slot, it) },
+            onChange = { effects, seed -> onNoise(slot, effects, seed) },
             onClose = { noiseOf = null },
         )
     }

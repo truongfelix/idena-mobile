@@ -1,5 +1,6 @@
 package io.github.truongfelix.idenanode
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,44 +23,75 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.withContext
+import java.security.SecureRandom
+import kotlin.random.Random
 
 /*
  * The noise of one protected picture, effect by effect (B-215, as the desktop's B-213 NoiseControls): Mirror, Grain
- * and Color shift start at the values the picture was protected with; each change makes the picture's
- * noise again (a slider on release), and the controls wait for it. Regenerate draws new values at random.
+ * and Color shift start at the values the picture was protected with; the preview follows a slider as it moves, and
+ * the picture's noise is made again on release (the controls wait for it). Regenerate draws new values at random.
  */
 
 /**
- * Picture [number]'s noise: [frame] the protected picture, [effects] its values; [onChange] makes the noise again
- * with new values; [busy] while it does, and the window cannot be closed then (the flip is never sent or protected
+ * Picture [number]'s noise: [source] the picture before its noise, [frame] the protected picture, [effects] its
+ * values. While a slider moves, the preview is drawn from [source] ([NoiseBase], cut once) with the window's seed;
+ * [onChange] makes the picture's noise again with the new values and that seed, so it is the picture shown; [busy]
+ * while it does, and the window cannot be closed then (the flip is never sent or protected
  * again with a picture on its way); [error] why the last change failed. Close or back closes it, the last values kept.
  */
 @Composable
 fun NoiseEditor(
     number: Int,
+    source: ByteArray?,
     frame: ByteArray?,
     effects: NoiseEffects,
     busy: Boolean,
     error: String?,
-    onChange: (NoiseEffects) -> Unit,
+    onChange: (NoiseEffects, Long) -> Unit,
     onClose: () -> Unit,
 ) {
+    // The picture cut into regions once; the grain's seed while the window is open (Regenerate draws another).
+    val base by produceState<NoiseBase?>(null, source) {
+        value = source?.let { bytes -> withContext(Dispatchers.Default) { framePixels(bytes)?.let { NoiseBase(it, WORK_WIDTH, WORK_HEIGHT) } } }
+    }
+    var seed by remember { mutableLongStateOf(SecureRandom().nextLong()) }
+    // The protected picture is shown until a control is moved: its grain was drawn with another seed.
+    var touched by remember { mutableStateOf(false) }
+    var preview by remember { mutableStateOf<ImageBitmap?>(null) }
     // The sliders' values while dragged; back to the picture's once its noise is made (or failed).
     var shown by remember { mutableStateOf(effects.normalized()) }
     LaunchedEffect(effects, busy) { if (!busy) shown = effects.normalized() }
+    // The preview follows the controls; a drawing still running when they move on is let finish, the moves meanwhile
+    // drawn as one.
+    LaunchedEffect(base) {
+        val b = base ?: return@LaunchedEffect
+        snapshotFlow { Triple(shown, seed, touched) }.conflate().collect { (e, s, t) ->
+            if (t) preview = withContext(Dispatchers.Default) { pixelBitmap(b.protect(e, Random(s)), WORK_WIDTH, WORK_HEIGHT).asImageBitmap() }
+        }
+    }
     // [force]: made again even with the same values (Regenerate draws a new grain too).
     fun commit(next: NoiseEffects, force: Boolean = false) {
         val n = next.normalized()
         shown = n
-        if (force || n != effects.normalized()) onChange(n)
+        touched = true
+        if (force || n != effects.normalized()) onChange(n, seed)
     }
     Dialog(onDismissRequest = { if (!busy) onClose() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
@@ -69,7 +101,12 @@ fun NoiseEditor(
             ) {
                 Text(t(R.string.flip_noise_title, number), style = MaterialTheme.typography.titleMedium)
                 Box(contentAlignment = Alignment.Center) {
-                    FrameImage(frame, Modifier.fillMaxWidth())
+                    val p = preview
+                    if (touched && p != null) {
+                        Image(p, contentDescription = null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())
+                    } else {
+                        FrameImage(frame, Modifier.fillMaxWidth())
+                    }
                     if (busy) CircularProgressIndicator()
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -79,11 +116,14 @@ fun NoiseEditor(
                     Switch(checked = shown.mirror, enabled = !busy, onCheckedChange = { commit(shown.copy(mirror = it)) })
                 }
                 NoiseSlider(t(R.string.flip_noise_grain, shown.grain), shown.grain, MIN_NOISE_GRAIN..MAX_NOISE_GRAIN, busy,
-                    onMove = { shown = shown.copy(grain = it) }, onDone = { commit(shown) })
+                    onMove = { shown = shown.copy(grain = it); touched = true }, onDone = { commit(shown) })
                 NoiseSlider(t(R.string.flip_noise_hue, shown.hue), shown.hue, MIN_NOISE_HUE..MAX_NOISE_HUE, busy,
-                    onMove = { shown = shown.copy(hue = it) }, onDone = { commit(shown) })
+                    onMove = { shown = shown.copy(hue = it); touched = true }, onDone = { commit(shown) })
                 // One action per line: French labels are cut side by side (L-65).
-                OutlinedButton(onClick = { commit(NoiseEffects.random(), force = true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = {
+                    seed = SecureRandom().nextLong()
+                    commit(NoiseEffects.random(), force = true)
+                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text(t(R.string.flip_noise_regenerate))
                 }
                 Button(onClick = onClose, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(t(R.string.common_close)) }

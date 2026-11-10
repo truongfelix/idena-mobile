@@ -188,7 +188,7 @@
     <string name="flip_shuffle_help">Left: the story. Right: the same pictures in an order that breaks it. At the validation, people see both and pick the one that makes sense. Move a picture on the right with ▲ ▼, or tap Shuffle. Tap a picture to see it full size.</string>
     <string name="flip_shuffle_more">The right side still tells the story: change its order.</string>
     <string name="flip_shuffle">Shuffle</string>
-    <string name="flip_noise_open">Noise…</string>
+    <string name="flip_noise_open">Noise of picture %1$d…</string>
     <string name="flip_noise_title">Noise of picture %1$d</string>
     <string name="flip_noise_help">The noise changes the picture for AI models, hardly for people. Each change makes the picture\'s noise again.</string>
     <string name="flip_noise_mirror">Mirror</string>

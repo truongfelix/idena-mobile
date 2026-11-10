@@ -145,6 +145,16 @@ class FlipNoiseTest {
     }
 
     @Test
+    fun oneCutServesEveryPreviewAsAFreshRun() {
+        // The noise window cuts the picture once and redraws it for each slider position: as the full noise each time.
+        val base = NoiseBase(pixels, pw, ph)
+        for (e in listOf(least, least.copy(grain = 33, hue = 47), least.copy(mirror = true, grain = 40, hue = 60), least)) {
+            assertArrayEquals("$e", protectFrame(pixels, pw, ph, e, Random(99)), base.protect(e, Random(99)))
+        }
+        assertArrayEquals("the source is not changed", photo.third, base.pixels)
+    }
+
+    @Test
     fun mirrorTurnsThePictureLeftToRight() {
         assertArrayEquals(mirrored(plain(least), pw), plain(least.copy(mirror = true)))
     }

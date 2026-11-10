@@ -235,25 +235,34 @@ fun mirrored(pixels: IntArray, width: Int): IntArray = IntArray(pixels.size) { i
 }
 
 /**
- * The grain of the noise: [share] (0 to 1) of the region border pixels of the grey, blurred frame recolored from
- * its palette (not its main color when it has several). One draw of [random] per pixel, border or not, as the noise
- * always drew them.
+ * What the noise needs of a picture before its effects (B-215): its region borders (the grey, blurred frame cut by
+ * [watershed]) and its palette. Made once for a picture, so that the noise window redraws it while a slider moves.
  */
-private fun grained(pixels: IntArray, width: Int, height: Int, share: Double, random: Random): IntArray {
-    val labels = watershed(blurLevels(grayLevels(pixels), width, height, 2), width, height)
-    val colors = palette(pixels)
-    val out = pixels.copyOf()
-    for (p in out.indices) {
-        if (colors.isEmpty() || random.nextDouble() >= share || !isBorder(labels, width, p)) continue
-        out[p] = if (colors.size == 1) colors[0] else colors[1 + random.nextInt(colors.size - 1)]
-    }
-    return out
-}
+class NoiseBase(val pixels: IntArray, val width: Int, val height: Int) {
+    private val border: BooleanArray
+    private val colors: List<Int> = palette(pixels)
 
-/** The grained pixels [out] with the hue turned by [degrees], maybe mirrored. */
-private fun finished(out: IntArray, width: Int, degrees: Int, mirror: Boolean): IntArray {
-    if (degrees != 0) for (p in out.indices) out[p] = turnHue(out[p], degrees.toFloat())
-    return if (mirror) mirrored(out, width) else out
+    init {
+        val labels = watershed(blurLevels(grayLevels(pixels), width, height, 2), width, height)
+        border = BooleanArray(pixels.size) { isBorder(labels, width, it) }
+    }
+
+    /**
+     * The picture with the noise of [effects]: [NoiseEffects.grain] % of the region border pixels recolored from its
+     * palette (not its main color when it has several), one draw of [random] per pixel, border or not, as the noise
+     * always drew them; the hue turned; maybe mirrored. The same [random] (seed) gives the same grain.
+     */
+    fun protect(effects: NoiseEffects, random: Random): IntArray {
+        val e = effects.normalized()
+        val share = e.grain / 100.0
+        val out = pixels.copyOf()
+        for (p in out.indices) {
+            if (colors.isEmpty() || random.nextDouble() >= share || !border[p]) continue
+            out[p] = if (colors.size == 1) colors[0] else colors[1 + random.nextInt(colors.size - 1)]
+        }
+        if (e.hue != 0) for (p in out.indices) out[p] = turnHue(out[p], e.hue.toFloat())
+        return if (e.mirror) mirrored(out, width) else out
+    }
 }
 
 /**
@@ -267,15 +276,11 @@ fun protectFrame(pixels: IntArray, width: Int, height: Int, random: Random = Ran
 }
 
 /**
- * [pixels] ([width] x [height]) with the anti-AI noise of [effects] (B-215): [NoiseEffects.grain] % of the region
- * border pixels recolored (at random, by [random]), the hue turned, the mirror: the builds before
+ * [pixels] ([width] x [height]) with the anti-AI noise of [effects] (B-215, [NoiseBase.protect]): the builds before
  * B-215 made the same pixels with a grain of 20 and their colour shift and mirror.
  */
-fun protectFrame(pixels: IntArray, width: Int, height: Int, effects: NoiseEffects, random: Random = Random.Default): IntArray {
-    val e = effects.normalized()
-    val out = grained(pixels, width, height, e.grain / 100.0, random)
-    return finished(out, width, e.hue, e.mirror)
-}
+fun protectFrame(pixels: IntArray, width: Int, height: Int, effects: NoiseEffects, random: Random = Random.Default): IntArray =
+    NoiseBase(pixels, width, height).protect(effects, random)
 
 /**
  * The nonsense frame from four pictures of the same size (desktop getAdversarialImage): one of them

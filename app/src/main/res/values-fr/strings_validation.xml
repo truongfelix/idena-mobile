@@ -191,7 +191,7 @@
     <string name="flip_shuffle_help">À gauche : l\'histoire. À droite : les mêmes images dans un ordre qui la casse. Lors de la validation, les gens voient les deux et choisissent celle qui a du sens. Déplacez une image à droite avec ▲ ▼, ou touchez Mélanger. Touchez une image pour la voir en plein écran.</string>
     <string name="flip_shuffle_more">Le côté droit raconte encore l\'histoire : changez son ordre.</string>
     <string name="flip_shuffle">Mélanger</string>
-    <string name="flip_noise_open">Bruit…</string>
+    <string name="flip_noise_open">Bruit de l\'image %1$d…</string>
     <string name="flip_noise_title">Bruit de l\'image %1$d</string>
     <string name="flip_noise_help">Le bruit change l\'image pour les modèles d\'IA, à peine pour les gens. Chaque changement refait le bruit de l\'image.</string>
     <string name="flip_noise_mirror">Miroir</string>
