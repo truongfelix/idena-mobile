@@ -70,7 +70,22 @@ data class FlipDraft(
     val edits: List<FrameEdit> = List(FLIP_FRAMES) { FrameEdit() },
     /** The anti-AI frame's place holds an own picture instead (B-163): the flip has four own pictures. */
     val ownPicture: Boolean = false,
+    /**
+     * The noise effects each frame was protected with (B-215), by the frame's [frameTag]: they move with their frame
+     * and count only for it.
+     */
+    val noise: Map<String, NoiseEffects> = emptyMap(),
 ) {
+    /** The noise effects frame [slot] was protected with, or null when it has none (a new or changed picture). */
+    fun noiseOf(slot: Int): NoiseEffects? = frames.getOrNull(slot)?.let { noise[frameTag(it)] }
+
+    /** This draft with frame [slot] protected with [effects]; the effects of frames no longer there are dropped. */
+    fun withNoise(slot: Int, effects: NoiseEffects): FlipDraft {
+        val frame = frames.getOrNull(slot) ?: return this
+        val tags = frames.mapNotNull { it?.let(::frameTag) }.toSet()
+        return copy(noise = noise.filterKeys { it in tags } + (frameTag(frame) to effects.normalized()))
+    }
+
     /** Whether every story frame is chosen and the anti-AI frame is made. */
     val complete: Boolean
         get() = frames.all { it != null }

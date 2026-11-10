@@ -60,7 +60,7 @@ class FlipImageTest {
         val width = 24
         val height = 18
         val pixels = IntArray(width * height) { p -> color((p * 13) % 256, (p * 7) % 256, (p * 3) % 256) }
-        val out = protectFrame(pixels, width, height, Random(1))
+        val out = protectFrame(pixels, width, height, Random(1)).pixels
         assertEquals(pixels.size, out.size)
         val changed = pixels.indices.count { pixels[it] != out[it] }
         assertTrue("most pixels change (hue)", changed > pixels.size / 2)

@@ -51,6 +51,7 @@ class FlipDrafts(private val flipsDir: File) {
             originals = kept.map { it?.first },
             edits = kept.map { it?.second ?: FrameEdit() },
             ownPicture = json.optBoolean("ownPicture", false),
+            noise = loadNoise(json.optJSONObject("noise"), frames),
         )
     }.getOrNull()
 
@@ -73,6 +74,11 @@ class FlipDrafts(private val flipsDir: File) {
             )
         }
         json.put("pictures", pictures)
+        // A build of 0.4.0 or earlier ignores the noise, and rewrites draft.json without it.
+        val tags = draft.frames.mapNotNull { it?.let(::frameTag) }.toSet()
+        val noise = JSONObject()
+        draft.noise.filterKeys { it in tags }.forEach { (tag, effects) -> noise.put(tag, effects.toJson()) }
+        if (noise.length() > 0) json.put("noise", noise)
         File(dir, "draft.json").writeText(json.toString())
     }
 
@@ -128,6 +134,14 @@ class FlipDrafts(private val flipsDir: File) {
         }
         oldDir.deleteRecursively()
     }
+}
+
+/** The saved noise effects ([FlipDraft.noise]) of the frames there are, by their [frameTag]. */
+private fun loadNoise(json: JSONObject?, frames: List<ByteArray?>): Map<String, NoiseEffects> {
+    if (json == null) return emptyMap()
+    return frames.mapNotNull { it?.let(::frameTag) }.mapNotNull { tag ->
+        json.optJSONObject(tag)?.let { tag to NoiseEffects.fromJson(it) }
+    }.toMap()
 }
 
 /** A short mark of a frame's bytes: an original and its edit belong to the frame with this mark. */

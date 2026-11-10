@@ -7,8 +7,9 @@ import kotlin.random.Random
  * protectFlipImage and getAdversarialImage), on ARGB pixels so that it runs and is tested without
  * Android:
  * - every frame gets a noise that people do not notice but that changes it for a model: the frame,
- *   grey and blurred, is cut into regions (watershed); about a fifth of the pixels on the region borders
- *   take a color of the frame's own palette; the hue turns by 20 to 49 degrees; the frame may be mirrored;
+ *   grey and blurred, is cut into regions (watershed); 20 to 30 % of the pixels on the region borders
+ *   take a color of the frame's own palette; the hue turns by 20 to 60 degrees; the frame may be mirrored (B-215:
+ *   each effect can be set per picture, see [NoiseEffects]);
  * - the nonsense ("adversarial") frame is a collage of four pictures along the regions of one of them.
  * The desktop's watershed comes from an obfuscated library; this one is the textbook algorithm (Vincent and
  * Soille 1991, as simplified by Roerdink and Meijster), 4-connected, on 256 grey levels.
@@ -233,25 +234,47 @@ fun mirrored(pixels: IntArray, width: Int): IntArray = IntArray(pixels.size) { i
     pixels[i - x + (width - 1 - x)]
 }
 
-/** The share of the border pixels that take a palette color (desktop: 20 %). */
-const val NOISE_SHARE = 0.2
-
 /**
- * [pixels] ([width] x [height]) with the anti-AI noise (desktop protectFlipImage): a fifth of the region
- * border pixels of the grey, blurred frame recolored from its palette (not its main color when it has
- * several), the hue turned by 20 to 49 degrees, mirrored left to right one time in two.
+ * The grain of the noise: [share] (0 to 1) of the region border pixels of the grey, blurred frame recolored from
+ * its palette (not its main color when it has several). One draw of [random] per pixel, border or not, as the noise
+ * always drew them.
  */
-fun protectFrame(pixels: IntArray, width: Int, height: Int, random: Random = Random.Default): IntArray {
+private fun grained(pixels: IntArray, width: Int, height: Int, share: Double, random: Random): IntArray {
     val labels = watershed(blurLevels(grayLevels(pixels), width, height, 2), width, height)
     val colors = palette(pixels)
     val out = pixels.copyOf()
     for (p in out.indices) {
-        if (colors.isEmpty() || random.nextDouble() >= NOISE_SHARE || !isBorder(labels, width, p)) continue
+        if (colors.isEmpty() || random.nextDouble() >= share || !isBorder(labels, width, p)) continue
         out[p] = if (colors.size == 1) colors[0] else colors[1 + random.nextInt(colors.size - 1)]
     }
-    val degrees = (20 + random.nextInt(30)).toFloat()
-    for (p in out.indices) out[p] = turnHue(out[p], degrees)
-    return if (random.nextBoolean()) mirrored(out, width) else out
+    return out
+}
+
+/** The grained pixels [out] with the hue turned by [degrees], maybe mirrored. */
+private fun finished(out: IntArray, width: Int, degrees: Int, mirror: Boolean): IntArray {
+    if (degrees != 0) for (p in out.indices) out[p] = turnHue(out[p], degrees.toFloat())
+    return if (mirror) mirrored(out, width) else out
+}
+
+/**
+ * [pixels] ([width] x [height]) with the automatic anti-AI noise (desktop protectFlipImage, owner 2026-11-10): 20 to
+ * 30 % of the region border pixels recolored from its palette, the hue turned by 20 to 60 degrees, mirrored left to
+ * right one time in two ([NoiseEffects.random]); with the effects it drew, for the controls (B-215).
+ */
+fun protectFrame(pixels: IntArray, width: Int, height: Int, random: Random = Random.Default): ProtectedPixels {
+    val effects = NoiseEffects.random(random)
+    return ProtectedPixels(protectFrame(pixels, width, height, effects, random), effects)
+}
+
+/**
+ * [pixels] ([width] x [height]) with the anti-AI noise of [effects] (B-215): [NoiseEffects.grain] % of the region
+ * border pixels recolored (at random, by [random]), the hue turned, the mirror: the builds before
+ * B-215 made the same pixels with a grain of 20 and their colour shift and mirror.
+ */
+fun protectFrame(pixels: IntArray, width: Int, height: Int, effects: NoiseEffects, random: Random = Random.Default): IntArray {
+    val e = effects.normalized()
+    val out = grained(pixels, width, height, e.grain / 100.0, random)
+    return finished(out, width, e.hue, e.mirror)
 }
 
 /**

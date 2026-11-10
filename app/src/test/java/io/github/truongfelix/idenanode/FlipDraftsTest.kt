@@ -164,4 +164,38 @@ class FlipDraftsTest {
         drafts.save(draft.copy(frames = draft.frames.toMutableList().also { it[0] = null }, originals = draft.originals.toMutableList().also { it[0] = null }))
         assertFalse("no original left without its frame", File(folder.root, "drafts/${draftKey(a.words)}/original0.jpg").exists())
     }
+
+    @Test
+    fun eachPictureKeepsItsNoiseWhileItStaysThere() {
+        val drafts = FlipDrafts(folder.root)
+        val e0 = NoiseEffects(mirror = true, grain = 25, hue = 33)
+        val e1 = NoiseEffects(mirror = false, grain = 40, hue = 60)
+        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "a"), 1, "b").withNoise(0, e0).withNoise(1, e1)
+        drafts.save(draft)
+        val back = drafts.load(a)!!
+        assertEquals(e0, back.noiseOf(0))
+        assertEquals(e1, back.noiseOf(1))
+        assertNull("no picture, no noise", back.noiseOf(2))
+        // The noise moves with its picture.
+        val swapped = back.copy(frames = listOf(back.frames[1], back.frames[0], null, null))
+        assertEquals(e1, swapped.noiseOf(0))
+        assertEquals(e0, swapped.noiseOf(1))
+        // Another picture in the frame: the automatic noise again.
+        val changed = withFrame(back, 0, "c")
+        assertNull(changed.noiseOf(0))
+        drafts.save(changed.withNoise(1, e1))
+        val json = org.json.JSONObject(File(folder.root, "drafts/${draftKey(a.words)}/draft.json").readText())
+        assertEquals("only the noise of pictures still there is kept", 1, json.getJSONObject("noise").length())
+    }
+
+    @Test
+    fun aNoiseLeftByAnOlderBuildOverAnotherPictureIsDropped() {
+        val drafts = FlipDrafts(folder.root)
+        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a").withNoise(0, NoiseEffects(grain = 31)))
+        // A build of 0.4.0 put another picture in the frame; it rewrites draft.json without the noise, or keeps it.
+        File(folder.root, "drafts/${draftKey(a.words)}/frame0.jpg").writeBytes("other".toByteArray())
+        assertNull(drafts.load(a)!!.noiseOf(0))
+        File(folder.root, "drafts/${draftKey(a.words)}/draft.json").writeText("""{"adversarial":3,"sources":0}""")
+        assertEquals(emptyMap<String, NoiseEffects>(), drafts.load(a)!!.noise)
+    }
 }
