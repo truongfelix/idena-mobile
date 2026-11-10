@@ -122,6 +122,7 @@
     <string name="flip_protecting">Protection des images contre l\'IA…</string>
     <string name="flip_picture_unreadable">une image est illisible</string>
     <string name="flip_prepare_failed">Les images n\'ont pas pu être préparées : %1$s</string>
+    <string name="flip_pictures_changed">Une image a changé pendant leur protection : touchez Suivant à nouveau.</string>
     <string name="flip_sending">Envoi du flip au nœud…</string>
     <string name="flip_too_large">le flip est trop volumineux</string>
     <string name="flip_submitted">Flip envoyé (%1$s…). Le nœud le garde sur IPFS et l\'envoie lors de la validation.</string>
@@ -191,6 +192,13 @@
     <string name="flip_shuffle_help">À gauche : l\'histoire. À droite : les mêmes images dans un ordre qui la casse. Lors de la validation, les gens voient les deux et choisissent celle qui a du sens. Déplacez une image à droite avec ▲ ▼, ou touchez Mélanger. Touchez une image pour la voir en plein écran.</string>
     <string name="flip_shuffle_more">Le côté droit raconte encore l\'histoire : changez son ordre.</string>
     <string name="flip_shuffle">Mélanger</string>
+    <string name="flip_noise_open">Bruit de l\'image %1$d…</string>
+    <string name="flip_noise_title">Bruit de l\'image %1$d</string>
+    <string name="flip_noise_help">Le bruit change l\'image pour les modèles d\'IA, à peine pour les gens. Chaque changement refait le bruit de l\'image.</string>
+    <string name="flip_noise_mirror">Miroir</string>
+    <string name="flip_noise_grain">Grain : %1$d %%</string>
+    <string name="flip_noise_hue">Décalage des couleurs : %1$d°</string>
+    <string name="flip_noise_regenerate">Régénérer</string>
     <string name="flip_submit_info">Le nœud chiffre le flip, le garde sur IPFS et le publie avec une transaction signée par votre identité. Un flip n\'a pas de frais.</string>
     <string name="flip_keep_running">Laissez le nœud tourner jusqu\'à la validation : c\'est alors qu\'il distribue les clés de vos flips.</string>
     <string name="flip_accepted_until">Les flips sont acceptés jusqu\'au %1$s.</string>

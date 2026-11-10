@@ -70,7 +70,30 @@ data class FlipDraft(
     val edits: List<FrameEdit> = List(FLIP_FRAMES) { FrameEdit() },
     /** The anti-AI frame's place holds an own picture instead (B-163): the flip has four own pictures. */
     val ownPicture: Boolean = false,
+    /**
+     * The noise effects each frame was protected with (B-215), with the [frameTag] of the frame they were for: they
+     * count only while the slot holds that frame (two slots with the same picture keep their own).
+     */
+    val noise: List<SlotNoise?> = List(FLIP_FRAMES) { null },
 ) {
+    /** What frame [slot] was protected with, or null when it has none (a new or changed picture). */
+    fun slotNoise(slot: Int): SlotNoise? {
+        val frame = frames.getOrNull(slot) ?: return null
+        return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }
+    }
+
+    /** The noise effects frame [slot] was protected with ([slotNoise]). */
+    fun noiseOf(slot: Int): NoiseEffects? = slotNoise(slot)?.effects
+
+    /** The seed frame [slot]'s grain was drawn with ([slotNoise]). */
+    fun noiseSeedOf(slot: Int): Long? = slotNoise(slot)?.seed
+
+    /** This draft with frame [slot] protected with [effects], its grain drawn with [seed]. */
+    fun withNoise(slot: Int, effects: NoiseEffects, seed: Long): FlipDraft {
+        val frame = frames.getOrNull(slot) ?: return this
+        return copy(noise = noise.toMutableList().also { it[slot] = SlotNoise(frameTag(frame), effects.normalized(), seed) })
+    }
+
     /** Whether every story frame is chosen and the anti-AI frame is made. */
     val complete: Boolean
         get() = frames.all { it != null }
@@ -99,6 +122,12 @@ data class FlipDraft(
         edits = edits.toMutableList().also { it[slot] = edit },
     )
 }
+
+/**
+ * The noise effects a slot's frame was protected with, the seed of its grain (the noise window starts from it, so the
+ * grain stays put while only a value changes), and that frame's [frameTag].
+ */
+data class SlotNoise(val frame: String, val effects: NoiseEffects, val seed: Long?)
 
 /** The longer side of a picture kept as a frame's original. */
 const val ORIGINAL_MAX_SIDE = 1280

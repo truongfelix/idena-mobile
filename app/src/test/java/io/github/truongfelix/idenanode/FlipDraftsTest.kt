@@ -164,4 +164,71 @@ class FlipDraftsTest {
         drafts.save(draft.copy(frames = draft.frames.toMutableList().also { it[0] = null }, originals = draft.originals.toMutableList().also { it[0] = null }))
         assertFalse("no original left without its frame", File(folder.root, "drafts/${draftKey(a.words)}/original0.jpg").exists())
     }
+
+    @Test
+    fun eachPictureKeepsItsNoiseWhileItStaysThere() {
+        val drafts = FlipDrafts(folder.root)
+        val e0 = NoiseEffects(mirror = true, grain = 25, hue = 33)
+        val e1 = NoiseEffects(mirror = false, grain = 40, hue = 60)
+        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "a"), 1, "b").withNoise(0, e0, Long.MIN_VALUE).withNoise(1, e1, 1234567890123456789L)
+        drafts.save(draft)
+        val back = drafts.load(a)!!
+        assertEquals(e0, back.noiseOf(0))
+        assertEquals(e1, back.noiseOf(1))
+        assertEquals("the seed kept exactly", Long.MIN_VALUE, back.noiseSeedOf(0))
+        assertEquals(1234567890123456789L, back.noiseSeedOf(1))
+        assertNull("no picture, no noise", back.noiseOf(2))
+        // The noise moves with its picture (as moveFrame swaps them).
+        val swapped = back.copy(frames = listOf(back.frames[1], back.frames[0], null, null), noise = listOf(back.noise[1], back.noise[0], null, null))
+        assertEquals(e1, swapped.noiseOf(0))
+        assertEquals(e0, swapped.noiseOf(1))
+        // Another picture in the frame: the automatic noise again.
+        val changed = withFrame(back, 0, "c")
+        assertNull(changed.noiseOf(0))
+        drafts.save(changed)
+        val json = org.json.JSONObject(File(folder.root, "drafts/${draftKey(a.words)}/draft.json").readText())
+        assertTrue("the changed picture's noise is not kept", json.getJSONArray("noise").isNull(0))
+        assertEquals(e1, drafts.load(a)!!.noiseOf(1))
+    }
+
+    @Test
+    fun twoSlotsWithTheSamePictureKeepTheirOwnNoise() {
+        val drafts = FlipDrafts(folder.root)
+        val e0 = NoiseEffects(mirror = true, grain = 22, hue = 41)
+        val e1 = NoiseEffects(mirror = false, grain = 29, hue = 57)
+        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "same"), 1, "same").withNoise(0, e0, 1L).withNoise(1, e1, 2L)
+        assertEquals(e0, draft.noiseOf(0))
+        assertEquals(e1, draft.noiseOf(1))
+        drafts.save(draft)
+        val back = drafts.load(a)!!
+        assertEquals(e0, back.noiseOf(0))
+        assertEquals(e1, back.noiseOf(1))
+    }
+
+    @Test
+    fun aNoiseLeftByAnOlderBuildOverAnotherPictureIsDropped() {
+        val drafts = FlipDrafts(folder.root)
+        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a").withNoise(0, NoiseEffects(grain = 31), 5L))
+        // A build of 0.4.0 put another picture in the frame; it rewrites draft.json without the noise, or keeps it.
+        File(folder.root, "drafts/${draftKey(a.words)}/frame0.jpg").writeBytes("other".toByteArray())
+        assertNull(drafts.load(a)!!.noiseOf(0))
+        File(folder.root, "drafts/${draftKey(a.words)}/draft.json").writeText("""{"adversarial":3,"sources":0}""")
+        assertEquals(List<SlotNoise?>(FLIP_FRAMES) { null }, drafts.load(a)!!.noise)
+    }
+
+    @Test
+    fun aNoiseSavedWithoutItsSeedKeepsItsValues() {
+        val drafts = FlipDrafts(folder.root)
+        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a"))
+        // 0.4.1-beta.1 and beta.2 saved the values without the grain's seed.
+        val file = File(folder.root, "drafts/${draftKey(a.words)}/draft.json")
+        val json = org.json.JSONObject(file.readText())
+        val e = NoiseEffects(mirror = true, grain = 27, hue = 44)
+        json.put("noise", org.json.JSONArray().put(org.json.JSONObject().put("frame", frameTag("a".toByteArray())).put("effects", e.toJson())))
+        file.writeText(json.toString())
+        val back = drafts.load(a)!!
+        assertEquals(e, back.noiseOf(0))
+        assertNull("no seed: a new one at the next protection", back.noiseSeedOf(0))
+        assertNull(back.noiseOf(1))
+    }
 }

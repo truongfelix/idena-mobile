@@ -120,6 +120,7 @@
     <string name="flip_protecting">Protecting the pictures against AI…</string>
     <string name="flip_picture_unreadable">a picture cannot be read</string>
     <string name="flip_prepare_failed">The pictures could not be prepared: %1$s</string>
+    <string name="flip_pictures_changed">A picture changed while they were protected: tap Next again.</string>
     <string name="flip_sending">Sending the flip to the node…</string>
     <string name="flip_too_large">the flip is too large</string>
     <string name="flip_submitted">Flip submitted (%1$s…). The node keeps it on IPFS and sends it at the validation.</string>
@@ -188,6 +189,13 @@
     <string name="flip_shuffle_help">Left: the story. Right: the same pictures in an order that breaks it. At the validation, people see both and pick the one that makes sense. Move a picture on the right with ▲ ▼, or tap Shuffle. Tap a picture to see it full size.</string>
     <string name="flip_shuffle_more">The right side still tells the story: change its order.</string>
     <string name="flip_shuffle">Shuffle</string>
+    <string name="flip_noise_open">Noise of picture %1$d…</string>
+    <string name="flip_noise_title">Noise of picture %1$d</string>
+    <string name="flip_noise_help">The noise changes the picture for AI models, hardly for people. Each change makes the picture\'s noise again.</string>
+    <string name="flip_noise_mirror">Mirror</string>
+    <string name="flip_noise_grain">Grain: %1$d%%</string>
+    <string name="flip_noise_hue">Color shift: %1$d°</string>
+    <string name="flip_noise_regenerate">Regenerate</string>
     <string name="flip_submit_info">The node encrypts the flip, keeps it on IPFS and publishes it with a transaction signed by your identity. A flip has no fee.</string>
     <string name="flip_keep_running">Keep the node running until the validation: it hands out the keys of your flips then.</string>
     <string name="flip_accepted_until">Flips are accepted until %1$s.</string>

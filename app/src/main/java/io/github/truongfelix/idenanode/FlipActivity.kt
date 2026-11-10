@@ -104,6 +104,25 @@ class FlipActivity : AppActivity() {
     }
 }
 
+/** What identifies [draft]'s pictures ([draftFingerprint]). */
+private fun fingerprintOf(draft: FlipDraft) = draftFingerprint(draft.frames, draft.antiAi ?: -1)
+
+/** A frame protected as sent, with the effects and the grain's seed it was made with. */
+private class MadeFrame(val bytes: ByteArray, val effects: NoiseEffects, val seed: Long)
+
+/**
+ * The frame [bytes] protected as sent ([flipFrameJpeg]): with [effects] when it has some, else the automatic noise's
+ * ([NoiseEffects.random]); the grain drawn with [seed] (the noise window's, so that it is the picture it showed), a new
+ * one when it has none.
+ */
+private fun protectedFrame(bytes: ByteArray, effects: NoiseEffects?, seed: Long?): MadeFrame {
+    val pixels = framePixels(bytes) ?: error(t(R.string.flip_picture_unreadable))
+    val secure = java.security.SecureRandom()
+    val e = (effects ?: NoiseEffects.random(kotlin.random.Random(secure.nextLong()))).normalized()
+    val s = seed ?: secure.nextLong()
+    return MadeFrame(flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, e, s)), e, s)
+}
+
 private enum class FlipStep(@StringRes val title: Int) {
     Words(R.string.flip_step_words), Frames(R.string.flip_step_pictures), Shuffle(R.string.flip_step_shuffle), Submit(R.string.flip_step_submit),
 }
@@ -148,6 +167,9 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
     var protected by remember { mutableStateOf<List<ByteArray>?>(null) }
     var protectedFor by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf<String?>(null) }
+    // A picture's noise being made again (B-215): its window stays open until it is done; and why it failed.
+    var noiseBusy by remember { mutableStateOf(false) }
+    var noiseError by remember { mutableStateOf<Pair<Int, String>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     // The flip sent last while the node does not count it yet ([SentFlip]); one send at a time.
     var sent by remember { mutableStateOf(FlipDraftStore.sent(context)) }
@@ -253,36 +275,58 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                 }, onNext = { step = FlipStep.Frames })
                 FlipStep.Frames -> FramesStep(current, words, ::update, onNext = {
                     working = t(R.string.flip_protecting)
-                    val fingerprint = draftFingerprint(current.frames, current.antiAi ?: -1)
+                    val fingerprint = fingerprintOf(current)
+                    noiseError = null
                     scope.launch {
                         protectedFor = null
-                        protected = withContext(Dispatchers.Default) {
+                        // Each picture with the noise it had (B-215), else the automatic noise, whose effects are kept.
+                        val made = withContext(Dispatchers.Default) {
                             runCatching {
-                                current.frames.map { bytes ->
-                                    val pixels = framePixels(bytes!!) ?: error(t(R.string.flip_picture_unreadable))
-                                    flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, kotlin.random.Random(java.security.SecureRandom().nextLong())))
-                                }
+                                current.frames.mapIndexed { i, bytes -> protectedFrame(bytes!!, current.noiseOf(i), current.noiseSeedOf(i)) }
                             }.onFailure { message = t(R.string.flip_prepare_failed, it.message.toString()) }.getOrNull()
                         }
                         working = null
-                        if (protected != null) {
+                        // Kept only for the pictures it was made from: one still being prepared at the tap may have
+                        // changed the draft since (its picture is then protected at the next Next).
+                        val now = draft
+                        if (made != null && (now == null || fingerprintOf(now) != fingerprint)) {
+                            message = t(R.string.flip_pictures_changed)
+                        } else if (made != null) {
+                            protected = made.map { it.bytes }
                             protectedFor = fingerprint
+                            var next = made.foldIndexed(now!!) { i, d, m -> d.withNoise(i, m.effects, m.seed) }
                             // The shuffle starts from the story order, as on the desktop (B-205).
-                            if (current.shuffled == null || current.shuffled.sorted() != STORY_ORDER) {
-                                update(current.copy(shuffled = STORY_ORDER))
-                            }
+                            if (next.shuffled == null || next.shuffled!!.sorted() != STORY_ORDER) next = next.copy(shuffled = STORY_ORDER)
+                            if (next != now) update(next)
                             step = FlipStep.Shuffle
                         }
                     }
                 })
                 FlipStep.Shuffle, FlipStep.Submit -> {
                     // Pictures changed since they were protected (or never protected): back to the pictures.
-                    if (protected == null || protectedFor != draftFingerprint(current.frames, current.antiAi ?: -1)) {
+                    if (protected == null || protectedFor != fingerprintOf(current)) {
                         LaunchedEffect(Unit) { step = FlipStep.Frames }
                         return@Box
                     }
                     if (step == FlipStep.Shuffle) {
-                        ShuffleStep(current, protected.orEmpty(), ::update, onNext = { step = FlipStep.Submit })
+                        ShuffleStep(current, protected.orEmpty(), ::update, noiseBusy, noiseError, onNoise = { slot, effects, seed ->
+                            val bytes = current.frames[slot] ?: return@ShuffleStep
+                            if (noiseBusy) return@ShuffleStep
+                            noiseBusy = true
+                            noiseError = null
+                            scope.launch {
+                                val made = withContext(Dispatchers.Default) { runCatching { protectedFrame(bytes, effects, seed) } }
+                                made.onSuccess { m ->
+                                    // Kept only while the pictures are still those protected.
+                                    val now = draft ?: return@onSuccess
+                                    if (now.frames[slot]?.contentEquals(bytes) == true && protectedFor == fingerprintOf(now)) {
+                                        protected = protected?.toMutableList()?.also { it[slot] = m.bytes }
+                                        update(now.withNoise(slot, m.effects, m.seed))
+                                    }
+                                }.onFailure { noiseError = slot to t(R.string.flip_prepare_failed, it.message.toString()) }
+                                noiseBusy = false
+                            }
+                        }, onNoiseClosed = { noiseError = null }, onNext = { step = FlipStep.Submit })
                         return@Box
                     }
                     SubmitStep(current, words, protected.orEmpty(), nodeState.deadline, enabled = !sending && sent == null && nodeState.synced) {
@@ -661,7 +705,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     viewing?.let { FrameViewer(it) { viewing = null } }
 }
 
-/** [draft] with the frame at [slot] moved one place by [by] (the anti-AI mark, the originals and edits move with it). */
+/** [draft] with the frame at [slot] moved one place by [by] (the anti-AI mark, the originals, edits and noise move with it). */
 private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
     val to = slot + by
     if (to !in 0 until FLIP_FRAMES) return draft
@@ -675,6 +719,7 @@ private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
         frames = swapped(draft.frames),
         originals = swapped(draft.originals),
         edits = swapped(draft.edits),
+        noise = swapped(draft.noise),
         adversarial = adversarial,
         shuffled = null,
     )
@@ -763,9 +808,20 @@ private fun SearchPanel(words: List<Keyword>, canUseForAntiAi: Boolean, onPick: 
  * of the shuffled order one place, Shuffle mixes all four, Reset goes back to the story. A tap opens a frame full size.
  */
 @Composable
-private fun ShuffleStep(draft: FlipDraft, frames: List<ByteArray>, update: (FlipDraft) -> Unit, onNext: () -> Unit) {
+private fun ShuffleStep(
+    draft: FlipDraft,
+    frames: List<ByteArray>,
+    update: (FlipDraft) -> Unit,
+    noiseBusy: Boolean,
+    noiseError: Pair<Int, String>?,
+    onNoise: (Int, NoiseEffects, Long) -> Unit,
+    onNoiseClosed: () -> Unit,
+    onNext: () -> Unit,
+) {
     val shuffled = draft.shuffled ?: return
     var viewing by remember { mutableStateOf<ByteArray?>(null) }
+    // The story picture whose noise is shown (B-215).
+    var noiseOf by remember { mutableStateOf<Int?>(null) }
     val valid = isValidShuffle(shuffled, draft.antiAi)
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -789,6 +845,8 @@ private fun ShuffleStep(draft: FlipDraft, frames: List<ByteArray>, update: (Flip
                     TextButton(onClick = { update(draft.copy(shuffled = movedInOrder(shuffled, i, 1))) }, enabled = i < FLIP_FRAMES - 1) { Text("▼") }
                 }
             }
+            // On a line of its own, so that both columns stay level (owner 2026-11-10).
+            TextButton(onClick = { noiseOf = i }) { Text(t(R.string.flip_noise_open, i + 1)) }
         }
         if (!valid) Text(t(R.string.flip_shuffle_more), color = MaterialTheme.colorScheme.error)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -798,6 +856,22 @@ private fun ShuffleStep(draft: FlipDraft, frames: List<ByteArray>, update: (Flip
         }
     }
     viewing?.let { FrameViewer(it) { viewing = null } }
+    noiseOf?.let { slot ->
+        NoiseEditor(
+            slot + 1,
+            draft.frames.getOrNull(slot),
+            frames.getOrNull(slot),
+            draft.noiseOf(slot) ?: NoiseEffects(),
+            draft.noiseSeedOf(slot),
+            noiseBusy,
+            noiseError?.takeIf { it.first == slot }?.second,
+            onChange = { effects, seed -> onNoise(slot, effects, seed) },
+            onClose = {
+                noiseOf = null
+                onNoiseClosed()
+            },
+        )
+    }
 }
 
 @Composable
