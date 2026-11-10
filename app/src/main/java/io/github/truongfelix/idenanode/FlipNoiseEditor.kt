@@ -39,19 +39,29 @@ import androidx.compose.ui.window.DialogProperties
 
 /**
  * Picture [number]'s noise: [frame] the protected picture, [effects] its values; [onChange] makes the noise again
- * with new values; [busy] while it does. Close or back closes it, the last values kept.
+ * with new values; [busy] while it does, and the window cannot be closed then (the flip is never sent or protected
+ * again with a picture on its way); [error] why the last change failed. Close or back closes it, the last values kept.
  */
 @Composable
-fun NoiseEditor(number: Int, frame: ByteArray?, effects: NoiseEffects, busy: Boolean, onChange: (NoiseEffects) -> Unit, onClose: () -> Unit) {
+fun NoiseEditor(
+    number: Int,
+    frame: ByteArray?,
+    effects: NoiseEffects,
+    busy: Boolean,
+    error: String?,
+    onChange: (NoiseEffects) -> Unit,
+    onClose: () -> Unit,
+) {
     // The sliders' values while dragged; back to the picture's once its noise is made (or failed).
     var shown by remember { mutableStateOf(effects.normalized()) }
     LaunchedEffect(effects, busy) { if (!busy) shown = effects.normalized() }
-    fun commit(next: NoiseEffects) {
+    // [force]: made again even with the same values (Regenerate draws a new grain too).
+    fun commit(next: NoiseEffects, force: Boolean = false) {
         val n = next.normalized()
         shown = n
-        if (n != effects.normalized()) onChange(n)
+        if (force || n != effects.normalized()) onChange(n)
     }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = { if (!busy) onClose() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
             Column(
                 Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -62,6 +72,7 @@ fun NoiseEditor(number: Int, frame: ByteArray?, effects: NoiseEffects, busy: Boo
                     FrameImage(frame, Modifier.fillMaxWidth())
                     if (busy) CircularProgressIndicator()
                 }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Text(t(R.string.flip_noise_help), style = MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(t(R.string.flip_noise_mirror), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
@@ -72,10 +83,10 @@ fun NoiseEditor(number: Int, frame: ByteArray?, effects: NoiseEffects, busy: Boo
                 NoiseSlider(t(R.string.flip_noise_hue, shown.hue), shown.hue, MIN_NOISE_HUE..MAX_NOISE_HUE, busy,
                     onMove = { shown = shown.copy(hue = it) }, onDone = { commit(shown) })
                 // One action per line: French labels are cut side by side (L-65).
-                OutlinedButton(onClick = { commit(NoiseEffects.random()) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { commit(NoiseEffects.random(), force = true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text(t(R.string.flip_noise_regenerate))
                 }
-                Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(t(R.string.common_close)) }
+                Button(onClick = onClose, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(t(R.string.common_close)) }
             }
         }
     }

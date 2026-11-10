@@ -71,19 +71,21 @@ data class FlipDraft(
     /** The anti-AI frame's place holds an own picture instead (B-163): the flip has four own pictures. */
     val ownPicture: Boolean = false,
     /**
-     * The noise effects each frame was protected with (B-215), by the frame's [frameTag]: they move with their frame
-     * and count only for it.
+     * The noise effects each frame was protected with (B-215), with the [frameTag] of the frame they were for: they
+     * count only while the slot holds that frame (two slots with the same picture keep their own).
      */
-    val noise: Map<String, NoiseEffects> = emptyMap(),
+    val noise: List<SlotNoise?> = List(FLIP_FRAMES) { null },
 ) {
     /** The noise effects frame [slot] was protected with, or null when it has none (a new or changed picture). */
-    fun noiseOf(slot: Int): NoiseEffects? = frames.getOrNull(slot)?.let { noise[frameTag(it)] }
+    fun noiseOf(slot: Int): NoiseEffects? {
+        val frame = frames.getOrNull(slot) ?: return null
+        return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }?.effects
+    }
 
-    /** This draft with frame [slot] protected with [effects]; the effects of frames no longer there are dropped. */
+    /** This draft with frame [slot] protected with [effects]. */
     fun withNoise(slot: Int, effects: NoiseEffects): FlipDraft {
         val frame = frames.getOrNull(slot) ?: return this
-        val tags = frames.mapNotNull { it?.let(::frameTag) }.toSet()
-        return copy(noise = noise.filterKeys { it in tags } + (frameTag(frame) to effects.normalized()))
+        return copy(noise = noise.toMutableList().also { it[slot] = SlotNoise(frameTag(frame), effects.normalized()) })
     }
 
     /** Whether every story frame is chosen and the anti-AI frame is made. */
@@ -114,6 +116,9 @@ data class FlipDraft(
         edits = edits.toMutableList().also { it[slot] = edit },
     )
 }
+
+/** The noise effects a slot's frame was protected with, and that frame's [frameTag]. */
+data class SlotNoise(val frame: String, val effects: NoiseEffects)
 
 /** The longer side of a picture kept as a frame's original. */
 const val ORIGINAL_MAX_SIDE = 1280

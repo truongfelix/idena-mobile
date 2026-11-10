@@ -163,8 +163,9 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
     var protected by remember { mutableStateOf<List<ByteArray>?>(null) }
     var protectedFor by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf<String?>(null) }
-    // A picture's noise being made again (B-215).
+    // A picture's noise being made again (B-215): its window stays open until it is done; and why it failed.
     var noiseBusy by remember { mutableStateOf(false) }
+    var noiseError by remember { mutableStateOf<Pair<Int, String>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     // The flip sent last while the node does not count it yet ([SentFlip]); one send at a time.
     var sent by remember { mutableStateOf(FlipDraftStore.sent(context)) }
@@ -270,7 +271,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                 }, onNext = { step = FlipStep.Frames })
                 FlipStep.Frames -> FramesStep(current, words, ::update, onNext = {
                     working = t(R.string.flip_protecting)
-                    val fingerprint = draftFingerprint(current.frames, current.antiAi ?: -1)
+                    val fingerprint = fingerprintOf(current)
                     scope.launch {
                         protectedFor = null
                         // Each picture with the noise it had (B-215), else the automatic noise, whose effects are kept.
@@ -293,14 +294,16 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                 })
                 FlipStep.Shuffle, FlipStep.Submit -> {
                     // Pictures changed since they were protected (or never protected): back to the pictures.
-                    if (protected == null || protectedFor != draftFingerprint(current.frames, current.antiAi ?: -1)) {
+                    if (protected == null || protectedFor != fingerprintOf(current)) {
                         LaunchedEffect(Unit) { step = FlipStep.Frames }
                         return@Box
                     }
                     if (step == FlipStep.Shuffle) {
-                        ShuffleStep(current, protected.orEmpty(), ::update, noiseBusy, onNoise = { slot, effects ->
+                        ShuffleStep(current, protected.orEmpty(), ::update, noiseBusy, noiseError, onNoise = { slot, effects ->
                             val bytes = current.frames[slot] ?: return@ShuffleStep
+                            if (noiseBusy) return@ShuffleStep
                             noiseBusy = true
+                            noiseError = null
                             scope.launch {
                                 val made = withContext(Dispatchers.Default) { runCatching { protectedFrame(bytes, effects) } }
                                 made.onSuccess { (frame, used) ->
@@ -310,7 +313,7 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                                         protected = protected?.toMutableList()?.also { it[slot] = frame }
                                         update(now.withNoise(slot, used))
                                     }
-                                }.onFailure { message = t(R.string.flip_prepare_failed, it.message.toString()) }
+                                }.onFailure { noiseError = slot to t(R.string.flip_prepare_failed, it.message.toString()) }
                                 noiseBusy = false
                             }
                         }, onNext = { step = FlipStep.Submit })
@@ -692,7 +695,7 @@ private fun FramesStep(draft: FlipDraft, words: List<Keyword>, update: (FlipDraf
     viewing?.let { FrameViewer(it) { viewing = null } }
 }
 
-/** [draft] with the frame at [slot] moved one place by [by] (the anti-AI mark, the originals and edits move with it). */
+/** [draft] with the frame at [slot] moved one place by [by] (the anti-AI mark, the originals, edits and noise move with it). */
 private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
     val to = slot + by
     if (to !in 0 until FLIP_FRAMES) return draft
@@ -706,6 +709,7 @@ private fun moveFrame(draft: FlipDraft, slot: Int, by: Int): FlipDraft {
         frames = swapped(draft.frames),
         originals = swapped(draft.originals),
         edits = swapped(draft.edits),
+        noise = swapped(draft.noise),
         adversarial = adversarial,
         shuffled = null,
     )
@@ -799,6 +803,7 @@ private fun ShuffleStep(
     frames: List<ByteArray>,
     update: (FlipDraft) -> Unit,
     noiseBusy: Boolean,
+    noiseError: Pair<Int, String>?,
     onNoise: (Int, NoiseEffects) -> Unit,
     onNext: () -> Unit,
 ) {
@@ -847,6 +852,7 @@ private fun ShuffleStep(
             frames.getOrNull(slot),
             draft.noiseOf(slot) ?: NoiseEffects(),
             noiseBusy,
+            noiseError?.takeIf { it.first == slot }?.second,
             onChange = { onNoise(slot, it) },
             onClose = { noiseOf = null },
         )
