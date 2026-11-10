@@ -47,9 +47,9 @@ import kotlin.random.Random
 
 /**
  * Picture [number]'s noise: [source] the picture before its noise, [frame] the protected picture, [effects] its
- * values. While a slider is held, the preview is drawn from [source] ([NoiseBase], cut once) with the window's seed,
- * as the frame is sent; [onChange] makes the picture's noise again with the new values and that seed (the same
- * bytes), and the window shows [frame] again once it is done, or failed; [busy]
+ * values. While a slider is held (and during the remake of those values), the preview is drawn from [source] ([NoiseBase], cut once) with the window's
+ * seed, as the frame is sent; otherwise the window shows [frame]. [onChange] makes the picture's noise again with the
+ * new values and that seed (the bytes the preview showed); [busy]
  * while it does, and the window cannot be closed then (the flip is never sent or protected
  * again with a picture on its way); [error] why the last change failed. Close or back closes it, the last values kept.
  */
@@ -69,10 +69,10 @@ fun NoiseEditor(
         value = source?.let { bytes -> withContext(Dispatchers.Default) { framePixels(bytes)?.let { NoiseBase(it, WORK_WIDTH, WORK_HEIGHT) } } }
     }
     var seed by remember { mutableLongStateOf(SecureRandom().nextLong()) }
-    // The preview, made as a frame is sent ([flipFrameJpeg]), shows only while a slider is held or the picture is made
-    // again; the rest of the time the window shows the protected picture itself, the one that is sent.
+    // The preview, made as a frame is sent ([flipFrameJpeg]) for the values and seed it holds, shows while a slider is
+    // held, and during the remake of exactly those values; otherwise the window shows the protected picture itself.
     var dragging by remember { mutableStateOf(false) }
-    var preview by remember { mutableStateOf<ByteArray?>(null) }
+    var preview by remember { mutableStateOf<Preview?>(null) }
     // The sliders' values while dragged; back to the picture's once its noise is made (or failed).
     var shown by remember { mutableStateOf(effects.normalized()) }
     LaunchedEffect(effects, busy) { if (!busy) shown = effects.normalized() }
@@ -80,8 +80,8 @@ fun NoiseEditor(
     // drawn as one.
     LaunchedEffect(base) {
         val b = base ?: return@LaunchedEffect
-        snapshotFlow { shown to seed }.conflate().collect { (e, s) ->
-            preview = withContext(Dispatchers.Default) { flipFrameJpeg(b.protect(e, Random(s))) }
+        snapshotFlow { Triple(shown, seed, dragging) }.conflate().collect { (e, s, held) ->
+            if (held) preview = Preview(withContext(Dispatchers.Default) { flipFrameJpeg(b.protect(e, Random(s))) }, e, s)
         }
     }
     // [force]: made again even with the same values (Regenerate draws a new grain too).
@@ -99,7 +99,8 @@ fun NoiseEditor(
             ) {
                 Text(t(R.string.flip_noise_title, number), style = MaterialTheme.typography.titleMedium)
                 Box(contentAlignment = Alignment.Center) {
-                    FrameImage(preview?.takeIf { dragging || busy } ?: frame, Modifier.fillMaxWidth())
+                    val p = preview?.takeIf { it.effects == shown && it.seed == seed && (dragging || busy) }
+                    FrameImage(p?.bytes ?: frame, Modifier.fillMaxWidth())
                     if (busy) CircularProgressIndicator()
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -124,6 +125,9 @@ fun NoiseEditor(
         }
     }
 }
+
+/** A preview's picture (as sent) and the values and seed it was drawn with. */
+private class Preview(val bytes: ByteArray, val effects: NoiseEffects, val seed: Long)
 
 @Composable
 private fun NoiseSlider(label: String, value: Int, range: IntRange, busy: Boolean, onMove: (Int) -> Unit, onDone: () -> Unit) {
