@@ -170,11 +170,13 @@ class FlipDraftsTest {
         val drafts = FlipDrafts(folder.root)
         val e0 = NoiseEffects(mirror = true, grain = 25, hue = 33)
         val e1 = NoiseEffects(mirror = false, grain = 40, hue = 60)
-        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "a"), 1, "b").withNoise(0, e0).withNoise(1, e1)
+        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "a"), 1, "b").withNoise(0, e0, Long.MIN_VALUE).withNoise(1, e1, 1234567890123456789L)
         drafts.save(draft)
         val back = drafts.load(a)!!
         assertEquals(e0, back.noiseOf(0))
         assertEquals(e1, back.noiseOf(1))
+        assertEquals("the seed kept exactly", Long.MIN_VALUE, back.noiseSeedOf(0))
+        assertEquals(1234567890123456789L, back.noiseSeedOf(1))
         assertNull("no picture, no noise", back.noiseOf(2))
         // The noise moves with its picture (as moveFrame swaps them).
         val swapped = back.copy(frames = listOf(back.frames[1], back.frames[0], null, null), noise = listOf(back.noise[1], back.noise[0], null, null))
@@ -194,7 +196,7 @@ class FlipDraftsTest {
         val drafts = FlipDrafts(folder.root)
         val e0 = NoiseEffects(mirror = true, grain = 22, hue = 41)
         val e1 = NoiseEffects(mirror = false, grain = 29, hue = 57)
-        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "same"), 1, "same").withNoise(0, e0).withNoise(1, e1)
+        val draft = withFrame(withFrame(drafts.open(listOf(a))!!, 0, "same"), 1, "same").withNoise(0, e0, 1L).withNoise(1, e1, 2L)
         assertEquals(e0, draft.noiseOf(0))
         assertEquals(e1, draft.noiseOf(1))
         drafts.save(draft)
@@ -206,7 +208,7 @@ class FlipDraftsTest {
     @Test
     fun aNoiseLeftByAnOlderBuildOverAnotherPictureIsDropped() {
         val drafts = FlipDrafts(folder.root)
-        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a").withNoise(0, NoiseEffects(grain = 31)))
+        drafts.save(withFrame(drafts.open(listOf(a))!!, 0, "a").withNoise(0, NoiseEffects(grain = 31), 5L))
         // A build of 0.4.0 put another picture in the frame; it rewrites draft.json without the noise, or keeps it.
         File(folder.root, "drafts/${draftKey(a.words)}/frame0.jpg").writeBytes("other".toByteArray())
         assertNull(drafts.load(a)!!.noiseOf(0))

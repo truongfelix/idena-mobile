@@ -107,16 +107,20 @@ class FlipActivity : AppActivity() {
 /** What identifies [draft]'s pictures ([draftFingerprint]). */
 private fun fingerprintOf(draft: FlipDraft) = draftFingerprint(draft.frames, draft.antiAi ?: -1)
 
+/** A frame protected as sent, with the effects and the grain's seed it was made with. */
+private class MadeFrame(val bytes: ByteArray, val effects: NoiseEffects, val seed: Long)
+
 /**
- * The frame [bytes] protected as sent ([flipFrameJpeg]): with [effects] when it has some, else with the automatic
- * noise; with the effects used. [seed] draws the grain (the noise window's, so that it is the picture it showed).
+ * The frame [bytes] protected as sent ([flipFrameJpeg]): with [effects] when it has some, else the automatic noise's
+ * ([NoiseEffects.random]); the grain drawn with [seed] (the noise window's, so that it is the picture it showed), a new
+ * one when it has none.
  */
-private fun protectedFrame(bytes: ByteArray, effects: NoiseEffects?, seed: Long = java.security.SecureRandom().nextLong()): Pair<ByteArray, NoiseEffects> {
+private fun protectedFrame(bytes: ByteArray, effects: NoiseEffects?, seed: Long?): MadeFrame {
     val pixels = framePixels(bytes) ?: error(t(R.string.flip_picture_unreadable))
-    val random = kotlin.random.Random(seed)
-    if (effects != null) return flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, effects, random)) to effects.normalized()
-    val made = protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, random)
-    return flipFrameJpeg(made.pixels) to made.effects
+    val secure = java.security.SecureRandom()
+    val e = (effects ?: NoiseEffects.random(kotlin.random.Random(secure.nextLong()))).normalized()
+    val s = seed ?: secure.nextLong()
+    return MadeFrame(flipFrameJpeg(protectFrame(pixels, WORK_WIDTH, WORK_HEIGHT, e, kotlin.random.Random(s))), e, s)
 }
 
 private enum class FlipStep(@StringRes val title: Int) {
@@ -277,14 +281,14 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                         // Each picture with the noise it had (B-215), else the automatic noise, whose effects are kept.
                         val made = withContext(Dispatchers.Default) {
                             runCatching {
-                                current.frames.mapIndexed { i, bytes -> protectedFrame(bytes!!, current.noiseOf(i)) }
+                                current.frames.mapIndexed { i, bytes -> protectedFrame(bytes!!, current.noiseOf(i), current.noiseSeedOf(i)) }
                             }.onFailure { message = t(R.string.flip_prepare_failed, it.message.toString()) }.getOrNull()
                         }
-                        protected = made?.map { it.first }
+                        protected = made?.map { it.bytes }
                         working = null
                         if (made != null) {
                             protectedFor = fingerprint
-                            var next = made.foldIndexed(current) { i, d, (_, effects) -> d.withNoise(i, effects) }
+                            var next = made.foldIndexed(current) { i, d, m -> d.withNoise(i, m.effects, m.seed) }
                             // The shuffle starts from the story order, as on the desktop (B-205).
                             if (next.shuffled == null || next.shuffled!!.sorted() != STORY_ORDER) next = next.copy(shuffled = STORY_ORDER)
                             if (next != current) update(next)
@@ -306,12 +310,12 @@ private fun FlipScreen(onClose: () -> Unit, onSent: () -> Unit, modifier: Modifi
                             noiseError = null
                             scope.launch {
                                 val made = withContext(Dispatchers.Default) { runCatching { protectedFrame(bytes, effects, seed) } }
-                                made.onSuccess { (frame, used) ->
+                                made.onSuccess { m ->
                                     // Kept only while the pictures are still those protected.
                                     val now = draft ?: return@onSuccess
                                     if (now.frames[slot]?.contentEquals(bytes) == true && protectedFor == fingerprintOf(now)) {
-                                        protected = protected?.toMutableList()?.also { it[slot] = frame }
-                                        update(now.withNoise(slot, used))
+                                        protected = protected?.toMutableList()?.also { it[slot] = m.bytes }
+                                        update(now.withNoise(slot, m.effects, m.seed))
                                     }
                                 }.onFailure { noiseError = slot to t(R.string.flip_prepare_failed, it.message.toString()) }
                                 noiseBusy = false
@@ -851,6 +855,7 @@ private fun ShuffleStep(
             draft.frames.getOrNull(slot),
             frames.getOrNull(slot),
             draft.noiseOf(slot) ?: NoiseEffects(),
+            draft.noiseSeedOf(slot),
             noiseBusy,
             noiseError?.takeIf { it.first == slot }?.second,
             onChange = { effects, seed -> onNoise(slot, effects, seed) },

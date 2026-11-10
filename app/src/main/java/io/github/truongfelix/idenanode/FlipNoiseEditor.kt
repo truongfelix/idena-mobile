@@ -47,10 +47,10 @@ import kotlin.random.Random
 
 /**
  * Picture [number]'s noise: [source] the picture before its noise, [frame] the protected picture, [effects] its
- * values. While a slider is held (and during the remake of those values), the preview is drawn from [source] ([NoiseBase], cut once) with the window's
- * seed, as the frame is sent; otherwise the window shows [frame]. [onChange] makes the picture's noise again with the
- * new values and that seed (the bytes the preview showed); [busy]
- * while it does, and the window cannot be closed then (the flip is never sent or protected
+ * values and [frameSeed] its grain's seed. The preview is drawn from [source] ([NoiseBase], cut once) as the frame is
+ * sent; it shows while a slider is held, and during the remake of exactly its values; otherwise the window shows
+ * [frame]. [onChange] makes the picture's noise again with the new values and the window's seed (the bytes the
+ * preview showed); [busy] while it does, and the window cannot be closed then (the flip is never sent or protected
  * again with a picture on its way); [error] why the last change failed. Close or back closes it, the last values kept.
  */
 @Composable
@@ -59,18 +59,22 @@ fun NoiseEditor(
     source: ByteArray?,
     frame: ByteArray?,
     effects: NoiseEffects,
+    frameSeed: Long?,
     busy: Boolean,
     error: String?,
     onChange: (NoiseEffects, Long) -> Unit,
     onClose: () -> Unit,
 ) {
-    // The picture cut into regions once; the grain's seed while the window is open (Regenerate draws another).
+    // The picture cut into regions once; the grain's seed: the picture's own, so that the grain stays put while only a
+    // value changes (Regenerate draws another).
     val base by produceState<NoiseBase?>(null, source) {
         value = source?.let { bytes -> withContext(Dispatchers.Default) { framePixels(bytes)?.let { NoiseBase(it, WORK_WIDTH, WORK_HEIGHT) } } }
     }
-    var seed by remember { mutableLongStateOf(SecureRandom().nextLong()) }
-    // The preview, made as a frame is sent ([flipFrameJpeg]) for the values and seed it holds, shows while a slider is
-    // held, and during the remake of exactly those values; otherwise the window shows the protected picture itself.
+    var seed by remember { mutableLongStateOf(frameSeed ?: SecureRandom().nextLong()) }
+    // The preview, made as a frame is sent ([flipFrameJpeg]) for the values and seed it holds: drawn once a control was
+    // moved; the latest one shows while a slider is held, and during a remake the one of exactly the values being
+    // made; otherwise the window shows the protected picture itself.
+    var touched by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Preview?>(null) }
     // The sliders' values while dragged; back to the picture's once its noise is made (or failed).
@@ -80,14 +84,15 @@ fun NoiseEditor(
     // drawn as one.
     LaunchedEffect(base) {
         val b = base ?: return@LaunchedEffect
-        snapshotFlow { Triple(shown, seed, dragging) }.conflate().collect { (e, s, held) ->
-            if (held) preview = Preview(withContext(Dispatchers.Default) { flipFrameJpeg(b.protect(e, Random(s))) }, e, s)
+        snapshotFlow { Triple(shown, seed, touched) }.conflate().collect { (e, s, moved) ->
+            if (moved) preview = Preview(withContext(Dispatchers.Default) { flipFrameJpeg(b.protect(e, Random(s))) }, e, s)
         }
     }
     // [force]: made again even with the same values (Regenerate draws a new grain too).
     fun commit(next: NoiseEffects, force: Boolean = false) {
         val n = next.normalized()
         shown = n
+        touched = true
         dragging = false
         if (force || n != effects.normalized()) onChange(n, seed)
     }
@@ -99,7 +104,7 @@ fun NoiseEditor(
             ) {
                 Text(t(R.string.flip_noise_title, number), style = MaterialTheme.typography.titleMedium)
                 Box(contentAlignment = Alignment.Center) {
-                    val p = preview?.takeIf { it.effects == shown && it.seed == seed && (dragging || busy) }
+                    val p = preview?.takeIf { dragging || (busy && it.effects == shown && it.seed == seed) }
                     FrameImage(p?.bytes ?: frame, Modifier.fillMaxWidth())
                     if (busy) CircularProgressIndicator()
                 }
@@ -110,9 +115,9 @@ fun NoiseEditor(
                     Switch(checked = shown.mirror, enabled = !busy, onCheckedChange = { commit(shown.copy(mirror = it)) })
                 }
                 NoiseSlider(t(R.string.flip_noise_grain, shown.grain), shown.grain, MIN_NOISE_GRAIN..MAX_NOISE_GRAIN, busy,
-                    onMove = { shown = shown.copy(grain = it); dragging = true }, onDone = { commit(shown) })
+                    onMove = { shown = shown.copy(grain = it); touched = true; dragging = true }, onDone = { commit(shown) })
                 NoiseSlider(t(R.string.flip_noise_hue, shown.hue), shown.hue, MIN_NOISE_HUE..MAX_NOISE_HUE, busy,
-                    onMove = { shown = shown.copy(hue = it); dragging = true }, onDone = { commit(shown) })
+                    onMove = { shown = shown.copy(hue = it); touched = true; dragging = true }, onDone = { commit(shown) })
                 // One action per line: French labels are cut side by side (L-65).
                 OutlinedButton(onClick = {
                     seed = SecureRandom().nextLong()

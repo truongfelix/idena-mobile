@@ -78,7 +78,12 @@ class FlipDrafts(private val flipsDir: File) {
         val noise = JSONArray()
         (0 until FLIP_FRAMES).forEach { i ->
             val effects = draft.noiseOf(i)
-            noise.put(if (effects == null) JSONObject.NULL else JSONObject().put("frame", frameTag(draft.frames[i]!!)).put("effects", effects.toJson()))
+            noise.put(
+                if (effects == null) JSONObject.NULL
+                else JSONObject().put("frame", frameTag(draft.frames[i]!!)).put("effects", effects.toJson())
+                    // A string: a JSON number may not hold every Long exactly.
+                    .also { o -> draft.noiseSeedOf(i)?.let { o.put("seed", it.toString()) } },
+            )
         }
         json.put("noise", noise)
         File(dir, "draft.json").writeText(json.toString())
@@ -144,7 +149,7 @@ private fun loadNoise(json: JSONArray?, frames: List<ByteArray?>): List<SlotNois
     val frame = frames[i]
     val effects = saved?.optJSONObject("effects")
     if (saved == null || frame == null || effects == null || saved.optString("frame") != frameTag(frame)) null
-    else SlotNoise(saved.optString("frame"), NoiseEffects.fromJson(effects))
+    else SlotNoise(saved.optString("frame"), NoiseEffects.fromJson(effects), saved.optString("seed").toLongOrNull())
 }
 
 /** A short mark of a frame's bytes: an original and its edit belong to the frame with this mark. */

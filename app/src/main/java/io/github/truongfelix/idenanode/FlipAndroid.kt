@@ -82,10 +82,16 @@ data class FlipDraft(
         return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }?.effects
     }
 
-    /** This draft with frame [slot] protected with [effects]. */
-    fun withNoise(slot: Int, effects: NoiseEffects): FlipDraft {
+    /** The seed frame [slot]'s grain was drawn with, or null when it has none. */
+    fun noiseSeedOf(slot: Int): Long? {
+        val frame = frames.getOrNull(slot) ?: return null
+        return noise.getOrNull(slot)?.takeIf { it.frame == frameTag(frame) }?.seed
+    }
+
+    /** This draft with frame [slot] protected with [effects], its grain drawn with [seed]. */
+    fun withNoise(slot: Int, effects: NoiseEffects, seed: Long): FlipDraft {
         val frame = frames.getOrNull(slot) ?: return this
-        return copy(noise = noise.toMutableList().also { it[slot] = SlotNoise(frameTag(frame), effects.normalized()) })
+        return copy(noise = noise.toMutableList().also { it[slot] = SlotNoise(frameTag(frame), effects.normalized(), seed) })
     }
 
     /** Whether every story frame is chosen and the anti-AI frame is made. */
@@ -117,8 +123,11 @@ data class FlipDraft(
     )
 }
 
-/** The noise effects a slot's frame was protected with, and that frame's [frameTag]. */
-data class SlotNoise(val frame: String, val effects: NoiseEffects)
+/**
+ * The noise effects a slot's frame was protected with, the seed of its grain (the noise window starts from it, so the
+ * grain stays put while only a value changes), and that frame's [frameTag].
+ */
+data class SlotNoise(val frame: String, val effects: NoiseEffects, val seed: Long?)
 
 /** The longer side of a picture kept as a frame's original. */
 const val ORIGINAL_MAX_SIDE = 1280
