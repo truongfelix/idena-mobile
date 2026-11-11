@@ -157,6 +157,8 @@ fun pickMedia(context: Context, uri: Uri, audio: Boolean): ImageDraft {
         is PickedAs.AsIs -> ImageDraft.asIs(withoutMp4Details(bytes) ?: throw IOException(t(R.string.social_error_video_unreadable)), picked.type)
         is PickedAs.TooLarge -> throw IOException(t(R.string.social_error_too_large, ipfsFileName(picked.what), bytes.size / 1000, MAX_IPFS_FILE / 1000))
         is PickedAs.Still -> {
+            // A picture picked as a sound is not one.
+            if (audio && format != MediaFormat.UNKNOWN) throw IOException(t(R.string.social_error_not_sound))
             if (format == MediaFormat.UNKNOWN && (audio || pickedType.startsWith("video/") || pickedType.startsWith("audio/"))) {
                 throw IOException(t(R.string.social_error_media_format))
             }

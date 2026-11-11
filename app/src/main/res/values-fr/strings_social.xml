@@ -189,8 +189,10 @@
     <string name="social_editor_stop">⏹ Arrêter (%1$s)</string>
     <string name="social_record_refused">Le micro n\'est pas autorisé : les réglages Android de l\'appli permettent de l\'autoriser.</string>
     <string name="social_record_failed">L\'enregistrement a échoué : %1$s</string>
-    <string name="social_record_limit">L\'enregistrement s\'est arrêté à sa limite (%1$d Ko, le plus qu\'une publication peut stocker).</string>
-    <string name="social_media_as_is_note">Il est stocké sur IPFS (une transaction storeToIpfs) : %1$s, en plus des frais de la publication. Le fichier est envoyé tel quel (%2$s) : le lieu où une vidéo a été prise est retiré, ses autres détails (titre, date) restent.</string>
+    <string name="social_record_limit_size">L\'enregistrement s\'est arrêté à sa limite : les 900 Ko qu\'une publication peut stocker.</string>
+    <string name="social_record_limit_time">L\'enregistrement s\'est arrêté à sa limite : 5 minutes.</string>
+    <string name="social_error_not_sound">ce fichier n\'est pas un son</string>
+    <string name="social_media_as_is_note">Il est stocké sur IPFS (une transaction storeToIpfs) : %1$s, en plus des frais de la publication. Le fichier est envoyé tel quel (%2$s) ; un fichier MP4 ou M4A est envoyé sans ses détails (lieu, appareil, titre), un autre garde les siens.</string>
     <string name="social_media_still_instead">Trop volumineux pour être envoyé animé (%1$d Ko, au plus %2$d Ko) : il est envoyé en image fixe.</string>
     <string name="social_error_video_unreadable">ses parties ne peuvent pas être lues, donc le lieu où elle a été prise ne peut pas être retiré</string>
     <string name="social_error_media_format">seules les vidéos MP4 et WebM, et les sons MP3, M4A, Ogg et WebM, peuvent être envoyés</string>

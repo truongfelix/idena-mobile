@@ -189,8 +189,10 @@
     <string name="social_editor_stop">⏹ Stop (%1$s)</string>
     <string name="social_record_refused">The microphone is not allowed: Android\'s settings for the app can allow it.</string>
     <string name="social_record_failed">The recording failed: %1$s</string>
-    <string name="social_record_limit">The recording stopped at its limit (%1$d KB, the most a post can store).</string>
-    <string name="social_media_as_is_note">It is stored on IPFS (a storeToIpfs transaction): %1$s, on top of the post\'s fee. The file is sent as it is (%2$s): the place where a video was taken is removed, its other details (title, date) stay.</string>
+    <string name="social_record_limit_size">The recording stopped at its limit: the 900 KB a post can store.</string>
+    <string name="social_record_limit_time">The recording stopped at its limit: 5 minutes.</string>
+    <string name="social_error_not_sound">this file is not a sound</string>
+    <string name="social_media_as_is_note">It is stored on IPFS (a storeToIpfs transaction): %1$s, on top of the post\'s fee. The file is sent as it is (%2$s); an MP4 or M4A file is sent without its details (place, camera, title), another file keeps its own.</string>
     <string name="social_media_still_instead">Too large to send moving (%1$d KB, at most %2$d KB): it is sent as a still picture.</string>
     <string name="social_error_video_unreadable">its parts cannot be read, so the place where it was taken cannot be removed</string>
     <string name="social_error_media_format">only MP4 and WebM videos, and MP3, M4A, Ogg and WebM sounds, can be sent</string>

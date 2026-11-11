@@ -23,15 +23,18 @@ private const val MAX_VOICE_MS = 5 * 60 * 1000
 
 private const val VOICE_BIT_RATE = 24_000
 
+/** The limit a recording stopped at: the size a post can store, or its longest time. */
+enum class VoiceLimit { SIZE, TIME }
+
 /** The type of a voice note in its post. */
 const val VOICE_TYPE = "audio/ogg"
 
 /**
  * One voice note at a time, in the app's cache. [recording] while the microphone records, since [startedAt]
  * (SystemClock.elapsedRealtime). [onDone] gets the file's bytes when it stops (by [stop], or at its limit with
- * [limited]), or the reason it failed.
+ * [VoiceLimit]), or the reason it failed.
  */
-class VoiceRecorder(private val context: Context, private val onDone: (Result<ByteArray>, limited: Boolean) -> Unit) {
+class VoiceRecorder(private val context: Context, private val onDone: (Result<ByteArray>, limit: VoiceLimit?) -> Unit) {
     var recording by mutableStateOf(false)
         private set
     var startedAt by mutableStateOf(0L)
@@ -58,8 +61,9 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
                 setMaxDuration(MAX_VOICE_MS)
                 setOutputFile(file.absolutePath)
                 setOnInfoListener { _, what, _ ->
-                    if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED || what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
-                        finish(limited = true)
+                    when (what) {
+                        MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED -> finish(VoiceLimit.SIZE)
+                        MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED -> finish(VoiceLimit.TIME)
                     }
                 }
                 prepare()
@@ -72,12 +76,12 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
             recording = true
         }.onFailure {
             created.release()
-            onDone(Result.failure(it), false)
+            onDone(Result.failure(it), null)
         }
     }
 
     /** Stops recording and hands the note over. */
-    fun stop() = finish(limited = false)
+    fun stop() = finish(null)
 
     /** Stops recording without handing anything over (the editor closed). */
     fun cancel() {
@@ -87,7 +91,7 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
         file.delete()
     }
 
-    private fun finish(limited: Boolean) {
+    private fun finish(limit: VoiceLimit?) {
         val current = recorder ?: return
         recorder = null
         recording = false
@@ -95,8 +99,8 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
         // already, and the file holds the whole note.
         val stopped = runCatching { current.stop() }
         current.release()
-        val result = if (stopped.isSuccess || (limited && file.length() > 0)) runCatching { file.readBytes() } else Result.failure(stopped.exceptionOrNull()!!)
+        val result = if (stopped.isSuccess || (limit != null && file.length() > 0)) runCatching { file.readBytes() } else Result.failure(stopped.exceptionOrNull()!!)
         file.delete()
-        onDone(result, limited)
+        onDone(result, limit)
     }
 }

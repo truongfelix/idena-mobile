@@ -137,6 +137,7 @@ fun DraftImageChoice(model: SocialModel, image: ImageDraft, feePerGas: BigDecima
     val cost = feePerGas?.let { t(R.string.social_image_cost, fee(storeToIpfsFeeEstimate(it, image.bytes.size))) } ?: t(R.string.social_image_cost_unknown)
     if (image.isAsIs) {
         DraftFile(image)
+        image.note?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         Text(t(R.string.social_media_as_is_note, cost, kilobytes(image.bytes.size)), style = MaterialTheme.typography.bodySmall)
         return
     }
@@ -262,10 +263,16 @@ fun rememberVoiceNote(model: SocialModel): VoiceNote {
     }
     voice = remember {
         lateinit var made: VoiceNote
-        val recorder = VoiceRecorder(context) { result, limited ->
+        val recorder = VoiceRecorder(context) { result, limit ->
             result.onSuccess {
-                model.sending.draftImage = ImageDraft.asIs(it, VOICE_TYPE)
-                made.note = if (limited) t(R.string.social_record_limit, it.size / 1000) else null
+                // A limit reached is said with the note itself, so it goes when the note goes.
+                val said = when (limit) {
+                    VoiceLimit.SIZE -> t(R.string.social_record_limit_size)
+                    VoiceLimit.TIME -> t(R.string.social_record_limit_time)
+                    null -> null
+                }
+                model.sending.draftImage = ImageDraft.asIs(it, VOICE_TYPE).copy(note = said)
+                made.note = null
             }.onFailure { made.note = t(R.string.social_record_failed, "${it.message}") }
         }
         made = VoiceNote(context, recorder) { microphone.launch(Manifest.permission.RECORD_AUDIO) }
