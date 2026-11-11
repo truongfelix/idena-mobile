@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -141,13 +142,13 @@ internal fun playTime(ms: Int): String {
 
 /**
  * A video's first frame and its shape (width / height), read without a player (B-229); nulls when Android cannot read
- * it. At most 1,080 pixels on its longer side.
+ * it. At most 720 pixels on its longer side (the post shows it smaller).
  */
 internal fun videoPoster(file: File): Pair<ImageBitmap?, Float?> {
     val retriever = MediaMetadataRetriever()
     return try {
         retriever.setDataSource(file.absolutePath)
-        val frame = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1080, 1080)
+        val frame = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 720)
         frame?.asImageBitmap() to frame?.let { if (it.height > 0) it.width.toFloat() / it.height else null }
     } catch (e: Exception) {
         null to null
@@ -224,6 +225,8 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
             }
         } ?: return
         player = made
+        // The first frame's shape until the player gives the video's own: no jump to 16:9 on the first tap.
+        if (!started) poster.second?.let { ratio = it }
         made.start()
         playing = true
         started = true
@@ -238,7 +241,11 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (video) Box(
             Modifier.fillMaxWidth().heightIn(max = maxHeight).aspectRatio(shape, matchHeightConstraintsFirst = true)
-                .clip(RoundedCornerShape(8.dp)).background(Color.Black).clickable(enabled = !failed) { toggle() },
+                .clip(RoundedCornerShape(8.dp)).background(Color.Black).clickable(
+                    enabled = !failed,
+                    onClickLabel = if (playing) t(R.string.social_media_pause) else t(R.string.social_media_play_video),
+                    role = Role.Button,
+                ) { toggle() },
             contentAlignment = Alignment.Center,
         ) {
             AndroidView(

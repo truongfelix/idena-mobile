@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -99,6 +100,20 @@ internal fun encodeWebp(bitmap: Bitmap): ByteArray {
     return out.toByteArray()
 }
 
+/** Whether the media file at [uri] holds a picture track; true when Android cannot tell (it stays a video). */
+private fun hasVideoTrack(context: Context, uri: Uri): Boolean {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(context, uri)
+        // "yes" when it has one; no answer (null) when it holds sound only.
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"
+    } catch (e: Exception) {
+        true
+    } finally {
+        runCatching { retriever.release() }
+    }
+}
+
 /** The size of the file at [uri] as the picker gives it, or null when it does not. */
 private fun fileSize(context: Context, uri: Uri): Long? = runCatching {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
@@ -151,14 +166,16 @@ fun pickMedia(context: Context, uri: Uri, audio: Boolean): ImageDraft {
     }
     val bytes = readImage(context, uri)
     val format = sniffFormat(bytes)
-    val asSound = audio || pickedType.startsWith("audio/")
+    // A WebM or MP4 without a picture track is a sound, whatever its provider types it.
+    val container = format == MediaFormat.MP4 || format == MediaFormat.WEBM
+    val asSound = audio || pickedType.startsWith("audio/") || (container && !hasVideoTrack(context, uri))
     val animated = (format == MediaFormat.GIF || format == MediaFormat.ANIMATED_WEBP) && isAnimation(bytes)
     return when (val picked = pickedAs(format, animated, bytes.size, asSound)) {
         is PickedAs.AsIs -> ImageDraft.asIs(withoutMp4Details(bytes) ?: throw IOException(t(R.string.social_error_video_unreadable)), picked.type)
         is PickedAs.TooLarge -> throw IOException(t(R.string.social_error_too_large, ipfsFileName(picked.what), bytes.size / 1000, MAX_IPFS_FILE / 1000))
         is PickedAs.Still -> {
             // A picture picked as a sound is not one.
-            if (audio && format != MediaFormat.UNKNOWN) throw IOException(t(R.string.social_error_not_sound))
+            if (asSound && format != MediaFormat.UNKNOWN) throw IOException(t(R.string.social_error_not_sound))
             if (format == MediaFormat.UNKNOWN && (audio || pickedType.startsWith("video/") || pickedType.startsWith("audio/"))) {
                 throw IOException(t(R.string.social_error_media_format))
             }

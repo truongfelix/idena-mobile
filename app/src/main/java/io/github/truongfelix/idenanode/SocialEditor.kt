@@ -90,7 +90,7 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             Spacer(Modifier.weight(1f))
             Text(draft.title, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
-            Button(onClick = model.sending::prepareDraft, enabled = canPost && (text.isNotBlank() || image != null) && imageNote == null && !voice.recording) { Text(t(R.string.social_post_button)) }
+            Button(onClick = model.sending::prepareDraft, enabled = canPost && (text.isNotBlank() || image != null) && !picker.preparing && !voice.recording) { Text(t(R.string.social_post_button)) }
         }
         draft.answering?.let {
             Card(Modifier.fillMaxWidth()) {
@@ -226,7 +226,8 @@ fun rememberImagePicker(model: SocialModel): ImagePicker {
         ImagePicker(
             { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
             { audioLauncher.launch("audio/*") },
-            { filesLauncher.launch(arrayOf("image/*", "video/*", "audio/*")) },
+            // Every file: a provider may type a messenger's .ogg or a Download .mp4 as application/*; the first bytes decide.
+            { filesLauncher.launch(arrayOf("*/*")) },
         )
     }
     return picker
@@ -277,8 +278,8 @@ fun rememberVoiceNote(model: SocialModel): VoiceNote {
             result.onSuccess {
                 // A limit reached is said with the note itself, so it goes when the note goes.
                 val said = when (limit) {
-                    VoiceLimit.SIZE -> t(R.string.social_record_limit_size)
-                    VoiceLimit.TIME -> t(R.string.social_record_limit_time)
+                    VoiceLimit.SIZE -> t(R.string.social_record_limit_size, MAX_VOICE_BYTES / 1000)
+                    VoiceLimit.TIME -> t(R.string.social_record_limit_time, MAX_VOICE_MS / 60_000)
                     null -> null
                 }
                 model.sending.draftImage = ImageDraft.asIs(it, VOICE_TYPE).copy(note = said)

@@ -113,6 +113,8 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                 }
                 picker.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
                 voice.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+                // What became of the draft's file (a voice note at its limit, a moving picture sent still).
+                sending.draftImage?.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
                 if (voice.recording) Pill(voice.stopLabel, enabled = true, onClick = voice::stop)
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutlinedTextField(

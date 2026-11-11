@@ -19,7 +19,7 @@ import java.io.File
 internal const val MAX_VOICE_BYTES = MAX_IPFS_FILE - 20_000
 
 /** The longest voice note: 5 minutes, about 900 KB at the bit rate. */
-private const val MAX_VOICE_MS = 5 * 60 * 1000
+internal const val MAX_VOICE_MS = 5 * 60 * 1000
 
 private const val VOICE_BIT_RATE = 24_000
 
