@@ -185,6 +185,7 @@
     <string name="social_file_video">video</string>
     <string name="social_file_audio">sound</string>
     <string name="social_editor_audio">🎵 Sound file</string>
+    <string name="social_editor_files">📁 From files</string>
     <string name="social_editor_record">🎙 Record</string>
     <string name="social_editor_stop">⏹ Stop (%1$s)</string>
     <string name="social_record_refused">The microphone is not allowed: Android\'s settings for the app can allow it.</string>

@@ -136,6 +136,7 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                                 DropdownMenu(expanded = attach, onDismissRequest = { attach = false }) {
                                     DropdownMenuItem(text = { Text(t(R.string.social_editor_image)) }, onClick = { attach = false; picker.pick() })
                                     DropdownMenuItem(text = { Text(t(R.string.social_editor_audio)) }, onClick = { attach = false; picker.pickAudio() })
+                                    DropdownMenuItem(text = { Text(t(R.string.social_editor_files)) }, onClick = { attach = false; picker.pickFile() })
                                     DropdownMenuItem(
                                         text = { Text(t(R.string.social_editor_record)) },
                                         onClick = { attach = false; voice.record() },

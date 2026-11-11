@@ -185,6 +185,7 @@
     <string name="social_file_video">vidéo</string>
     <string name="social_file_audio">son</string>
     <string name="social_editor_audio">🎵 Fichier son</string>
+    <string name="social_editor_files">📁 Depuis les fichiers</string>
     <string name="social_editor_record">🎙 Enregistrer</string>
     <string name="social_editor_stop">⏹ Arrêter (%1$s)</string>
     <string name="social_record_refused">Le micro n\'est pas autorisé : les réglages Android de l\'appli permettent de l\'autoriser.</string>

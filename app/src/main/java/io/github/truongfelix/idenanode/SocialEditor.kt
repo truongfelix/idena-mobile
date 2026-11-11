@@ -115,6 +115,7 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             val idle = !picker.preparing && !voice.recording
             Pill(if (image == null) t(R.string.social_editor_image) else t(R.string.social_editor_other_image), enabled = idle, onClick = picker::pick)
             Pill(t(R.string.social_editor_audio), enabled = idle, onClick = picker::pickAudio)
+            Pill(t(R.string.social_editor_files), enabled = idle, onClick = picker::pickFile)
             if (voice.recording) Pill(voice.stopLabel, enabled = true, onClick = voice::stop)
             // One media per post: Record once the draft's picture or file is removed.
             else Pill(t(R.string.social_editor_record), enabled = !picker.preparing && image == null, onClick = voice::record)
@@ -172,7 +173,7 @@ fun TextOnIpfsNote() {
  * the draft ([SocialSending.draftImage]); [note] says it is being prepared or why it was refused; [feePerGas] prices
  * the sizes.
  */
-class ImagePicker(private val launch: () -> Unit, private val launchAudio: () -> Unit) {
+class ImagePicker(private val launch: () -> Unit, private val launchAudio: () -> Unit, private val launchFiles: () -> Unit) {
     var note by mutableStateOf<String?>(null)
     var feePerGas by mutableStateOf<BigDecimal?>(null)
 
@@ -183,6 +184,12 @@ class ImagePicker(private val launch: () -> Unit, private val launchAudio: () ->
 
     /** A sound file, from the phone's files. */
     fun pickAudio() = launchAudio()
+
+    /**
+     * A picture, video or sound from the phone's files (B-228): the photo picker lists only what Android has indexed,
+     * a file saved by another app or in Download may be missing there.
+     */
+    fun pickFile() = launchFiles()
 
     /** Asks the node for [feePerGas] once (none when it does not answer). */
     suspend fun loadFee(context: Context) {
@@ -213,10 +220,13 @@ fun rememberImagePicker(model: SocialModel): ImagePicker {
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked(it, audio = false) }
     val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { picked(it, audio = true) }
+    // A sound picked here is told by its type (pickMedia reads the picker's type).
+    val filesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked(it, audio = false) }
     picker = remember {
         ImagePicker(
             { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
             { audioLauncher.launch("audio/*") },
+            { filesLauncher.launch(arrayOf("image/*", "video/*", "audio/*")) },
         )
     }
     return picker

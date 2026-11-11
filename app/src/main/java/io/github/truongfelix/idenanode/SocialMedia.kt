@@ -5,11 +5,22 @@ import android.graphics.ImageDecoder
 import android.graphics.SurfaceTexture
 import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.Drawable
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.view.Surface
 import android.view.TextureView
 import android.widget.ImageView
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -33,6 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -125,9 +140,27 @@ internal fun playTime(ms: Int): String {
 }
 
 /**
- * A video ([video]) or a sound from [file]: Play / Pause, the time, a bar to move in it; a video shows its picture
- * above, at its own shape, at most [maxHeight] high. The player is made on the first tap and freed when it leaves
- * the screen; a file Android cannot play says so.
+ * A video's first frame and its shape (width / height), read without a player (B-229); nulls when Android cannot read
+ * it. At most 1,080 pixels on its longer side.
+ */
+internal fun videoPoster(file: File): Pair<ImageBitmap?, Float?> {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(file.absolutePath)
+        val frame = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1080, 1080)
+        frame?.asImageBitmap() to frame?.let { if (it.height > 0) it.width.toFloat() / it.height else null }
+    } catch (e: Exception) {
+        null to null
+    } finally {
+        runCatching { retriever.release() }
+    }
+}
+
+/**
+ * A video ([video]) or a sound from [file]. A video shows its first frame at its own shape, at most [maxHeight] high,
+ * with ▶ in its middle as other social apps do (B-229): a tap on the picture plays or pauses it. A sound has its Play
+ * / Pause button. Both have the time and a bar to move in it. The player is made on the first tap and freed when it
+ * leaves the screen; a file Android cannot play says so.
  */
 @Composable
 internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
@@ -139,6 +172,13 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
     var ratio by remember(file) { mutableFloatStateOf(16f / 9f) }
     var failed by remember(file) { mutableStateOf(false) }
     var dragging by remember(file) { mutableStateOf(false) }
+    // Played once: the first frame gives way to the player's picture.
+    var started by remember(file) { mutableStateOf(false) }
+    val poster by produceState<Pair<ImageBitmap?, Float?>>(null to null, file) {
+        if (video) value = withContext(Dispatchers.IO) { videoPoster(file) }
+    }
+    // Its shape: the first frame's until the player gives the video's own.
+    val shape = if (started) ratio else poster.second ?: ratio
     DisposableEffect(file) {
         onDispose {
             player?.release()
@@ -186,9 +226,21 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
         player = made
         made.start()
         playing = true
+        started = true
+    }
+    fun toggle() {
+        val current = player
+        if (playing && current != null) {
+            current.pause()
+            playing = false
+        } else start()
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (video) {
+        if (video) Box(
+            Modifier.fillMaxWidth().heightIn(max = maxHeight).aspectRatio(shape, matchHeightConstraintsFirst = true)
+                .clip(RoundedCornerShape(8.dp)).background(Color.Black).clickable(enabled = !failed) { toggle() },
+            contentAlignment = Alignment.Center,
+        ) {
             AndroidView(
                 factory = { context ->
                     TextureView(context).apply {
@@ -210,22 +262,26 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).aspectRatio(ratio, matchHeightConstraintsFirst = true)
-                    .clip(RoundedCornerShape(8.dp)),
+                modifier = Modifier.fillMaxSize(),
             )
+            val frame = poster.first
+            if (!started && frame != null) Image(frame, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            if (!playing && !failed) Box(
+                Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = t(R.string.social_media_play_video), tint = Color.White, modifier = Modifier.size(40.dp))
+            }
         }
         if (failed) {
             Text(t(R.string.social_media_cannot_play), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = {
-                val current = player
-                if (playing && current != null) {
-                    current.pause()
-                    playing = false
-                } else start()
-            }) { Text(if (playing) t(R.string.social_media_pause) else if (video) t(R.string.social_media_play_video) else t(R.string.social_media_play_audio)) }
+            // A video plays from its picture; a sound has its button.
+            if (!video) OutlinedButton(onClick = ::toggle) {
+                Text(if (playing) t(R.string.social_media_pause) else t(R.string.social_media_play_audio))
+            }
             Text(
                 if (duration > 0) "${playTime(position)} / ${playTime(duration)}" else "",
                 style = MaterialTheme.typography.bodySmall,
