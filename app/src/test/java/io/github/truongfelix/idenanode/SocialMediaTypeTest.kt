@@ -108,26 +108,28 @@ class SocialMediaTypeTest {
         val place = box("udta", box("©xyz", ascii("+48.85+002.35/")))
         val keys = box("meta", ascii("com.apple.quicktime.location.ISO6709"))
         val track = box("trak", box("tkhd", bytes(1, 2, 3)), box("udta", ascii("track name")))
-        val file = ftyp("mp42") + box("moov", box("mvhd", bytes(9, 9)), place, keys, track) + box("mdat", bytes(7, 7, 7))
-        val cleaned = withoutMp4Details(file)
+        val xmp = box("uuid", ascii("BE7ACFCB97A942E89C71999491E3AFAC<x:xmp GPS/>"))
+        val file = ftyp("mp42") + box("moov", box("mvhd", bytes(9, 9)), place, keys, track) + xmp + box("mdat", bytes(7, 7, 7))
+        val cleaned = withoutMp4Details(file)!!
         assertEquals("nothing moves", file.size, cleaned.size)
         val text = String(cleaned, Charsets.ISO_8859_1)
         assertEquals("no detail box is left", -1, text.indexOf("udta"))
         assertEquals(-1, text.indexOf("meta"))
-        assertEquals("the moov's two and the track's one", 3, Regex("free").findAll(text).count())
+        assertEquals(-1, text.indexOf("uuid"))
+        assertEquals("the moov's two, the track's one and the XMP", 4, Regex("free").findAll(text).count())
         // Only the four type bytes of each renamed box changed.
         val changed = file.indices.filter { file[it] != cleaned[it] }
-        assertEquals(12, changed.size)
+        assertEquals(16, changed.size)
         assertArrayEquals("the media itself is untouched", box("mdat", bytes(7, 7, 7)), cleaned.copyOfRange(file.size - 11, file.size))
     }
 
     @Test
-    fun aFileThatIsNotACleanMp4ComesBackUnchanged() {
+    fun aFileThatIsNotAnMp4ComesBackUnchangedAndABrokenMp4IsNotSent() {
         val ogg = ascii("OggS") + ascii("udta")
         assertSame("not an MP4", ogg, withoutMp4Details(ogg))
-        // A moov whose size runs past the end of the file.
+        // A moov whose size runs past the end of the file: its details cannot be found.
         val broken = ftyp("isom") + bytes(0, 0, 0x10, 0) + ascii("moov") + box("udta", ascii("x"))
-        assertSame(broken, withoutMp4Details(broken))
+        assertNull(withoutMp4Details(broken))
         val noDetails = ftyp("isom") + box("moov", box("mvhd", bytes(1)))
         assertArrayEquals(noDetails, withoutMp4Details(noDetails))
     }

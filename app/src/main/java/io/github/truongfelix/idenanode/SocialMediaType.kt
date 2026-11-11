@@ -99,21 +99,25 @@ fun kindOfType(type: String): MediaKind = type.lowercase().let {
     }
 }
 
-/** The boxes of an MP4 that hold its details (place, camera, title): renamed "free", which every reader skips. */
-private val DETAIL_BOXES = setOf("udta", "meta")
+/**
+ * The boxes of an MP4 that hold its details (place, camera, title; "uuid": XMP, where some cameras write the place):
+ * renamed "free", which every reader skips.
+ */
+private val DETAIL_BOXES = setOf("udta", "meta", "uuid")
 
 /** The boxes holding other boxes where details may sit. */
 private val PARENT_BOXES = setOf("moov", "trak")
 
 /**
- * [bytes] (an MP4 or M4A file) with its detail boxes ("udta", "meta": where a phone writes the place a video was taken)
+ * [bytes] (an MP4 or M4A file) with its detail boxes ([DETAIL_BOXES]: where a phone writes the place a video was taken)
  * renamed "free" at the top, in "moov" and in its tracks. Nothing moves, so every offset in the file stays right. A
- * file that is not an MP4, or whose boxes do not add up, comes back unchanged.
+ * file that is not an MP4 comes back unchanged; null for an MP4 whose boxes do not add up (its details cannot be
+ * found, so it is not sent).
  */
-fun withoutMp4Details(bytes: ByteArray): ByteArray {
+fun withoutMp4Details(bytes: ByteArray): ByteArray? {
     if (sniffFormat(bytes) !in setOf(MediaFormat.MP4, MediaFormat.M4A)) return bytes
     val out = bytes.copyOf()
-    return if (renameDetails(out, 0, out.size)) out else bytes
+    return if (renameDetails(out, 0, out.size)) out else null
 }
 
 /** Renames the detail boxes between [from] and [to] (and in their parent boxes); false when a box does not fit. */

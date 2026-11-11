@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
@@ -98,6 +99,13 @@ internal fun encodeWebp(bitmap: Bitmap): ByteArray {
     return out.toByteArray()
 }
 
+/** The size of the file at [uri] as the picker gives it, or null when it does not. */
+private fun fileSize(context: Context, uri: Uri): Long? = runCatching {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else null
+    }
+}.getOrNull()
+
 /** How a picked file is posted ([pickedAs]). */
 sealed interface PickedAs {
     /** Encoded as a WebP picture at the offered sizes; [tooLargeToMove] when it moved but is above [MAX_IPFS_FILE]. */
@@ -132,15 +140,26 @@ fun pickedAs(format: MediaFormat, animated: Boolean, size: Int, audio: Boolean):
  * as it is leaves out its details ([withoutMp4Details]). Throws when it cannot be read or is too large.
  */
 fun pickMedia(context: Context, uri: Uri, audio: Boolean): ImageDraft {
+    val pickedType = context.contentResolver.getType(uri).orEmpty()
+    // A video or a sound above one IPFS file is refused from its size, before it is read.
+    if (audio || pickedType.startsWith("video/") || pickedType.startsWith("audio/")) {
+        val size = fileSize(context, uri)
+        if (size != null && size > MAX_IPFS_FILE) {
+            val what = if (pickedType.startsWith("video/") && !audio) "video" else "audio"
+            throw IOException(t(R.string.social_error_too_large, ipfsFileName(what), (size / 1000).toInt(), MAX_IPFS_FILE / 1000))
+        }
+    }
     val bytes = readImage(context, uri)
     val format = sniffFormat(bytes)
-    val asSound = audio || context.contentResolver.getType(uri).orEmpty().startsWith("audio/")
+    val asSound = audio || pickedType.startsWith("audio/")
     val animated = (format == MediaFormat.GIF || format == MediaFormat.ANIMATED_WEBP) && isAnimation(bytes)
     return when (val picked = pickedAs(format, animated, bytes.size, asSound)) {
-        is PickedAs.AsIs -> ImageDraft.asIs(withoutMp4Details(bytes), picked.type)
+        is PickedAs.AsIs -> ImageDraft.asIs(withoutMp4Details(bytes) ?: throw IOException(t(R.string.social_error_video_unreadable)), picked.type)
         is PickedAs.TooLarge -> throw IOException(t(R.string.social_error_too_large, ipfsFileName(picked.what), bytes.size / 1000, MAX_IPFS_FILE / 1000))
         is PickedAs.Still -> {
-            if (audio && format == MediaFormat.UNKNOWN) throw IOException(t(R.string.social_media_cannot_play))
+            if (format == MediaFormat.UNKNOWN && (audio || pickedType.startsWith("video/") || pickedType.startsWith("audio/"))) {
+                throw IOException(t(R.string.social_error_media_format))
+            }
             val sizes = encodeImageBytes(bytes)
             ImageDraft(
                 sizes,

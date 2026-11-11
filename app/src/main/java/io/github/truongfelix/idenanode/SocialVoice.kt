@@ -44,9 +44,10 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
     fun start() {
         if (recording) return
         file.delete()
+        @Suppress("DEPRECATION")
+        val created = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else MediaRecorder()
         val made = runCatching {
-            @Suppress("DEPRECATION")
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else MediaRecorder()).apply {
+            created.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.OGG)
                 setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
@@ -69,7 +70,10 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
             recorder = it
             startedAt = SystemClock.elapsedRealtime()
             recording = true
-        }.onFailure { onDone(Result.failure(it), false) }
+        }.onFailure {
+            created.release()
+            onDone(Result.failure(it), false)
+        }
     }
 
     /** Stops recording and hands the note over. */
@@ -87,9 +91,12 @@ class VoiceRecorder(private val context: Context, private val onDone: (Result<By
         val current = recorder ?: return
         recorder = null
         recording = false
-        // stop() throws when nothing was recorded yet (a tap right after start).
+        // stop() throws when nothing was recorded yet (a tap right after start); at a limit Android may have stopped
+        // already, and the file holds the whole note.
         val stopped = runCatching { current.stop() }
         current.release()
-        onDone(stopped.mapCatching { file.readBytes().also { file.delete() } }, limited)
+        val result = if (stopped.isSuccess || (limited && file.length() > 0)) runCatching { file.readBytes() } else Result.failure(stopped.exceptionOrNull()!!)
+        file.delete()
+        onDone(result, limited)
     }
 }

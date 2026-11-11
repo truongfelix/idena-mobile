@@ -116,7 +116,8 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             Pill(if (image == null) t(R.string.social_editor_image) else t(R.string.social_editor_other_image), enabled = idle, onClick = picker::pick)
             Pill(t(R.string.social_editor_audio), enabled = idle, onClick = picker::pickAudio)
             if (voice.recording) Pill(voice.stopLabel, enabled = true, onClick = voice::stop)
-            else Pill(t(R.string.social_editor_record), enabled = !picker.preparing, onClick = voice::record)
+            // One media per post: Record once the draft's picture or file is removed.
+            else Pill(t(R.string.social_editor_record), enabled = !picker.preparing && image == null, onClick = voice::record)
             FilterChip(selected = model.sending.textOnIpfs, onClick = { model.sending.textOnIpfs = !model.sending.textOnIpfs }, label = { Text(t(R.string.social_text_on_ipfs)) })
         }
         model.sending.sendStatus?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }

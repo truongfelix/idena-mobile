@@ -37,11 +37,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
+import java.io.IOException
 import java.nio.ByteBuffer
 
 /*
@@ -95,14 +99,21 @@ internal fun AnimatedImage(key: String, bytes: ByteArray, maxHeight: Dp, modifie
     )
 }
 
-/** The file holding [bytes] for the player, in the app's cache, named by [key] (an IPFS id or a transaction hash). */
+/** The most player files kept in the cache: the oldest go when a new one is written. */
+private const val MAX_MEDIA_FILES = 12
+
+/**
+ * The file holding [bytes] for the player, in the app's cache, named by [key] (an IPFS id or a transaction hash); at
+ * most [MAX_MEDIA_FILES] are kept.
+ */
 internal fun mediaFile(context: Context, key: String, bytes: ByteArray): File {
     val dir = File(context.cacheDir, "social-media").also { it.mkdirs() }
     val file = File(dir, key.filter { it.isLetterOrDigit() }.take(80).ifEmpty { "media" })
     if (!file.exists() || file.length() != bytes.size.toLong()) {
         val tmp = File(dir, file.name + ".tmp")
         tmp.writeBytes(bytes)
-        tmp.renameTo(file)
+        if (!tmp.renameTo(file)) throw IOException("the file could not be written")
+        dir.listFiles()?.filter { it != file }?.sortedByDescending { it.lastModified() }?.drop(MAX_MEDIA_FILES - 1)?.forEach { it.delete() }
     }
     return file
 }
@@ -127,31 +138,51 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
     var position by remember(file) { mutableIntStateOf(0) }
     var ratio by remember(file) { mutableFloatStateOf(16f / 9f) }
     var failed by remember(file) { mutableStateOf(false) }
+    var dragging by remember(file) { mutableStateOf(false) }
     DisposableEffect(file) {
         onDispose {
             player?.release()
             player = null
         }
     }
-    // While it plays, the bar follows.
+    // The app leaving the screen (Home, the screen off) pauses it.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, file) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && playing) {
+                runCatching { player?.pause() }
+                playing = false
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    // While it plays, the bar follows, but not under a drag.
     LaunchedEffect(player, playing) {
         while (playing) {
-            player?.let { position = runCatching { it.currentPosition }.getOrDefault(position) }
+            if (!dragging) player?.let { position = runCatching { it.currentPosition }.getOrDefault(position) }
             delay(250)
         }
     }
     fun start() {
-        val made = player ?: runCatching {
-            MediaPlayer().apply {
-                FileInputStream(file).use { setDataSource(it.fd) }
-                surface?.let { setSurface(it) }
-                setOnCompletionListener { playing = false; position = 0 }
-                setOnErrorListener { _, _, _ -> failed = true; playing = false; true }
-                setOnVideoSizeChangedListener { _, width, height -> if (width > 0 && height > 0) ratio = width.toFloat() / height }
-                prepare()
-                duration = this.duration
+        val made = player ?: run {
+            val created = MediaPlayer()
+            runCatching {
+                created.apply {
+                    FileInputStream(file).use { setDataSource(it.fd) }
+                    surface?.let { setSurface(it) }
+                    setOnCompletionListener { playing = false; position = 0 }
+                    setOnErrorListener { _, _, _ -> failed = true; playing = false; true }
+                    setOnVideoSizeChangedListener { _, width, height -> if (width > 0 && height > 0) ratio = width.toFloat() / height }
+                    prepare()
+                    duration = this.duration
+                }
+            }.getOrElse {
+                created.release()
+                failed = true
+                null
             }
-        }.getOrElse { failed = true; null } ?: return
+        } ?: return
         player = made
         made.start()
         playing = true
@@ -204,8 +235,14 @@ internal fun MediaPlayerView(file: File, video: Boolean, maxHeight: Dp) {
         if (duration > 0) {
             Slider(
                 value = position.toFloat().coerceIn(0f, duration.toFloat()),
-                onValueChange = { position = it.toInt() },
-                onValueChangeFinished = { player?.seekTo(position) },
+                onValueChange = {
+                    dragging = true
+                    position = it.toInt()
+                },
+                onValueChangeFinished = {
+                    player?.seekTo(position)
+                    dragging = false
+                },
                 valueRange = 0f..duration.toFloat(),
             )
         }
