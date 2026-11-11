@@ -1,6 +1,8 @@
 package io.github.truongfelix.idenanode
 
 import android.graphics.BitmapFactory
+import android.graphics.drawable.AnimatedImageDrawable
+import android.os.Build
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -123,15 +125,26 @@ fun PostContent(
     if (call.hasMedia && !(ipfsHidden && !shown)) {
         val tapToShow = hidden.hiding.pictures == PicturesMode.TapToShow && call.author != hidden.me
         var mediaShown by remember(call.hash) { mutableStateOf(false) }
+        val kind = kindOfType(call.mediaType)
         when {
             !showMedia -> Note(t(R.string.social_media))
             tapToShow && !mediaShown && inThread -> Text(
-                t(R.string.social_picture_tap),
+                when (kind) {
+                    MediaKind.VIDEO -> t(R.string.social_video_tap)
+                    MediaKind.AUDIO -> t(R.string.social_audio_tap)
+                    else -> t(R.string.social_picture_tap)
+                },
                 Modifier.clickable { mediaShown = true },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            tapToShow && !mediaShown -> Note(t(R.string.social_picture_open_post))
+            tapToShow && !mediaShown -> Note(
+                when (kind) {
+                    MediaKind.VIDEO -> t(R.string.social_video_open_post)
+                    MediaKind.AUDIO -> t(R.string.social_audio_open_post)
+                    else -> t(R.string.social_picture_open_post)
+                },
+            )
             else -> PostMedia(call, mediaMaxHeight, inThread)
         }
     }
@@ -167,20 +180,35 @@ private fun IpfsText(
     }
 }
 
-/** The first media: an image (inline or on IPFS); video, audio and SVG are only mentioned. */
+/**
+ * The first media: a picture, a moving picture, a video or a sound (inline or on IPFS); SVG is only mentioned. A video
+ * or a sound plays in its thread only; in a list a line says to open the post.
+ */
 @Composable
 private fun PostMedia(call: PostCall, maxHeight: Dp, inThread: Boolean) {
     val type = call.mediaType.lowercase()
-    val cid = ipfsCid(call.media)
+    val kind = kindOfType(type)
+    val playable = kind == MediaKind.VIDEO || kind == MediaKind.AUDIO
     when {
         call.media.isEmpty() -> Note(t(R.string.social_media_too_large))
-        type.startsWith("video/") || type.startsWith("audio/") -> Note(t(R.string.social_media_video))
         type == "image/svg+xml" -> Note(t(R.string.social_media_svg))
+        playable && !inThread -> Note(if (kind == MediaKind.VIDEO) t(R.string.social_video_open_post) else t(R.string.social_audio_open_post))
+        else -> MediaBytes(call, if (playable) t(R.string.social_loading_media) else t(R.string.social_loading_image)) { key, bytes ->
+            if (playable) PlayableMedia(key, type, bytes, maxHeight) else PostImage(key, bytes, maxHeight, inThread)
+        }
+    }
+}
+
+/** The bytes of a post's first media, known by [content]'s key (its IPFS id, or the post's hash for inline media). */
+@Composable
+private fun MediaBytes(call: PostCall, loading: String, content: @Composable (key: String, bytes: ByteArray) -> Unit) {
+    val cid = ipfsCid(call.media)
+    when {
         cid != null -> {
             val (state, retry) = rememberIpfs(cid)
             when (state) {
-                Fetched.Loading -> Note(t(R.string.social_loading_image))
-                is Fetched.Loaded -> PostImage(cid, state.bytes, maxHeight, inThread)
+                Fetched.Loading -> Note(loading)
+                is Fetched.Loaded -> content(cid, state.bytes)
                 Fetched.Unavailable -> Unavailable(retry)
                 is Fetched.Failed -> Note(t(R.string.social_scan_no_answer, state.reason))
             }
@@ -188,17 +216,47 @@ private fun PostMedia(call: PostCall, maxHeight: Dp, inThread: Boolean) {
         call.media.startsWith("ipfs://") -> Note(t(R.string.social_media_invalid_address))
         else -> {
             val bytes = remember(call.hash) { runCatching { Base64.getDecoder().decode(call.media) }.getOrNull() }
-            if (bytes == null) Note(t(R.string.social_media_unreadable)) else PostImage(call.hash, bytes, maxHeight, inThread)
+            if (bytes == null) Note(t(R.string.social_media_unreadable)) else content(call.hash, bytes)
         }
     }
 }
 
+/** A video or a sound declared as [type], played only when its file really is one ([playableKind]). */
+@Composable
+private fun PlayableMedia(key: String, type: String, bytes: ByteArray, maxHeight: Dp) {
+    val kind = remember(key) { playableKind(type, bytes) }
+    if (kind == null) {
+        Note(t(R.string.social_media_not_as_declared))
+        return
+    }
+    val file = rememberMediaFile(key, bytes)
+    if (file == null) Note(t(R.string.social_loading_media)) else MediaPlayerView(file, kind == MediaKind.VIDEO, maxHeight)
+}
+
 /**
- * An image decoded off the main thread, at most 1,080 pixels on its longer side; in a thread ([inThread]) a tap shows
- * it full screen, in a list the tap goes to the post (its thread).
+ * An image decoded off the main thread, at most 1,080 pixels on its longer side; a GIF or an animated WebP moves. In a
+ * thread ([inThread]) a tap shows it full screen, in a list the tap goes to the post (its thread).
  */
 @Composable
 private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp, inThread: Boolean) {
+    val format = remember(key) { sniffFormat(bytes) }
+    var open by remember(key) { mutableStateOf(false) }
+    val tap = if (inThread) Modifier.clickable { open = true } else Modifier
+    if (format == MediaFormat.GIF || format == MediaFormat.ANIMATED_WEBP) {
+        val animation by produceState<Pair<Boolean, AnimatedImageDrawable?>>(false to null, key) {
+            value = true to withContext(Dispatchers.Default) { decodeAnimation(bytes) }
+        }
+        if (!animation.first) {
+            Note(t(R.string.social_image_decoding))
+            return
+        }
+        // A GIF of one frame is a still picture, below.
+        animation.second?.let {
+            AnimationView(it, Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp)).then(tap), t(R.string.social_image_description))
+            if (open) AnimationViewer(key, bytes) { open = false }
+            return
+        }
+    }
     val decoded by produceState<Pair<Boolean, ImageBitmap?>>(false to images.get(key), key) {
         if (value.second == null) {
             val bitmap = withContext(Dispatchers.Default) { decodeScaled(bytes) }
@@ -207,15 +265,15 @@ private fun PostImage(key: String, bytes: ByteArray, maxHeight: Dp, inThread: Bo
         }
     }
     val bitmap = decoded.second
-    var open by remember(key) { mutableStateOf(false) }
     when {
         bitmap != null -> Image(
             bitmap = bitmap,
             contentDescription = t(R.string.social_image_description),
-            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp))
-                .then(if (inThread) Modifier.clickable { open = true } else Modifier),
+            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).clip(RoundedCornerShape(8.dp)).then(tap),
             contentScale = ContentScale.Fit,
         )
+        // Android reads AVIF from version 12 on.
+        decoded.first && format == MediaFormat.AVIF && Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> Note(t(R.string.social_image_avif_old_android))
         decoded.first -> Note(t(R.string.social_image_cannot_show))
         else -> Note(t(R.string.social_image_decoding))
     }

@@ -1,6 +1,11 @@
 package io.github.truongfelix.idenanode
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -69,6 +74,8 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
     val onPost = draft == null || draft.target == PostTarget.onPost(post.id)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val picker = rememberImagePicker(model)
+    val voice = rememberVoiceNote(model)
+    var attach by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
     if (options && draft != null) ReplyOptionsSheet(model, picker) { options = false }
     Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
@@ -89,7 +96,7 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                     }
                 }
                 val extras = listOfNotNull(
-                    sending.draftImage?.let { t(R.string.social_reply_image, it.chosen) },
+                    sending.draftImage?.let(::draftLabel),
                     t(R.string.social_text_on_ipfs).takeIf { sending.textOnIpfs },
                     t(R.string.social_long_text_question).takeIf { !sending.textOnIpfs && sending.draftText.length >= LONG_REPLY },
                 )
@@ -105,6 +112,10 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                     }
                 }
                 picker.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+                voice.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+                // What became of the draft's file (a voice note at its limit, a moving picture sent still).
+                sending.draftImage?.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+                if (voice.recording) Pill(voice.stopLabel, enabled = true, onClick = voice::stop)
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutlinedTextField(
                         value = sending.draftText,
@@ -115,13 +126,27 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                             .onFocusChanged { if (it.isFocused && sending.draft == null) sending.draft = replyDraft(post) },
                         placeholder = { Text(t(R.string.social_reply_to, displayName(post.call.author, model.names)), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    if (sending.draft == null) sending.draft = replyDraft(post)
-                                    picker.pick()
-                                },
-                                enabled = !picker.preparing,
-                            ) { Text("🖼") }
+                            // A picture or video, a sound file, a voice note (B-222, B-223).
+                            Box {
+                                IconButton(
+                                    onClick = {
+                                        if (sending.draft == null) sending.draft = replyDraft(post)
+                                        attach = true
+                                    },
+                                    enabled = !picker.preparing && !voice.recording,
+                                ) { Text("📎", Modifier.semantics { contentDescription = t(R.string.social_reply_attach) }) }
+                                DropdownMenu(expanded = attach, onDismissRequest = { attach = false }) {
+                                    DropdownMenuItem(text = { Text(t(R.string.social_editor_image)) }, onClick = { attach = false; picker.pick() })
+                                    DropdownMenuItem(text = { Text(t(R.string.social_editor_audio)) }, onClick = { attach = false; picker.pickAudio() })
+                                    DropdownMenuItem(text = { Text(t(R.string.social_editor_files)) }, onClick = { attach = false; picker.pickFile() })
+                                    DropdownMenuItem(
+                                        text = { Text(t(R.string.social_editor_record)) },
+                                        onClick = { attach = false; voice.record() },
+                                        // One media per reply: remove the picture or file first.
+                                        enabled = sending.draftImage == null,
+                                    )
+                                }
+                            }
                         },
                         maxLines = 5,
                         shape = RoundedCornerShape(24.dp),
@@ -129,12 +154,22 @@ fun ReplyBar(model: SocialModel, post: SocialPost, canPost: Boolean) {
                     )
                     FilledIconButton(
                         onClick = sending::prepareDraft,
-                        enabled = canPost && draft != null && !picker.preparing && (sending.draftText.isNotBlank() || sending.draftImage != null),
+                        enabled = canPost && draft != null && !picker.preparing && !voice.recording && (sending.draftText.isNotBlank() || sending.draftImage != null),
                         modifier = Modifier.padding(bottom = 4.dp).size(SEND_BUTTON),
                     ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t(R.string.social_post_reply)) }
                 }
             }
         }
+    }
+}
+
+/** The reply bar's line for its media: a picture's size, or a file's kind and weight. */
+private fun draftLabel(image: ImageDraft): String = if (!image.isAsIs) t(R.string.social_reply_image, image.chosen) else {
+    val weight = kilobytes(image.bytes.size)
+    when (kindOfType(image.type)) {
+        MediaKind.VIDEO -> t(R.string.social_reply_video, weight)
+        MediaKind.AUDIO -> t(R.string.social_reply_audio, weight)
+        else -> t(R.string.social_reply_animation, weight)
     }
 }
 
