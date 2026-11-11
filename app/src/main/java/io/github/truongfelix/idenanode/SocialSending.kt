@@ -37,10 +37,33 @@ fun putBackNote(sent: EditorContent?, putBack: Boolean): String? = when {
     else -> t(R.string.social_draft_not_back)
 }
 
-/** An image chosen for a post: its encodings at the offered sizes (longer side in pixels), and the chosen size. */
-data class ImageDraft(val sizes: Map<Int, ByteArray>, val chosen: Int) {
+/**
+ * The media chosen for a post: a picture's encodings at the offered sizes (longer side in pixels) and the chosen size,
+ * or a file sent as it is ([asIs]: a moving picture, a video, a sound; one size, [AS_IS]). [type] is what the post
+ * declares; [note] says what became of the file (a moving picture too large, sent still).
+ */
+data class ImageDraft(val sizes: Map<Int, ByteArray>, val chosen: Int, val type: String = SocialSending.IMAGE_TYPE, val note: String? = null) {
     val bytes: ByteArray
         get() = sizes.getValue(chosen)
+
+    /** Whether it is a file sent as it is, not a picture encoded by the app. */
+    val isAsIs: Boolean
+        get() = chosen == AS_IS
+
+    /** What the IPFS file is ([ipfsFileName]): "image", "video" or "audio". */
+    val what: String
+        get() = when (kindOfType(type)) {
+            MediaKind.VIDEO -> "video"
+            MediaKind.AUDIO -> "audio"
+            else -> "image"
+        }
+
+    companion object {
+        /** The size key of a file sent as it is. */
+        const val AS_IS = 0
+
+        fun asIs(bytes: ByteArray, type: String) = ImageDraft(mapOf(AS_IS to bytes), AS_IS, type)
+    }
 }
 
 /**
@@ -58,6 +81,8 @@ fun ipfsFileName(what: String): String = when (what) {
     "text" -> t(R.string.social_file_text)
     "image" -> t(R.string.social_file_image)
     "picture" -> t(R.string.social_file_picture)
+    "video" -> t(R.string.social_file_video)
+    "audio" -> t(R.string.social_file_audio)
     else -> what
 }
 
@@ -184,7 +209,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     fun prepareDraft() {
         val current = draft ?: return
         val text = draftText.trim()
-        val image = draftImage?.bytes
+        val image = draftImage
         val textFile = textOnIpfs && text.isNotEmpty()
         // A new post may go in a topic: its channel.
         val channel = if (current.target != PostTarget.NEW_POST || draftTopic.isBlank()) current.target.channel
@@ -196,9 +221,9 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             val files = ArrayList<IpfsFile>()
             fun file(what: String, bytes: ByteArray) = ipfsFile(posting, from, what, bytes).also { files += it }
             val message = if (textFile) "ipfs://" + file("text", text.toByteArray(Charsets.UTF_8)).cid else text
-            val media = image?.let { "ipfs://" + file("image", it).cid }
+            val media = image?.let { "ipfs://" + file(it.what, it.bytes).cid }
             val call = SocialPosting.post(
-                makePostArgument(message, current.target.replyTo, channel, media, media?.let { IMAGE_TYPE }),
+                makePostArgument(message, current.target.replyTo, channel, media, image?.type),
             )
             val fee = posting.estimate(from, call)
             // Every transaction may take up to twice its fee: the balance must cover them all.
@@ -363,7 +388,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
     }
 
     companion object {
-        /** The type of the images the app posts. */
+        /** The type of the pictures the app encodes (a file sent as it is keeps its own, [ImageDraft.type]). */
         const val IMAGE_TYPE = "image/webp"
 
         /** How long the status bar shows a refusal, and a done action. */

@@ -2,6 +2,7 @@ package io.github.truongfelix.idenanode
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.drawable.AnimatedImageDrawable
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.foundation.Image
@@ -25,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -62,6 +64,7 @@ internal fun imageFileType(bytes: ByteArray): Pair<String, String>? {
         at(0, 'G'.code, 'I'.code, 'F'.code, '8'.code) -> "image/gif" to "gif"
         at(0, 'R'.code, 'I'.code, 'F'.code, 'F'.code) && at(8, 'W'.code, 'E'.code, 'B'.code, 'P'.code) -> "image/webp" to "webp"
         at(0, 'B'.code, 'M'.code) -> "image/bmp" to "bmp"
+        sniffFormat(bytes) == MediaFormat.AVIF -> "image/avif" to "avif"
         else -> null
     }
 }
@@ -98,7 +101,26 @@ fun saveImageToGallery(context: Context, key: String, bytes: ByteArray): String 
  * [bytes] there is nothing to save (a flip frame).
  */
 @Composable
-fun ImageViewer(key: String?, bitmap: ImageBitmap, bytes: ByteArray?, onClose: () -> Unit) {
+fun ImageViewer(key: String?, bitmap: ImageBitmap, bytes: ByteArray?, onClose: () -> Unit) =
+    ZoomViewer(key, bytes, onClose) { modifier ->
+        Image(bitmap = bitmap, contentDescription = t(R.string.social_image_full_screen), modifier = modifier, contentScale = ContentScale.Fit)
+    }
+
+/** A post's moving picture (GIF, animated WebP) from its file [bytes], full screen and moving, as [ImageViewer]. */
+@Composable
+fun AnimationViewer(key: String, bytes: ByteArray, onClose: () -> Unit) {
+    // Its own copy: one decoded picture runs in one view only, and the post's stays in the post.
+    val drawable by produceState<AnimatedImageDrawable?>(null, key) {
+        value = withContext(Dispatchers.Default) { decodeAnimation(bytes) }
+    }
+    ZoomViewer(key, bytes, onClose) { modifier ->
+        drawable?.let { AnimationView(it, modifier, t(R.string.social_image_full_screen)) }
+    }
+}
+
+/** The full-screen frame of [ImageViewer] and [AnimationViewer]: [content] drawn with the zoom and move [Modifier]. */
+@Composable
+private fun ZoomViewer(key: String?, bytes: ByteArray?, onClose: () -> Unit, content: @Composable (Modifier) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var scale by remember { mutableFloatStateOf(1f) }
@@ -107,10 +129,8 @@ fun ImageViewer(key: String?, bitmap: ImageBitmap, bytes: ByteArray?, onClose: (
     var saving by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = t(R.string.social_image_full_screen),
-                modifier = Modifier
+            content(
+                Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
@@ -123,7 +143,6 @@ fun ImageViewer(key: String?, bitmap: ImageBitmap, bytes: ByteArray?, onClose: (
                         detectTapGestures(onDoubleTap = { scale = 1f; offset = Offset.Zero })
                     }
                     .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
-                contentScale = ContentScale.Fit,
             )
             Row(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
