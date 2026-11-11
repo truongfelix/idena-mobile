@@ -170,7 +170,10 @@ fun pickMedia(context: Context, uri: Uri, audio: Boolean): ImageDraft {
     val container = format == MediaFormat.MP4 || format == MediaFormat.WEBM
     val asSound = audio || pickedType.startsWith("audio/") || (container && !hasVideoTrack(context, uri))
     val animated = (format == MediaFormat.GIF || format == MediaFormat.ANIMATED_WEBP) && isAnimation(bytes)
-    return when (val picked = pickedAs(format, animated, bytes.size, asSound)) {
+    val picked = pickedAs(format, animated, bytes.size, asSound)
+    // A file picked as a sound must be one (a moving GIF would be posted as itself).
+    if (asSound && picked is PickedAs.AsIs && !picked.type.startsWith("audio/")) throw IOException(t(R.string.social_error_not_sound))
+    return when (picked) {
         is PickedAs.AsIs -> ImageDraft.asIs(withoutMp4Details(bytes) ?: throw IOException(t(R.string.social_error_video_unreadable)), picked.type)
         is PickedAs.TooLarge -> throw IOException(t(R.string.social_error_too_large, ipfsFileName(picked.what), bytes.size / 1000, MAX_IPFS_FILE / 1000))
         is PickedAs.Still -> {
