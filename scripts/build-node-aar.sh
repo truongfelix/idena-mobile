@@ -6,7 +6,7 @@ set -eu
 cd "$(dirname "$0")/.."
 . scripts/env.sh
 BINDING_REPO=https://github.com/truongfelix/idena-wasm-binding
-BINDING_REV=01ccca5cc3c94917725964541954a9f20e3412e9
+BINDING_REV=8772e6200afe6e0c670b945f275c10ced48bdbe2
 [ -f build/libidena_wasm_android_arm64.a ] || { echo "run scripts/build-wasm-android.sh first"; exit 1; }
 
 # The wasm binding pinned by idena-go, with Android support (go/wasm-binding-android.patch) and the

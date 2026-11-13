@@ -1,8 +1,8 @@
 module github.com/truongfelix/idena-mobile/go
 
-go 1.26.10
+go 1.26.11
 
-// The node: truongfelix/idena-go master f23eb89 (2026-11-09, the compatibility pin after #60 and #52):
+// The node: truongfelix/idena-go master 83ee80b (2026-11-13, the compatibility pin after #62):
 // ubiubi18/idena-go ef2107e with our pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for
 // the Social tab and #50 the consensus version on mobile) and truongfelix #1-#29 (--dbwritebuffer, read-only
 // consensus-version read, OpenTelemetry 1.45.0, push tracker, own dependency forks, dna_validationSummary,
@@ -13,8 +13,8 @@ go 1.26.10
 // dialable beside another connection, direct peers, the official node's IPFS folder and key file, the node key
 // given in memory, Go 1.26.10, a wait for a peer above a stale head instead of consensus at that height,
 // dna_ceremonySummary, the official IPFS folder converted without the two config keys kubo 0.42 refuses, a stoppable tx keeper,
-// go-jose 4.1.6 and klauspost/compress 1.20.2).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261109104443-f23eb89d9e40
+// go-jose 4.1.6 and klauspost/compress 1.20.2, Go 1.26.11 with binding libraries without LTO sections).
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261113123755-83ee80bc67aa
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
@@ -22,7 +22,7 @@ replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223
 replace github.com/libp2p/go-libp2p-kad-dht => github.com/truongfelix/go-libp2p-kad-dht v0.41.1-0.20260924080750-83f1403bcb17
 
 // The wasm binding pinned by idena-go with Android support, prepared by scripts/build-node-aar.sh from
-// truongfelix/idena-wasm-binding 01ccca5 + wasm-binding-android.patch + the Android library.
+// truongfelix/idena-wasm-binding 8772e62 + wasm-binding-android.patch + the Android library.
 replace github.com/idena-network/idena-wasm-binding => ../build/wasm-binding
 
 require (
