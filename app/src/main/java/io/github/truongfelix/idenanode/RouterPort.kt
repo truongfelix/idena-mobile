@@ -291,27 +291,39 @@ const val RENEW_BEFORE_SECONDS = 30 * 60L
 /** How long after a change the upkeep waits for an incoming peer before it makes the opening again, once. */
 const val RETRY_AFTER_MS = 5 * 60_000L
 
+/** One part of an IPv4 address written plainly: 0-255 without a leading zero (checked as a number after). */
+private val IPV4_PART = Regex("0|[1-9]\\d{0,2}")
+
 /**
- * Whether [ip] is an IPv4 address the internet can reach, as the node judges it (go-multiaddr's IsPublicAddr): not
- * this network's (10/8, 172.16/12, 192.168/16), not a provider's shared one (100.64/10, a router behind carrier-grade
- * NAT), loopback, link-local, multicast, documentation, benchmarking or reserved; written plainly (no leading zero,
- * which the node refuses).
+ * The IPv4 ranges the node takes as not public: go-multiaddr v0.16.1 net/private.go, Private4 then Unroutable4, as
+ * the node's IsPublicAddr checks an announced address (copied as is; compare on its next upgrade).
+ */
+private val NOT_PUBLIC_IPV4: List<Pair<Long, Long>> = listOf(
+    "127.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
+    "0.0.0.0/8", "192.0.0.0/26", "192.0.2.0/24", "192.88.99.0/24", "198.18.0.0/15", "198.51.100.0/24",
+    "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32",
+).map { cidr ->
+    val (base, bits) = cidr.split('/')
+    // The range's block: the addresses that share its first `bits` bits.
+    val size = 1L shl (32 - bits.toInt())
+    ipv4Number(base)!! / size to size
+}
+
+/** An IPv4 address written plainly (four numbers 0-255, no leading zero) as a number; null otherwise. */
+private fun ipv4Number(ip: String?): Long? {
+    val parts = ip?.split('.') ?: return null
+    if (parts.size != 4 || parts.any { !it.matches(IPV4_PART) || it.toInt() > 255 }) return null
+    return parts.fold(0L) { n, part -> n * 256 + part.toLong() }
+}
+
+/**
+ * Whether [ip] is an IPv4 address the internet can reach, as the node judges it ([NOT_PUBLIC_IPV4]): not this
+ * network's, not a provider's shared one (100.64/10, a router behind carrier-grade NAT), loopback, link-local,
+ * multicast, documentation, benchmarking or reserved; written plainly (the node refuses a leading zero).
  */
 fun isPublicIPv4(ip: String?): Boolean {
-    val parts = ip?.split('.') ?: return false
-    if (parts.size != 4 || parts.any { !it.matches(Regex("0|[1-9]\\d{0,2}")) || it.toInt() > 255 }) return false
-    val (a, b, c) = parts.map { it.toInt() }
-    return !(
-        a == 0 || a == 10 || a == 127 || a >= 224 ||
-            (a == 100 && b in 64..127) ||
-            (a == 169 && b == 254) ||
-            (a == 172 && b in 16..31) ||
-            (a == 192 && b == 168) ||
-            (a == 192 && b == 0 && (c == 0 || c == 2)) ||
-            (a == 198 && (b == 18 || b == 19)) ||
-            (a == 198 && b == 51 && c == 100) ||
-            (a == 203 && b == 0 && c == 113)
-        )
+    val n = ipv4Number(ip) ?: return false
+    return NOT_PUBLIC_IPV4.none { (block, size) -> n / size == block }
 }
 
 /**
@@ -325,7 +337,7 @@ fun publicAddrFor(externalIp: String?, port: Int): String? =
 /**
  * What the node announces (net_setPublicAddrs, node B-248): the router's public address with the opened port while
  * the app's [opening] is on [routerUdn] (this network's router, or null), before its end, for the port the node
- * listens on ([nodePort]), and the router still forwards it to the phone ([owner]); nothing otherwise. Without it
+ * listens on ([nodePort]), and the router still forwards it to the phone's address now ([owner]); nothing otherwise. Without it
  * the network learns the opened port only when libp2p takes the node as reachable, measured at 46 and 51 min after
  * an opening on a desktop. [externalIp] is read only when needed.
  */
@@ -339,7 +351,8 @@ fun announcement(
 ): List<String> {
     if (opening == null || routerUdn == null || opening.gateway.udn != routerUdn) return emptyList()
     if (nowMs >= opening.endMs || nodePort != opening.port) return emptyList()
-    if (owner() !in setOf(MappingOwner.Phone, MappingOwner.PhoneBefore)) return emptyList()
+    // Only a forwarding to the phone's address now: one to its previous address reaches nobody here.
+    if (owner() != MappingOwner.Phone) return emptyList()
     return listOfNotNull(publicAddrFor(externalIp(), opening.port))
 }
 
