@@ -323,4 +323,51 @@ class RouterPortTest {
             routerNotFoundText("Speedport Smart 4 Typ B"),
         )
     }
+
+    @Test
+    fun onlyAPublicIPv4AddressIsAnnounced() {
+        listOf(
+            "82.123.115.203", "1.1.1.1", "100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "8.8.8.8",
+            "198.17.0.1", "192.0.1.1", "203.0.114.1", "198.51.101.1", "192.0.0.64", "192.0.0.70", "223.255.255.255",
+        )
+            .forEach { assertTrue(it, isPublicIPv4(it)) }
+        listOf(
+            "192.168.1.1", "10.0.0.1", "172.16.0.1", "172.31.255.255", "100.64.0.1", "100.127.255.255", "127.0.0.1",
+            "169.254.1.1", "0.0.0.0", "224.0.0.1", "255.255.255.255", "256.1.1.1", "1.2.3", "1.2.3.4.5", "2a01:cb04::1",
+            "", null, " 82.123.115.203", "198.18.0.1", "198.19.255.1", "192.0.2.1", "192.0.0.1", "198.51.100.1",
+            "203.0.113.5", "08.8.8.8", "1.02.3.4", "192.0.0.63", "192.88.99.1", "240.0.0.1",
+        ).forEach { assertFalse(it.toString(), isPublicIPv4(it)) }
+        assertEquals("/ip4/82.123.115.203/tcp/40405", publicAddrFor("82.123.115.203", 40405))
+        assertNull(publicAddrFor("100.64.1.2", 40405))
+        assertNull(publicAddrFor("82.123.115.203", 0))
+        assertNull(publicAddrFor(null, 40405))
+    }
+
+    @Test
+    fun theNodeAnnouncesTheOpeningWhileItHolds() {
+        val opening = RouterOpening(livebox, "192.168.1.13", endMs = 10_000, changedAtMs = 0, port = 40405)
+        var asked = 0
+        fun announced(
+            opening: RouterOpening? = null,
+            udn: String? = livebox.udn,
+            now: Long = 5_000,
+            nodePort: Int = 40405,
+            owner: MappingOwner = MappingOwner.Phone,
+            ip: String? = "82.123.115.203",
+        ) = announcement(opening, udn, now, nodePort, { owner }, { asked++; ip })
+
+        assertEquals(listOf("/ip4/82.123.115.203/tcp/40405"), announced(opening))
+        assertEquals("the phone's previous address", emptyList<String>(), announced(opening, owner = MappingOwner.PhoneBefore))
+        assertEquals(1, asked)
+        assertEquals("no opening", emptyList<String>(), announced(null))
+        assertEquals("another network", emptyList<String>(), announced(opening, udn = null))
+        assertEquals("another router", emptyList<String>(), announced(opening, udn = "uuid:other"))
+        assertEquals("the opening ended", emptyList<String>(), announced(opening, now = 10_000))
+        assertEquals("the node is on another port", emptyList<String>(), announced(opening, nodePort = 40406))
+        assertEquals("the port goes to another device", emptyList<String>(), announced(opening, owner = MappingOwner.Other))
+        assertEquals("the router lost it", emptyList<String>(), announced(opening, owner = MappingOwner.None))
+        assertEquals("the router's address is asked only when needed", 1, asked)
+        assertEquals("carrier-grade NAT", emptyList<String>(), announced(opening, ip = "100.64.1.2"))
+        assertEquals("no address", emptyList<String>(), announced(opening, ip = null))
+    }
 }

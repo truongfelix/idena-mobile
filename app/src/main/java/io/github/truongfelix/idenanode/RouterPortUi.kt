@@ -170,12 +170,20 @@ class RouterPortModel(private val context: Context) {
         val replace = owner == MappingOwner.Phone || owner == MappingOwner.PhoneBefore
         RouterNet.open(found.gateway, port, phoneIp, opening.leaseSeconds(opening.changedAtMs), replace)
         RouterFiles.setOpening(context, opening)
+        announceLater(found.gateway)
     }
 
     /** Closes the node's port at once. */
     suspend fun close(found: RouterPortState.Found) = act(found) {
         RouterNet.delete(found.gateway, found.port)
         RouterFiles.setOpening(context, null)
+        announceLater(found.gateway)
+    }
+
+    /** Tells the node at once, after the row is free again: the router and the node may each take seconds. */
+    private fun announceLater(gateway: Gateway) {
+        val appContext = context.applicationContext
+        Thread { RouterPortUpkeep.announce(appContext, gateway) }.start()
     }
 
     private suspend fun act(found: RouterPortState.Found, request: () -> Unit) {
