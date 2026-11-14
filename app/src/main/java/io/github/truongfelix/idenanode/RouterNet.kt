@@ -203,6 +203,13 @@ object RouterNet {
         if (!answer.ok) throw RouterError(answer)
     }
 
+    /** The router's public address (GetExternalIPAddress), as it gives it; an empty answer gives null. */
+    fun externalAddress(gateway: Gateway): String? {
+        val answer = soap(gateway, "GetExternalIPAddress", emptyList()).first
+        if (!answer.ok) throw RouterError(answer)
+        return answer.fields["NewExternalIPAddress"]?.ifEmpty { null }
+    }
+
     /** Removes the forwarding of [port]; none there is fine. */
     fun delete(gateway: Gateway, port: Int) {
         val answer = soap(gateway, "DeletePortMapping", portArgs(port)).first

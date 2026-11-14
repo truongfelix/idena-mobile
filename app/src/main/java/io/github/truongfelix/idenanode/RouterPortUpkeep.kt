@@ -1,6 +1,7 @@
 package io.github.truongfelix.idenanode
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 
@@ -12,10 +13,59 @@ import java.time.Instant
  * Nothing when the phone is on another network: the router's lease ends the opening there.
  */
 object RouterPortUpkeep {
+    /**
+     * Keeps the opening, then has the node announce it or not ([announce]), also when there is nothing to keep. A
+     * router that fails to answer leaves the announcement as it is, until the next run.
+     */
     fun run(context: Context) {
-        val opening = RouterFiles.opening(context) ?: return
-        if (!RouterNet.onWifi(context)) return
-        val gateway = RouterNet.gatewayAt(opening.gateway.location, opening.gateway.udn) ?: return
+        announce(context, keep(context))
+    }
+
+    /**
+     * Has the node announce the opening, or nothing ([announcement]) when [gateway] (this network's router, or null)
+     * is not the opening's. A node without the call (older) or not answering is left alone; a failure is logged.
+     */
+    fun announce(context: Context, gateway: Gateway?) {
+        val rpc = NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))
+        val have = runCatching { rpc.call("net_publicAddrs") as? JSONArray }.getOrNull() ?: return
+        val want = runCatching {
+            val opening = RouterFiles.opening(context)
+            announcement(
+                opening,
+                gateway?.udn,
+                System.currentTimeMillis(),
+                NodeSettings.routerPort(context),
+                owner = { gateway!!.let { val (m, ip) = RouterNet.mapping(it, opening!!.port); mappingOwner(m, ip, opening) } },
+                externalIp = { RouterNet.externalAddress(gateway!!) },
+            )
+        }.onFailure { failed(it) }.getOrNull() ?: return
+        if ((0 until have.length()).map { have.optString(it) } == want) {
+            lastFailure = null
+            return
+        }
+        runCatching { rpc.call("net_setPublicAddrs", JSONArray().put(JSONArray(want))) }
+            .onSuccess {
+                lastFailure = null
+                android.util.Log.i("IdenaNode", "Router port announced: $want")
+            }
+            .onFailure { failed(it) }
+    }
+
+    /** The announcement's last failure, logged once until it changes or one succeeds: a router may never answer it. */
+    @Volatile private var lastFailure: String? = null
+
+    private fun failed(error: Throwable) {
+        val text = error.toString()
+        if (text == lastFailure) return
+        lastFailure = text
+        android.util.Log.w("IdenaNode", "Router port announcement failed: $text")
+    }
+
+    /** The upkeep itself; returns this network's router when it is the opening's, else null. */
+    private fun keep(context: Context): Gateway? {
+        val opening = RouterFiles.opening(context) ?: return null
+        if (!RouterNet.onWifi(context)) return null
+        val gateway = RouterNet.gatewayAt(opening.gateway.location, opening.gateway.udn) ?: return null
         val port = opening.port
         val (mapping, phoneIp) = RouterNet.mapping(gateway, port)
         val nodePort = NodeSettings.routerPort(context)
@@ -54,6 +104,7 @@ object RouterPortUpkeep {
                 )
             }
         }
+        return gateway
     }
 
     /** Whether a validation runs (its period is not None); false when the node does not answer. */

@@ -170,12 +170,14 @@ class RouterPortModel(private val context: Context) {
         val replace = owner == MappingOwner.Phone || owner == MappingOwner.PhoneBefore
         RouterNet.open(found.gateway, port, phoneIp, opening.leaseSeconds(opening.changedAtMs), replace)
         RouterFiles.setOpening(context, opening)
+        RouterPortUpkeep.announce(context, found.gateway)
     }
 
     /** Closes the node's port at once. */
     suspend fun close(found: RouterPortState.Found) = act(found) {
         RouterNet.delete(found.gateway, found.port)
         RouterFiles.setOpening(context, null)
+        RouterPortUpkeep.announce(context, found.gateway)
     }
 
     private suspend fun act(found: RouterPortState.Found, request: () -> Unit) {

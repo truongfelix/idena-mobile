@@ -291,6 +291,58 @@ const val RENEW_BEFORE_SECONDS = 30 * 60L
 /** How long after a change the upkeep waits for an incoming peer before it makes the opening again, once. */
 const val RETRY_AFTER_MS = 5 * 60_000L
 
+/**
+ * Whether [ip] is an IPv4 address the internet can reach, as the node judges it (go-multiaddr's IsPublicAddr): not
+ * this network's (10/8, 172.16/12, 192.168/16), not a provider's shared one (100.64/10, a router behind carrier-grade
+ * NAT), loopback, link-local, multicast, documentation, benchmarking or reserved; written plainly (no leading zero,
+ * which the node refuses).
+ */
+fun isPublicIPv4(ip: String?): Boolean {
+    val parts = ip?.split('.') ?: return false
+    if (parts.size != 4 || parts.any { !it.matches(Regex("0|[1-9]\\d{0,2}")) || it.toInt() > 255 }) return false
+    val (a, b, c) = parts.map { it.toInt() }
+    return !(
+        a == 0 || a == 10 || a == 127 || a >= 224 ||
+            (a == 100 && b in 64..127) ||
+            (a == 169 && b == 254) ||
+            (a == 172 && b in 16..31) ||
+            (a == 192 && b == 168) ||
+            (a == 192 && b == 0 && (c == 0 || c == 2)) ||
+            (a == 198 && (b == 18 || b == 19)) ||
+            (a == 198 && b == 51 && c == 100) ||
+            (a == 203 && b == 0 && c == 113)
+        )
+}
+
+/**
+ * The address the node announces for the router's opening of [port] (net_setPublicAddrs): the router's public
+ * address (GetExternalIPAddress) with the port, or null when the router has no public IPv4 address (behind another
+ * router, or a provider's carrier-grade NAT: then the port is not reachable from the internet).
+ */
+fun publicAddrFor(externalIp: String?, port: Int): String? =
+    if (isPublicIPv4(externalIp) && port in 1..65535) "/ip4/$externalIp/tcp/$port" else null
+
+/**
+ * What the node announces (net_setPublicAddrs, node B-248): the router's public address with the opened port while
+ * the app's [opening] is on [routerUdn] (this network's router, or null), before its end, for the port the node
+ * listens on ([nodePort]), and the router still forwards it to the phone ([owner]); nothing otherwise. Without it
+ * the network learns the opened port only when libp2p takes the node as reachable, measured at 46 and 51 min after
+ * an opening on a desktop. [externalIp] is read only when needed.
+ */
+fun announcement(
+    opening: RouterOpening?,
+    routerUdn: String?,
+    nowMs: Long,
+    nodePort: Int,
+    owner: () -> MappingOwner,
+    externalIp: () -> String?,
+): List<String> {
+    if (opening == null || routerUdn == null || opening.gateway.udn != routerUdn) return emptyList()
+    if (nowMs >= opening.endMs || nodePort != opening.port) return emptyList()
+    if (owner() !in setOf(MappingOwner.Phone, MappingOwner.PhoneBefore)) return emptyList()
+    return listOfNotNull(publicAddrFor(externalIp(), opening.port))
+}
+
 /** A plain HTTP response: status code and body (chunked or not). */
 data class HttpResponse(val status: Int, val body: String)
 
