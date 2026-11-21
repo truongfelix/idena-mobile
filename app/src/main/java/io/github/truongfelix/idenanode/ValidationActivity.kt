@@ -219,13 +219,21 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
     var pending by remember { mutableStateOf<List<SubmittedAnswer>?>(null) }
     // The short answers were refused as sent before: said once at the start of the long session.
     var sentBeforeNotice by remember {
-        mutableStateOf(!short && NodeSettings.answersSentBeforeFile(context, epoch, short = true).exists())
+        mutableStateOf(
+            !short && NodeSettings.answersSentBeforeFile(context, epoch, short = true).exists() &&
+                !NodeSettings.sentBeforeNoticeSeenFile(context, epoch).exists(),
+        )
     }
     if (sentBeforeNotice) {
+        val dismiss = {
+            sentBeforeNotice = false
+            scope.launch(Dispatchers.IO) { NodeSettings.sentBeforeNoticeSeenFile(context, epoch).createNewFile() }
+            Unit
+        }
         AlertDialog(
-            onDismissRequest = { sentBeforeNotice = false },
+            onDismissRequest = dismiss,
             text = { Text(t(R.string.validation_sent_before)) },
-            confirmButton = { TextButton(onClick = { sentBeforeNotice = false }) { Text(t(R.string.common_ok)) } },
+            confirmButton = { TextButton(onClick = dismiss) { Text(t(R.string.common_ok)) } },
         )
     }
     val sessionStart = if (short) times.start else times.shortEnd
