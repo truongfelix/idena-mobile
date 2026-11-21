@@ -174,6 +174,10 @@ private fun Done(times: CeremonyTimes, epoch: Int, onClose: () -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(t(R.string.validation_answers_sent), style = MaterialTheme.typography.headlineSmall)
+        val sentBefore = remember(epoch) {
+            listOf(true, false).any { NodeSettings.answersSentBeforeFile(context, epoch, it).exists() }
+        }
+        if (sentBefore) Text(t(R.string.validation_sent_before), color = MaterialTheme.colorScheme.error)
         if (inBlocks) {
             Text(t(R.string.validation_in_blocks))
         } else {
@@ -213,6 +217,17 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
     var sending by remember { mutableStateOf(false) }
     var sendError by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<List<SubmittedAnswer>?>(null) }
+    // The short answers were refused as sent before: said once at the start of the long session.
+    var sentBeforeNotice by remember {
+        mutableStateOf(!short && NodeSettings.answersSentBeforeFile(context, epoch, short = true).exists())
+    }
+    if (sentBeforeNotice) {
+        AlertDialog(
+            onDismissRequest = { sentBeforeNotice = false },
+            text = { Text(t(R.string.validation_sent_before)) },
+            confirmButton = { TextButton(onClick = { sentBeforeNotice = false }) { Text(t(R.string.common_ok)) } },
+        )
+    }
     val sessionStart = if (short) times.start else times.shortEnd
     val sessionEnd = if (short) times.shortEnd else times.longEnd
     val endsAt = remember(sessionEnd) { elapsedAt(sessionEnd) }
@@ -230,8 +245,11 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
                 val error = withContext(Dispatchers.IO) {
                     runCatching { rpc(context).submitAnswers(short, answers) }.exceptionOrNull()?.message
                 }
-                if (error == null || isAlreadySent(error)) {
-                    withContext(Dispatchers.IO) { NodeSettings.answersSentFile(context, epoch, short).createNewFile() }
+                if (error == null || isAlreadySent(error) || isSentBefore(error)) {
+                    withContext(Dispatchers.IO) {
+                        NodeSettings.answersSentFile(context, epoch, short).createNewFile()
+                        if (isSentBefore(error)) NodeSettings.answersSentBeforeFile(context, epoch, short).createNewFile()
+                    }
                     onSent()
                     return@launch
                 }

@@ -100,4 +100,15 @@ class ValidationTest {
         assertFalse(isAlreadySent("coinbase address is not a ceremony candidate"))
         assertFalse(isAlreadySent(null))
     }
+
+    @Test
+    fun answersRefusedAsSentBeforeMoveOn() {
+        // idena-go: one waiting in the pool (mempool), one in a block (validateCeremonyTx).
+        assertTrue(isSentBefore("multiple ceremony transaction [type=5] in executable queue"))
+        assertTrue(isSentBefore("multiple ceremony transaction [type=7] in pending queue"))
+        assertTrue(isSentBefore("duplicated tx"))
+        assertFalse(isSentBefore("tx can't be accepted due to wrong period"))
+        assertFalse(isSentBefore("duplicated flip"))
+        assertFalse(isSentBefore(null))
+    }
 }

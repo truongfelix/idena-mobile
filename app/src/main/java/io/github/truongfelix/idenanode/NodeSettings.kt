@@ -73,6 +73,10 @@ object NodeSettings {
     fun answersSentFile(context: Context, epoch: Int, short: Boolean): File =
         File(nodeDir(context), "answers_sent_${epoch}_${if (short) "short" else "long"}")
 
+    /** Kept beside [answersSentFile] when the node refused the answers as sent before ([isSentBefore]). */
+    fun answersSentBeforeFile(context: Context, epoch: Int, short: Boolean): File =
+        File(nodeDir(context), "answers_sent_before_${epoch}_${if (short) "short" else "long"}")
+
     /** Whether the user switched sync on. The node process checks it when Android restarts it. */
     fun isSyncEnabled(context: Context): Boolean = syncEnabledFile(context).exists()
 
