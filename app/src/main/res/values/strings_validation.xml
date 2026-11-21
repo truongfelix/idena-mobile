@@ -79,6 +79,7 @@
     <string name="validation_leave_title">Leave the validation?</string>
     <string name="validation_leave_text">The answers of this session are not sent yet. You can come back while the session lasts.</string>
     <string name="validation_answers_sent">Answers sent</string>
+    <string name="validation_sent_before">Answers for this identity were already sent, by this app earlier or by another app with the same key. Validating one identity in two apps at once can make the validation fail.</string>
     <string name="validation_in_blocks">Your short and long answers are in blocks: you can close the app.</string>
     <string name="validation_putting_in_blocks">The node is putting your answers in blocks. Keep the app open until this screen says it is done.</string>
     <string name="validation_ends_at">The validation ends at %1$s. Its result shows on the main screen a few minutes later, as the identity status.</string>

@@ -70,6 +70,14 @@ fun keywordsOf(indexes: List<Int>, all: List<Keyword>): List<Keyword> = indexes.
 fun isAlreadySent(error: String?): Boolean = error?.contains("already exists") == true
 
 /**
+ * An error that means answers of this kind from the identity are already in a block (`duplicated tx`) or wait in
+ * the node's pool (`multiple ceremony transaction`): sent before by this phone, whose answer from the node was
+ * lost, or by another app with the same key. No retry changes it (the desktop's rule, idena-desktop #158).
+ */
+fun isSentBefore(error: String?): Boolean =
+    error != null && ("duplicated tx" in error || "multiple ceremony transaction" in error)
+
+/**
  * Whether the answers are in blocks: the long answers, and the short answers the node reveals once the
  * long ones are sent (their hash went in the short session). Until then the node must run; after, the
  * app may close. [txs] are the identity's transactions in blocks (bcn_transactions): type and epoch.

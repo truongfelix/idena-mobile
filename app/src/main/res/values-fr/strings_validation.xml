@@ -81,6 +81,7 @@
     <string name="validation_leave_title">Quitter la validation ?</string>
     <string name="validation_leave_text">Les réponses de cette session ne sont pas encore envoyées. Vous pouvez revenir tant que la session dure.</string>
     <string name="validation_answers_sent">Réponses envoyées</string>
+    <string name="validation_sent_before">Les réponses de cette identité ont déjà été envoyées, par cette application plus tôt ou par une autre application avec la même clé. Valider une identité dans deux applications à la fois peut faire échouer la validation.</string>
     <string name="validation_in_blocks">Vos réponses courtes et longues sont dans des blocs : vous pouvez fermer l\'application.</string>
     <string name="validation_putting_in_blocks">Le nœud inscrit vos réponses dans des blocs. Gardez l\'application ouverte jusqu\'à ce que cet écran indique que c\'est fait.</string>
     <string name="validation_ends_at">La validation se termine le %1$s. Son résultat s\'affiche sur l\'écran principal quelques minutes plus tard, comme statut de l\'identité.</string>
