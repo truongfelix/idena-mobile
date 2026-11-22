@@ -2,7 +2,7 @@ module github.com/truongfelix/idena-mobile/go
 
 go 1.26.11
 
-// The node: truongfelix/idena-go master cc21ded (2026-11-18, the compatibility pin after #68):
+// The node: truongfelix/idena-go master 3d9de06 (2026-11-22, the compatibility pin after #69 and #70):
 // ubiubi18/idena-go ef2107e with our pull requests there (#35, #41-#50, incl. #47 bcn_blocksWithAddress for
 // the Social tab and #50 the consensus version on mobile) and truongfelix #1-#29 (--dbwritebuffer, read-only
 // consensus-version read, OpenTelemetry 1.45.0, push tracker, own dependency forks, dna_validationSummary,
@@ -15,8 +15,9 @@ go 1.26.11
 // dna_ceremonySummary, the official IPFS folder converted without the two config keys kubo 0.42 refuses, a stoppable tx keeper,
 // go-jose 4.1.6 and klauspost/compress 1.20.2, Go 1.26.11 with binding libraries without LTO sections, the fork
 // check updating its validators at each online switch, the public addresses the app announces for its router port,
-// OpenTelemetry 1.47.0, the memory IPFS build tag, no online-status tx for an identity delegated to a pool).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261118164810-cc21ded6edc1
+// OpenTelemetry 1.47.0, the memory IPFS build tag, no online-status tx for an identity delegated to a pool, a peer
+// exchange of incoming peers reachable through relays, the Idena protocol advertised from the host's creation).
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261122202751-3d9de0659d67
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
