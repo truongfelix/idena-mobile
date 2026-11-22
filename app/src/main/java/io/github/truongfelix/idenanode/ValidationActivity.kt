@@ -224,17 +224,11 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
                 !NodeSettings.sentBeforeNoticeSeenFile(context, epoch).exists(),
         )
     }
+    // Marked as seen when it shows (not on the tap, which a step change can cut off): said once per ceremony.
     if (sentBeforeNotice) {
-        val dismiss = {
-            sentBeforeNotice = false
-            scope.launch(Dispatchers.IO) { NodeSettings.sentBeforeNoticeSeenFile(context, epoch).createNewFile() }
-            Unit
+        LaunchedEffect(epoch) {
+            withContext(Dispatchers.IO) { NodeSettings.sentBeforeNoticeSeenFile(context, epoch).createNewFile() }
         }
-        AlertDialog(
-            onDismissRequest = dismiss,
-            text = { Text(t(R.string.validation_sent_before)) },
-            confirmButton = { TextButton(onClick = dismiss) { Text(t(R.string.common_ok)) } },
-        )
     }
     val sessionStart = if (short) times.start else times.shortEnd
     val sessionEnd = if (short) times.shortEnd else times.longEnd
@@ -294,6 +288,8 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
             totalMs = totalMs,
             submitAt = submitAt,
             withKeywords = !short,
+            notice = if (sentBeforeNotice) t(R.string.validation_sent_before) else null,
+            onNotice = { sentBeforeNotice = false },
         ) { answers ->
             send(if (short) shortSessionAnswers(state.hashes.map { it.hash }, answers) else longSessionAnswers(shown, answers))
         }
