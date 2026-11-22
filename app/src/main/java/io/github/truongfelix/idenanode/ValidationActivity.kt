@@ -218,17 +218,9 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
     var sendError by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<List<SubmittedAnswer>?>(null) }
     // The short answers were refused as sent before: said once at the start of the long session.
-    var sentBeforeNotice by remember {
-        mutableStateOf(
-            !short && NodeSettings.answersSentBeforeFile(context, epoch, short = true).exists() &&
-                !NodeSettings.sentBeforeNoticeSeenFile(context, epoch).exists(),
-        )
-    }
-    // Marked as seen when it shows (not on the tap, which a step change can cut off): said once per ceremony.
-    if (sentBeforeNotice) {
-        LaunchedEffect(epoch) {
-            withContext(Dispatchers.IO) { NodeSettings.sentBeforeNoticeSeenFile(context, epoch).createNewFile() }
-        }
+    val sentBeforeNotice = remember {
+        !short && NodeSettings.answersSentBeforeFile(context, epoch, short = true).exists() &&
+            !NodeSettings.sentBeforeNoticeSeenFile(context, epoch).exists()
     }
     val sessionStart = if (short) times.start else times.shortEnd
     val sessionEnd = if (short) times.shortEnd else times.longEnd
@@ -289,7 +281,8 @@ private fun RealSession(times: CeremonyTimes, epoch: Int, short: Boolean, flips:
             submitAt = submitAt,
             withKeywords = !short,
             notice = if (sentBeforeNotice) t(R.string.validation_sent_before) else null,
-            onNotice = { sentBeforeNotice = false },
+            // Seen once the line is on screen with the flips: this screen's scope outlives the line.
+            onNoticeShown = { scope.launch(Dispatchers.IO) { NodeSettings.sentBeforeNoticeSeenFile(context, epoch).createNewFile() } },
         ) { answers ->
             send(if (short) shortSessionAnswers(state.hashes.map { it.hash }, answers) else longSessionAnswers(shown, answers))
         }
