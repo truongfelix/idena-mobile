@@ -90,6 +90,8 @@ fun Session(
     totalMs: Long,
     submitAt: Long,
     withKeywords: Boolean,
+    notice: String? = null,
+    onNoticeShown: () -> Unit = {},
     onSubmit: (Answers) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -173,6 +175,12 @@ fun Session(
     zoomed?.takeIf { it.first == flip.hash }?.let { ZoomedImage(flip, it.second) { zoomed = null } }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SessionHeader(title, endsAt - now, totalMs)
+        // A line under the header, not a dialog: the session's time runs on. It stays to the session's end, so
+        // nothing under the validator's finger moves (B-301).
+        notice?.let {
+            LaunchedEffect(Unit) { onNoticeShown() }
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
         if (!checkingKeywords) {
             Text(t(R.string.validation_flip_of, index + 1, flips.size), style = MaterialTheme.typography.bodyMedium)
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
