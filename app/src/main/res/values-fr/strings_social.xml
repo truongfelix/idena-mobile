@@ -346,8 +346,8 @@
         <item quantity="many">"%1$d publications  ·  dernière activité %2$s"</item>
     </plurals>
     <plurals name="social_topic_header">
-        <item quantity="one">%1$d publication parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; le site Idena Social n\'affiche pas les publications des sujets.</item>
-        <item quantity="other">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; le site Idena Social n\'affiche pas les publications des sujets.</item>
-        <item quantity="many">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet ; le site Idena Social n\'affiche pas les publications des sujets.</item>
+        <item quantity="one">%1$d publication parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet.</item>
+        <item quantity="other">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet.</item>
+        <item quantity="many">%1$d publications parmi les publications lues jusqu\'ici. Tout le monde peut écrire dans n\'importe quel sujet.</item>
     </plurals>
 </resources>
