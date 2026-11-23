@@ -130,7 +130,7 @@ fun SocialScreen(
     }
     CompositionLocalProvider(
         LocalNames provides model.names,
-        LocalPictures provides shownPictures(model.profiles.values),
+        LocalPictures provides shownPictures(model.shownProfiles),
         LocalHiding provides HiddenContent(model.hiding, myAddress),
         LocalPostMenu provides PostMenu(
             me = myAddress,
@@ -140,6 +140,19 @@ fun SocialScreen(
             onBlockTopic = { model.setTopicBlocked(it, true) },
         ),
         LocalProfileAccess provides ProfileAccess(myAddress, canAct, model.profileAction, model.sending::waiting),
+        LocalModeration provides ModerationAccess(
+            on = model.moderation.on,
+            me = myAddress,
+            state = model.moderation.state,
+            epoch = model.moderation.epoch,
+            placeholders = model.moderated.placeholders,
+            role = if (model.moderation.on) model.moderation.state.moderatorRole(model.moderation.epoch, myAddress, model.moderation.myStake) else null,
+            canAct = canAct,
+            stakeOf = { model.states[it.lowercase()]?.stake },
+            onAction = { what, detail, call -> model.sending.prepareModeration(what, detail, call) },
+            waiting = model.sending::waiting,
+            openPage = { model.open(SocialPage.Moderation) },
+        ),
         LocalNow provides now,
         LocalPendingLikes provides model.sending.sent.likes,
         LocalOpenTopic provides model::openTopic,
@@ -238,6 +251,12 @@ fun SocialScreen(
             page is SocialPage.GroupEdit -> key(page) {
                 GroupEditView(model, page.key, canSend = canAct, onBack = model::back, Modifier.fillMaxSize())
             }
+            page is SocialPage.Moderation -> key(page) {
+                Column(Modifier.fillMaxSize()) {
+                    BackRow(model::back)
+                    ModerationPage(model, model::openProfile, { id -> model.open(SocialPage.Thread(id)) }, Modifier.weight(1f))
+                }
+            }
             page is SocialPage.Settings -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
@@ -309,7 +328,7 @@ fun SocialScreen(
                         onTip = { tipping = it },
                         onWho = { who = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-                        contract = model.profiles[page.address.lowercase()],
+                        contract = model.profiles[page.address.lowercase()]?.let(model::shownProfile),
                         myContract = myAddress?.let { model.profiles[it.lowercase()] },
                         onContract = { model.profiles[it.address] = it },
                         reload = model.profileWrites,

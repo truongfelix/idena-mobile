@@ -70,6 +70,9 @@ sealed interface SocialPage {
     /** Social settings ([SocialSettingsView]). */
     data object Settings : SocialPage
 
+    /** The community moderators' page (B-308). */
+    data object Moderation : SocialPage
+
     /** The accounts blocked ([BlockedView]). */
     data object Blocked : SocialPage
 
@@ -126,8 +129,22 @@ enum class ProfileTab(@StringRes private val titleId: Int) {
 class SocialModel(private val context: Context, private val scope: CoroutineScope) {
     var cache by mutableStateOf<SocialCache?>(null)
         private set
-    var feed by mutableStateOf<List<SocialPost>>(emptyList())
+    // The feed as scanned, before Community moderation: for the moderators' tools ([scannedFeed]).
+    var scannedFeed by mutableStateOf<List<SocialPost>>(emptyList())
         private set
+
+    /** Community moderation (off unless turned on): the setting, the contract read on, its decisions. */
+    val moderation = SocialModeration(context, scope)
+
+    /** The feed as Community moderation shows it, with its placeholders; empty while its first read holds it. */
+    val moderated: ModeratedFeed by derivedStateOf {
+        if (moderation.loading) ModeratedFeed(emptyList(), emptyMap())
+        else moderatedFeed(scannedFeed, moderation.state, moderation.epoch)
+    }
+
+    /** The feed every view reads: moderated ([moderated]); the scanned one with Community moderation off. */
+    val feed: List<SocialPost>
+        get() = moderated.feed
 
     /** The identity state and age of the authors (Human, Verified...), read again at each new epoch. */
     val states = mutableStateMapOf<String, AuthorIdentity>()
@@ -226,7 +243,17 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         private set
     /** The names shown: those given on the phone, else the names claimed in the profiles contract ([mergedNames]). */
     val names: Map<String, String>
-        get() = mergedNames(peopleNames(people), shownNames(profiles.values))
+        get() = mergedNames(peopleNames(people), shownNames(shownProfiles))
+
+    /** [profile] as shown: a banned account's (Community moderation) without its name, bio and picture; one's own kept. */
+    fun shownProfile(profile: ContractProfile): ContractProfile =
+        if (profile.address != myAddress && moderation.on && moderation.state.activeBan(profile.address, moderation.epoch) != null)
+            profile.copy(name = null, bio = null, picture = null)
+        else profile
+
+    /** The profiles read, as shown ([shownProfile]). */
+    val shownProfiles: List<ContractProfile>
+        get() = profiles.values.map(::shownProfile)
 
     /** Puts [person] in the People list (or takes it out once it has no name and no mark) and saves the list. */
     fun setPerson(person: Person) {
@@ -331,6 +358,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         refreshProfile(myAddress)
         profileWrites++
         refreshOffers()
+        moderation.refresh()
     }
 
     /** The vouch offers made to the account that wait for its answer (B-81): in Notifications, counted in its badge. */
@@ -479,7 +507,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     private suspend fun show(next: SocialCache) {
         cache = next
-        feed = withContext(Dispatchers.Default) { next.feed() }
+        scannedFeed = withContext(Dispatchers.Default) { next.feed() }
         // What was sent is in the feed now when its block was read.
         sending.sent.scanned(next.authorsHeight)
         // The ages and states change at the validation: ask again in a new epoch.
@@ -686,7 +714,11 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
         val me = myAddress ?: return
         refreshOffers()
         val current = feed
-        allActivity = withContext(Dispatchers.Default) { socialActivity(current, me) }
+        val placeholders = moderated.placeholders
+        // An answer Community moderation hid is no notification.
+        allActivity = withContext(Dispatchers.Default) {
+            socialActivity(current, me).filter { item -> item.answer?.hash?.lowercase() !in placeholders }
+        }
         val through = cache?.authorsHeight ?: return
         if (seenThrough == null) {
             // The first scan: what is there already is not news.
@@ -706,7 +738,7 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
 
     /** Waits [ms], or less when a button changes, the tab is shown or hidden, or a post was made. */
     private suspend fun pause(ms: Long) {
-        withTimeoutOrNull(ms) { snapshotFlow { listOf(scanning, wake, visible, notify) }.drop(1).first() }
+        withTimeoutOrNull(ms) { snapshotFlow { listOf(scanning, wake, visible, notify, moderation.on) }.drop(1).first() }
     }
 
     /** Scans while the app is shown (see the class); returns when [lifecycle] ends. */
@@ -743,6 +775,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
                         pause(30_000)
                         continue
                     }
+                    // Community moderation's decisions, read on at most once a minute while it is on.
+                    moderation.syncIfDue(rpc(context), myAddress)
                     val source = NodeSocialSource(rpc(context))
                     val (nodeHead, headTime) = withContext(Dispatchers.IO) { source.headBlock() }
                     head = nodeHead

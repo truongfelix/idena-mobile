@@ -117,6 +117,7 @@ fun PostHeader(
                     softWrap = false,
                 )
             }
+            BannedLabel(call.author)
             Text("  ·  " + ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
           }
           PostMenuButton(call)
@@ -144,15 +145,19 @@ fun PostHeader(
                 Text(ago(call.time), style = MaterialTheme.typography.bodySmall, color = color, maxLines = 1, softWrap = false)
                 PostMenuButton(call)
             }
-            identity?.let {
-                Text(
-                    it.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette(it.state),
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                identity?.let {
+                    Text(
+                        it.label,
+                        Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette(it.state),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                BannedLabel(call.author)
             }
         }
     }
@@ -176,6 +181,15 @@ fun PostCard(
     topicShown: TopicShown = TopicShown.AsTag,
 ) {
     val topic = post.topic?.takeIf { topicShown != TopicShown.Not }
+    // Hidden by Community moderation with answers under it: one line and the answers' count, no author or actions.
+    val moderation = LocalModeration.current
+    if (moderation?.isPlaceholder(post) == true) {
+        Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 10.dp)) {
+            ModeratedLine(moderation.reasonOf(post))
+            Text("💬 ${replyCount(post)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
     // Flat, as Reddit's feed: the list draws a thin line between posts.
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {

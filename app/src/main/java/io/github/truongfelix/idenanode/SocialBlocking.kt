@@ -57,6 +57,7 @@ val BLOCKED_TEXT: String
 fun BlockMenu(person: Person, onBlock: (Person) -> Unit, onName: (() -> Unit)? = null) {
     var open by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
+    var moderating by remember { mutableStateOf<ModerationDialog?>(null) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = t(R.string.common_more)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -75,9 +76,15 @@ fun BlockMenu(person: Person, onBlock: (Person) -> Unit, onName: (() -> Unit)? =
                 open = false
                 asking = true
             })
+            // Community moderation, while on: Report, and a moderator's Ban or Unban (B-308).
+            ModerationMenuItems(person.address, null) {
+                open = false
+                moderating = it
+            }
         }
     }
     if (asking) BlockDialog(person, onBlock) { asking = false }
+    ModerationDialogView(moderating) { moderating = null }
 }
 
 /**
@@ -159,6 +166,7 @@ fun PostMenuButton(call: PostCall) {
     if (call.author == menu.me) return
     var open by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
+    var moderating by remember { mutableStateOf<ModerationDialog?>(null) }
     val hidden = call.hash.lowercase() in LocalHiding.current.hiding.posts
     val name = displayName(call.author, LocalNames.current)
     Box {
@@ -185,9 +193,15 @@ fun PostMenuButton(call: PostCall) {
                     menu.onBlockTopic(topic)
                 })
             }
+            // Community moderation, while on: Report, and a moderator's Hide this post and Ban or Unban (B-308).
+            ModerationMenuItems(call.author, call.hash) {
+                open = false
+                moderating = it
+            }
         }
     }
     if (asking) BlockDialog(menu.person(call.author), menu.onBlock) { asking = false }
+    ModerationDialogView(moderating) { moderating = null }
 }
 
 /** The accounts blocked, each with Unblock; a tap on one opens its profile. */

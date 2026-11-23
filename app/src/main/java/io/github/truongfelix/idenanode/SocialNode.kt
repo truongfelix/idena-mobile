@@ -76,7 +76,7 @@ class NodeSocialSource(private val rpc: NodeRpc) : SocialSource {
         addresses.zip(rpc.batch("dna_identity", addresses.map { JSONArray().put(it) }))
             .associate { (address, identity) ->
                 val json = identity as? JSONObject
-                address to AuthorIdentity(json?.optString("state") ?: "", json?.optInt("age") ?: 0)
+                address to AuthorIdentity(json?.optString("state") ?: "", json?.optInt("age") ?: 0, json?.optString("stake")?.toDoubleOrNull() ?: 0.0)
             }
 
     /** The state, age and stake of [address]'s identity. */

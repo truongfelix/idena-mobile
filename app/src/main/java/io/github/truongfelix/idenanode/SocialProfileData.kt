@@ -105,7 +105,8 @@ fun identityStatus(state: String): String =
     if (state.isEmpty() || state == "Undefined") t(R.string.social_not_validated) else identityStateText(state)
 
 /** What a post's header shows of its author's identity: the state and the age in epochs. */
-data class AuthorIdentity(val state: String, val age: Int) {
+/** [stake] in iDNA: Community moderation's moderators hold 1,000,000 (Moderation.kt). */
+data class AuthorIdentity(val state: String, val age: Int, val stake: Double = 0.0) {
     /** "Human · age 12"; the state alone without an identity or at age 0. */
     val label: String
         get() = if (age > 0 && state.isNotEmpty() && state != "Undefined") t(R.string.social_status_age, identityStatus(state), age) else identityStatus(state)

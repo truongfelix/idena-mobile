@@ -137,6 +137,13 @@ fun ProfileList(
     }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
         item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustButton, vouchButton) }
+        // Community moderation (B-308): a banned account's banner (one's own too), and a moderator's Moderate panel.
+        item(key = "moderation") {
+            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BanBanner(address, onProfile)
+                if (!isMe) ModeratePanel(address)
+            }
+        }
         // Own profile: the node's task (flips to make), then, for an account without an identity, how to be vouched for.
         if (isMe) {
             myTask?.let { item { it() } }
