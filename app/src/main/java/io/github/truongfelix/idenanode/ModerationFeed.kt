@@ -29,6 +29,13 @@ fun hiddenStatus(call: PostCall, state: ModerationState, epoch: Long?): HiddenSt
 /** A placeholder's call: the same post, without what it says or shows. */
 private fun PostCall.emptied() = copy(message = "", hasMedia = false, media = "", mediaType = "")
 
+/**
+ * Whether this is a placeholder's call ([emptied]): no text and no media, which socialFeed never keeps for a real post
+ * (one without either has no place in the feed).
+ */
+val PostCall.isModeratedPlaceholder: Boolean
+    get() = message.isEmpty() && !hasMedia
+
 /** The posts Community moderation shows as a placeholder (by transaction hash), with the moderators' reason. */
 data class ModeratedFeed(val feed: List<SocialPost>, val placeholders: Map<String, String>)
 
@@ -47,9 +54,10 @@ fun moderatedFeed(feed: List<SocialPost>, state: ModerationState, epoch: Long?):
 
     // A reply's comments: a comment's answers are the comments that reply to it; a loop counts as nothing shown.
     fun comments(comments: List<SocialPost>): List<SocialPost> {
-        val ids = comments.map { it.id.toString() }.toSet()
-        val answers = comments.filter { it.call.replyTo in ids && it.call.replyTo != it.id.toString() }
-            .groupBy { it.call.replyTo }
+        // Ids as numbers, as socialFeed reads replyToPostId ("07" answers 7).
+        val ids = comments.map { it.id }.toSet()
+        val answers = comments.filter { it.call.replyTo.toLongOrNull().let { to -> to != null && to in ids && to != it.id } }
+            .groupBy { it.call.replyTo.toLong() }
         val shown = mutableMapOf<Long, Boolean>()
         val resolving = mutableSetOf<Long>()
         fun shows(comment: SocialPost): Boolean {
@@ -58,7 +66,7 @@ fun moderatedFeed(feed: List<SocialPost>, state: ModerationState, epoch: Long?):
             val result = when (val status = hiddenStatus(comment.call, state, epoch)) {
                 null -> true
                 HiddenStatus.DuringBan -> false
-                is HiddenStatus.Hidden -> answers[comment.id.toString()].orEmpty().any { shows(it) }
+                is HiddenStatus.Hidden -> answers[comment.id].orEmpty().any { shows(it) }
             }
             resolving.remove(comment.id)
             shown[comment.id] = result

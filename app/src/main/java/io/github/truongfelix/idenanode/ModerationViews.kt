@@ -28,15 +28,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
 
@@ -54,7 +58,8 @@ class ModerationAccess(
     val role: ModeratorRole?,
     val canAct: Boolean,
     val stakeOf: (String) -> Double?,
-    val onAction: (what: String, detail: String?, call: SocialCall) -> Unit,
+    /** Prepares [call] (its fee shown next); [onSent] runs once the node took it. */
+    val onAction: (what: String, detail: String?, call: SocialCall, onSent: () -> Unit) -> Unit,
     val waiting: (SocialCall) -> Boolean,
     val openPage: () -> Unit,
 ) {
@@ -62,15 +67,36 @@ class ModerationAccess(
     fun reasonOf(post: SocialPost) = placeholders[post.call.hash.lowercase()].orEmpty()
     fun ban(address: String?) = if (on) state.activeBan(address, epoch) else null
 
-    /** The role of [address] itself (a staker or a vouched moderator cannot be banned), from its known stake. */
-    fun targetRole(address: String): ModeratorRole? = when {
-        (stakeOf(address) ?: 0.0) >= MODERATOR_STAKE -> ModeratorRole.Staker
+    /** The role of [address] itself (a staker or a vouched moderator cannot be banned), from its [stake]. */
+    fun targetRole(address: String, stake: Double?): ModeratorRole? = when {
+        (stake ?: 0.0) >= MODERATOR_STAKE -> ModeratorRole.Staker
         state.vouchersOf(address).isNotEmpty() -> ModeratorRole.Vouched
         else -> null
     }
 }
 
 val LocalModeration = compositionLocalOf<ModerationAccess?> { null }
+
+/**
+ * [address]'s stake (iDNA): the one the scan read with the authors' identities, else read from the node now; null
+ * while it is read (a ban waits for it: a staker cannot be banned).
+ */
+@Composable
+fun rememberStake(address: String?): Double? {
+    val access = LocalModeration.current
+    val known = address?.let { access?.stakeOf?.invoke(it) }
+    val context = LocalContext.current
+    val read by produceState<Double?>(null, address, known) {
+        if (address == null || known != null) return@produceState
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                (NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context)).call("dna_identity", org.json.JSONArray().put(address)) as? org.json.JSONObject)
+                    ?.optString("stake")?.toDoubleOrNull() ?: 0.0
+            }.getOrNull()
+        }
+    }
+    return known ?: read
+}
 
 /** The text of a [ModerationRefusal]. */
 fun refusalText(refusal: ModerationRefusal): String = t(
@@ -235,7 +261,7 @@ private fun ReportDialog(dialog: ModerationDialog.Report, onDismiss: () -> Unit)
             if (previous == null) {
                 DialogActions(onDismiss, t(R.string.mod_report), refusal == null && !waiting && access.canAct) {
                     onDismiss()
-                    access.onAction(t(R.string.mod_report_what), reason.trim(), call)
+                    access.onAction(t(R.string.mod_report_what), reason.trim(), call) {}
                 }
             } else {
                 TextButton(onClick = onDismiss) { Text(t(R.string.common_close)) }
@@ -259,9 +285,10 @@ private fun ModeratorDialog(dialog: ModerationDialog.Act, onDismiss: () -> Unit)
     val epochs = epochsText.takeIf { Regex("^[0-9]{1,5}$").matches(it) }?.toInt() ?: -1
     val action = dialog.action
     val withReason = action in setOf("ban", "unban", "hidePost", "restorePost", "hidePosts")
+    val targetStake = rememberStake(dialog.address.takeIf { action == "ban" })
     var refusal = access.state.moderatorRefusal(
         access.epoch, access.me, access.role, dialog.address,
-        if (action == "ban" && dialog.address != null) access.targetRole(dialog.address) else null,
+        if (action == "ban" && dialog.address != null) access.targetRole(dialog.address, targetStake) else null,
         if (action == "ban") epochs else 0, reason, if (action == "hidePosts") dialog.hashes.size else 1,
     )
     if (action == "withdrawVouch") refusal = if (access.me == null) ModerationRefusal.NoAccount else null
@@ -333,10 +360,11 @@ private fun ModeratorDialog(dialog: ModerationDialog.Act, onDismiss: () -> Unit)
             }
         },
         confirmButton = {
-            DialogActions(onDismiss, t(R.string.mod_continue), refusal == null && !waiting && access.canAct) {
+            // A ban waits for the target's stake (a staker cannot be banned).
+            val stakeKnown = action != "ban" || targetStake != null
+            DialogActions(onDismiss, t(R.string.mod_continue), refusal == null && stakeKnown && !waiting && access.canAct) {
                 onDismiss()
-                access.onAction(title, reason.trim().ifEmpty { null }, call)
-                dialog.onSent()
+                access.onAction(title, reason.trim().ifEmpty { null }, call, dialog.onSent)
             }
         },
     )
@@ -381,7 +409,8 @@ fun ModeratePanel(address: String) {
     val names = LocalNames.current
     val banned = access.ban(address) != null
     val vouchers = access.state.vouchersOf(address)
-    val target = access.targetRole(address)
+    val stake = rememberStake(address)
+    val target = access.targetRole(address, stake)
     val reporters = access.state.reports
         .filter { it.kind == "address" && it.target == address && access.ban(it.reporter) == null }
         .map { it.reporter }.toSet()
@@ -397,7 +426,9 @@ fun ModeratePanel(address: String) {
         if (reporters.isNotEmpty()) Text(tp(R.plurals.mod_reported_by, reporters.size, reporters.size), style = MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (banned) OutlinedButton(onClick = { dialog = ModerationDialog.Act("unban", address = address) }) { Text(t(R.string.mod_unban_button)) }
-            else OutlinedButton(onClick = { dialog = ModerationDialog.Act("ban", address = address) }, enabled = target == null) { Text(t(R.string.mod_ban_button)) }
+            else OutlinedButton(onClick = { dialog = ModerationDialog.Act("ban", address = address) }, enabled = stake != null && target == null) {
+                Text(t(R.string.mod_ban_button))
+            }
             if (access.role == ModeratorRole.Staker && !iVouch && !banned && target != ModeratorRole.Staker)
                 OutlinedButton(onClick = { dialog = ModerationDialog.Act("vouch", address = address) }) { Text(t(R.string.mod_vouch_button)) }
             if (iVouch) OutlinedButton(onClick = { dialog = ModerationDialog.Act("withdrawVouch", address = address) }) { Text(t(R.string.mod_withdraw_button)) }

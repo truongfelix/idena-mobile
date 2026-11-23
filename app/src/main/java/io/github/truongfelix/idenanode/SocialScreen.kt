@@ -149,7 +149,7 @@ fun SocialScreen(
             role = if (model.moderation.on) model.moderation.state.moderatorRole(model.moderation.epoch, myAddress, model.moderation.myStake) else null,
             canAct = canAct,
             stakeOf = { model.states[it.lowercase()]?.stake },
-            onAction = { what, detail, call -> model.sending.prepareModeration(what, detail, call) },
+            onAction = { what, detail, call, onSent -> model.sending.prepareModeration(what, detail, call, onSent) },
             waiting = model.sending::waiting,
             openPage = { model.open(SocialPage.Moderation) },
         ),
@@ -254,7 +254,7 @@ fun SocialScreen(
             page is SocialPage.Moderation -> key(page) {
                 Column(Modifier.fillMaxSize()) {
                     BackRow(model::back)
-                    ModerationPage(model, model::openProfile, { id -> model.open(SocialPage.Thread(id)) }, Modifier.weight(1f))
+                    ModerationPage(model, model::openProfile, { root, focus -> model.open(SocialPage.Thread(root, focus)) }, Modifier.weight(1f))
                 }
             }
             page is SocialPage.Settings -> key(page) {

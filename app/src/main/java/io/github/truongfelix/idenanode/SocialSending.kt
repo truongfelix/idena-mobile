@@ -281,7 +281,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
      * in a callback included, shows and nothing is sent) sizes the callbacks' gas ([withSizedCallbacks]), a second
      * gives the fee; the max fee covers what the callbacks reserve ([profileFee]). [detail] tells what it does.
      */
-    fun prepareModeration(what: String, detail: String?, call: SocialCall) =
+    fun prepareModeration(what: String, detail: String?, call: SocialCall, onSent: () -> Unit = {}) =
         prepareWith(what) { posting, from ->
             val first = posting.estimateReceipt(from, call)
             val sized = withSizedCallbacks(call, first)
@@ -289,7 +289,7 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             val fee = profileFee(receipt)
             val balance = posting.balance(from)
             if (balance < fee.maxFee) throw IOException(balanceText(fee.maxFee, balance))
-            PendingPost(what, sized, from, fee, detail, emptyList())
+            PendingPost(what, sized, from, fee, detail, emptyList(), onSent = onSent)
         }
 
     fun prepareWith(what: String, build: (SocialPosting, String) -> PendingPost) {

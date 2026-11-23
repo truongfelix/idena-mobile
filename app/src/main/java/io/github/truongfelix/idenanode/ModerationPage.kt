@@ -45,6 +45,17 @@ fun postsByHash(feed: List<SocialPost>): Map<String, SocialPost> {
     return byHash
 }
 
+/** The id of the post whose thread holds each post, reply and comment of [feed], by lowercase transaction hash. */
+fun threadRoots(feed: List<SocialPost>): Map<String, Long> {
+    val roots = HashMap<String, Long>()
+    fun visit(post: SocialPost, root: Long) {
+        roots[normalHex(post.call.hash)] = root
+        post.replies.forEach { visit(it, root) }
+    }
+    feed.forEach { visit(it, it.id) }
+    return roots
+}
+
 /** The reports on one target, each reporter's last once, newest first. */
 data class ReportGroup(val kind: String, val target: String, val reports: List<Report>) {
     val newest: Long
@@ -105,7 +116,7 @@ private fun Card(content: @Composable () -> Unit) {
 
 /** A post the moderators review: its text and media only after Show (it may be what they hid), on this screen only. */
 @Composable
-private fun ReviewedPost(post: SocialPost?, onProfile: (String) -> Unit, onThread: (Long) -> Unit) {
+private fun ReviewedPost(post: SocialPost?, onProfile: (String) -> Unit, onThread: ((SocialPost) -> Unit)?) {
     if (post == null) {
         Text(t(R.string.mod_post_not_read), style = MaterialTheme.typography.bodySmall)
         return
@@ -113,8 +124,9 @@ private fun ReviewedPost(post: SocialPost?, onProfile: (String) -> Unit, onThrea
     var shown by remember(post.call.hash) { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Who(post.call.author, onProfile)
-        Text(t(R.string.mod_open_thread), Modifier.clickable { onThread(post.id) }, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary)
+        // Only a thread the feed shows opens (a post made during a ban has none: Show is the way to read it).
+        if (onThread != null) Text(t(R.string.mod_open_thread), Modifier.clickable { onThread(post) },
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
     }
     if (shown) PostContent(post.call, MaterialTheme.typography.bodyMedium, maxLines = 6, mediaMaxHeight = 200.dp)
     else Text(t(R.string.mod_show), Modifier.clickable { shown = true }, style = MaterialTheme.typography.bodySmall,
@@ -123,7 +135,7 @@ private fun ReviewedPost(post: SocialPost?, onProfile: (String) -> Unit, onThrea
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ModerationPage(model: SocialModel, onProfile: (String) -> Unit, onThread: (Long) -> Unit, modifier: Modifier = Modifier) {
+fun ModerationPage(model: SocialModel, onProfile: (String) -> Unit, onThread: (root: Long, focus: Long) -> Unit, modifier: Modifier = Modifier) {
     val access = LocalModeration.current
     if (access?.role == null) {
         Text(t(R.string.mod_page_only), modifier.padding(16.dp))
@@ -136,6 +148,11 @@ fun ModerationPage(model: SocialModel, onProfile: (String) -> Unit, onThread: (L
     val state = access.state
     val epoch = access.epoch
     val byHash = remember(model.scannedFeed) { postsByHash(model.scannedFeed) }
+    val roots = remember(model.scannedFeed) { threadRoots(model.scannedFeed) }
+    val shownRoots = model.feed.map { it.id }.toSet()
+    // A post's thread, opened at it, when the feed shows that thread.
+    val openThread: (SocialPost) -> Unit = { post -> roots[normalHex(post.call.hash)]?.let { onThread(it, post.id) } }
+    val threadOf = { post: SocialPost? -> openThread.takeIf { post != null && roots[normalHex(post.call.hash)] in shownRoots } }
     val now = System.currentTimeMillis() / 1000
     LazyColumn(modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -178,7 +195,7 @@ fun ModerationPage(model: SocialModel, onProfile: (String) -> Unit, onThread: (L
                             Checkbox(hash in chosen, { on -> chosen = if (on && chosen.size < MAX_TRANSACTION_BATCH) chosen + hash else chosen - hash })
                             Text(timeAgo(post.call.time, now), style = MaterialTheme.typography.bodySmall)
                         }
-                        ReviewedPost(post, onProfile, onThread)
+                        ReviewedPost(post, onProfile, threadOf(post))
                     }
                 }
             }
@@ -193,7 +210,7 @@ fun ModerationPage(model: SocialModel, onProfile: (String) -> Unit, onThread: (L
                         Text(tp(if (group.kind == "post") R.plurals.mod_post_reported else R.plurals.mod_account_reported,
                             group.reports.size, group.reports.size) + "  ·  " + timeAgo(group.newest, now),
                             style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        if (group.kind == "post") ReviewedPost(post, onProfile, onThread) else Who(group.target, onProfile)
+                        if (group.kind == "post") ReviewedPost(post, onProfile, threadOf(post)) else Who(group.target, onProfile)
                         group.reports.take(3).forEach { report ->
                             Row { Text("“${report.reason}” · ", style = MaterialTheme.typography.bodySmall); Who(report.reporter, onProfile) }
                         }
@@ -236,7 +253,7 @@ fun ModerationPage(model: SocialModel, onProfile: (String) -> Unit, onThread: (L
                     Card {
                         Text(listOf(info.reason, timeAgo(info.hiddenAt, now)).filter { it.isNotEmpty() }.joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall)
-                        ReviewedPost(byHash[hash], onProfile, onThread)
+                        ReviewedPost(byHash[hash], onProfile, threadOf(byHash[hash]))
                         OutlinedButton(onClick = { dialog = ModerationDialog.Act("restorePost", hash = hash) }) { Text(t(R.string.mod_restore_button)) }
                     }
                 }

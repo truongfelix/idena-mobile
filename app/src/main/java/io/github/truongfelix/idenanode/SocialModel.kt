@@ -712,6 +712,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** The activity on the identity's posts after a scan, and a notice of what is new. */
     private suspend fun updateActivity() {
         val me = myAddress ?: return
+        // While Community moderation's first read holds the feed, nothing is announced: the empty feed holds no news.
+        if (moderation.loading) return
         refreshOffers()
         val current = feed
         val placeholders = moderated.placeholders
@@ -744,6 +746,8 @@ class SocialModel(private val context: Context, private val scope: CoroutineScop
     /** Scans while the app is shown (see the class); returns when [lifecycle] ends. */
     suspend fun run(lifecycle: Lifecycle) {
         withContext(Dispatchers.IO) { SocialStore.load(context) }?.let { show(it) }
+        // New Community moderation decisions (or its first read ended): the notifications follow the feed shown.
+        scope.launch { snapshotFlow { moderated }.drop(1).collect { if (cache != null) updateActivity() } }
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 // The Social tab on screen shows the news: the icon's notification goes ([SocialBadge]).

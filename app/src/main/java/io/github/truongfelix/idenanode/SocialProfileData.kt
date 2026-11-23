@@ -59,20 +59,23 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
 
     fun visit(node: SocialPost, threadId: Long, parent: PostCall?, list: MutableList<ProfileItem>) {
         val own = node.call.author == me
+        // A post Community moderation hid (its call emptied: ModerationFeed.kt) is in no list, it shows no author;
+        // its likes and tips still count.
+        val listed = !node.call.isModeratedPlaceholder
         if (own) {
             val item = ProfileItem(node, threadId, parent)
-            list += item
-            if (node.call.hasMedia) media += item
+            if (listed) list += item
+            if (listed && node.call.hasMedia) media += item
             likesReceived += node.likes
         }
         for (like in node.likeCalls) {
-            if (like.author == me) likes += ProfileItem(node, threadId, parent, like = like)
+            if (listed && like.author == me) likes += ProfileItem(node, threadId, parent, like = like)
         }
         for (tip in node.tips) {
             val amount = tip.validAmount ?: BigDecimal.ZERO
             if (own) tipsReceived += amount
             if (tip.from == me) tipsGiven += amount
-            if (tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
+            if (listed && tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
         }
     }
 

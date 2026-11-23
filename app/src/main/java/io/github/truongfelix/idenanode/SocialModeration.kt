@@ -37,12 +37,15 @@ class SocialModeration(private val context: Context, private val scope: Coroutin
 
     // Whether a sync of this run ended (well or not): the first read holds the feed only without decisions saved.
     private var synced by mutableStateOf(false)
+
+    // Raised at each switch: a sync started before it neither marks the read done nor keeps its cache.
+    private var generation = 0
     private var lastSync = 0L
 
     /** The state the events leave; nothing while off. */
     val state: ModerationState by derivedStateOf { cache?.takeIf { on }?.let { replay(it.events) } ?: ModerationState.None }
 
-    /** The decisions' log, newest first (reports apart). */
+    /** Every event read, in chain order (the Moderation page's log reverses it). */
     val events: List<ModerationEvent>
         get() = cache?.takeIf { on }?.events.orEmpty()
 
@@ -67,6 +70,7 @@ class SocialModeration(private val context: Context, private val scope: Coroutin
 
     fun change(value: Boolean) {
         on = value
+        generation++
         scope.launch(Dispatchers.IO) { runCatching { ModerationStore.setOn(context, value) } }
         if (value) {
             lastSync = 0
@@ -88,6 +92,7 @@ class SocialModeration(private val context: Context, private val scope: Coroutin
         val start = cache
         if (!on || start == null || System.currentTimeMillis() - lastSync < SYNC_EVERY_MS) return
         lastSync = System.currentTimeMillis()
+        val started = generation
         try {
             val next = withContext(Dispatchers.IO) {
                 epoch = (rpc.call("dna_epoch") as JSONObject).optLong("epoch").takeIf { it > 0 }
@@ -97,13 +102,13 @@ class SocialModeration(private val context: Context, private val scope: Coroutin
                     runCatching { ModerationStore.save(context, range) }
                 }, stopped = { !on })
             }
-            if (on) cache = next
-            error = null
+            if (on && started == generation) cache = next
+            if (started == generation) error = null
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            error = e.message ?: e.toString()
+            if (started == generation) error = e.message ?: e.toString()
         } finally {
-            synced = true
+            if (started == generation) synced = true
         }
     }
 

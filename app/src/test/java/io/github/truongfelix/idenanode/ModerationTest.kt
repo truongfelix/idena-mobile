@@ -177,6 +177,43 @@ class ModerationTest {
     }
 
     @Test
+    fun aCommentAnsweredWithAPaddedIdKeepsItsPlaceholder() {
+        val feed = feedOf(
+            post(hx(1), a, "post", 10),
+            post(hx(2), b, "reply", 20, replyTo = "1"),
+            post(hx(3), c, "hidden comment", 30, replyTo = "2", channel = "discuss:2"),
+            post(hx(4), a, "answer", 40, replyTo = "03", channel = "discuss:2"),
+        )
+        val state = ModerationState(hidden = mapOf(hx(3) to HiddenPost(b, 240, "", 0)))
+        assertEquals(listOf("", "answer"), moderatedFeed(feed, state, 240).feed[0].replies[0].replies.map { it.call.message })
+    }
+
+    @Test
+    fun aProfileListsNoPlaceholderButCountsItsLikes() {
+        val feed = feedOf(
+            post(hx(1), b, "before the ban", 10),
+            post(hx(2), a, LIKE, 20, replyTo = "1"),
+            post(hx(3), a, "a reply", 30, replyTo = "1"),
+        )
+        val shown = moderatedFeed(feed, banned(b, 15), 240).feed
+        val profile = socialProfile(shown, b)
+        assertTrue(profile.posts.isEmpty())
+        assertEquals(1, profile.likesReceived)
+        assertTrue(shown[0].call.isModeratedPlaceholder)
+        assertFalse(feed[0].call.isModeratedPlaceholder)
+    }
+
+    @Test
+    fun everyPostKnowsTheThreadThatHoldsIt() {
+        val feed = feedOf(
+            post(hx(1), a, "post", 10),
+            post(hx(2), b, "reply", 20, replyTo = "1"),
+            post(hx(3), c, "comment", 30, replyTo = "2", channel = "discuss:2"),
+        )
+        assertEquals(mapOf(hx(1) to 1L, hx(2) to 1L, hx(3) to 1L), threadRoots(feed))
+    }
+
+    @Test
     fun aPostEarlierInTheBanBlockWasMadeBeforeIt() {
         val ban = banned(b, 20).bans.getValue(b).copy(since = BanStart(20, 20, 3))
         val state = ModerationState(bans = mapOf(b to ban))
