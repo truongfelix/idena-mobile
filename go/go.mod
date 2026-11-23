@@ -17,7 +17,7 @@ go 1.26.11
 // check updating its validators at each online switch, the public addresses the app announces for its router port,
 // OpenTelemetry 1.47.0, the memory IPFS build tag, no online-status tx for an identity delegated to a pool, a peer
 // exchange of incoming peers reachable through relays, the Idena protocol advertised from the host's creation).
-replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261122202751-3d9de0659d67
+replace github.com/idena-network/idena-go => github.com/truongfelix/idena-go v1.1.3-beta.4.0.20261123120139-3c91722d8b09
 
 // idena-go's own replacements (a module does not inherit those of its dependencies).
 replace github.com/cosmos/iavl => github.com/truongfelix/iavl v0.12.3-0.20211223100228-a33b117aa31e
