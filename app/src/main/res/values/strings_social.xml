@@ -332,7 +332,7 @@
         <item quantity="other">"%1$d posts  ·  last activity %2$s"</item>
     </plurals>
     <plurals name="social_topic_header">
-        <item quantity="one">%1$d post in the posts read so far. Anyone can write in any topic; the Idena Social website does not show topic posts.</item>
-        <item quantity="other">%1$d posts in the posts read so far. Anyone can write in any topic; the Idena Social website does not show topic posts.</item>
+        <item quantity="one">%1$d post in the posts read so far. Anyone can write in any topic.</item>
+        <item quantity="other">%1$d posts in the posts read so far. Anyone can write in any topic.</item>
     </plurals>
 </resources>
