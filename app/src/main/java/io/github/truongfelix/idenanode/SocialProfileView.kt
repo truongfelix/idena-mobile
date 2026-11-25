@@ -239,8 +239,9 @@ private fun ProfileHeader(
             identity?.fold(
                 {
                     buildAnnotatedString {
-                        withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) {
-                            append(t(R.string.socialb_identity_line, it.status, it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
+                        val vouched = isActingMember(contract)
+                        withStyle(SpanStyle(color = palette(if (vouched) VOUCHED else it.state), fontWeight = FontWeight.Medium)) {
+                            append(t(R.string.socialb_identity_line, memberStatus(it.state, contract), it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
                         }
                     }
                 },

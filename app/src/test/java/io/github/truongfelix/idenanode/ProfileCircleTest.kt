@@ -37,5 +37,9 @@ class ProfileCircleTest {
         assertEquals("Candidate", circleStatus(ProfileIdentity("Candidate", 0, BigDecimal.ZERO)))
         assertEquals("Not validated", circleStatus(ProfileIdentity("Undefined", 0, BigDecimal.ZERO)))
         assertEquals("Not validated", circleStatus(null))
+        assertEquals("Vouched", circleStatus(ProfileIdentity("Undefined", 0, BigDecimal.ZERO), vouched = true))
+        assertEquals("Vouched", circleStatus(null, vouched = true))
+        // A member who got an identity of its own shows it.
+        assertEquals("Newbie · age 1", circleStatus(ProfileIdentity("Newbie", 1, BigDecimal.ZERO), vouched = true))
     }
 }

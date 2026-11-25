@@ -25,6 +25,7 @@ fun statusPalette(): (String) -> Color {
             "Suspended" -> pick(0xFFE65100, 0xFFFFB74D)
             "Zombie" -> pick(0xFFC62828, 0xFFEF9A9A)
             "Killed" -> pick(0xFF5D4037, 0xFFBCAAA4)
+            VOUCHED -> pick(0xFFAD1457, 0xFFF48FB1)
             else -> grey
         }
     }

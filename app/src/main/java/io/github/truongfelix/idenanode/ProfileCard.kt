@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,8 +67,16 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                             status == null -> Text(t(R.string.profile_switch_sync_on), style = MaterialTheme.typography.bodyMedium)
                             ready == null -> Text(t(R.string.profile_identity_after_sync), style = MaterialTheme.typography.bodyMedium)
                             else -> {
-                                val color = statusPalette()(ready.identityState)
-                                Field(t(R.string.profile_identity), identityStatus(ready.identityState), color)
+                                // A vouched member reads "Vouched" (B-316), from its profile in the profiles contract.
+                                val contract by produceState<ContractProfile?>(null, address, ready.identityState) {
+                                    value = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
+                                        }.getOrNull()?.values?.firstOrNull()
+                                    }
+                                }
+                                val color = statusPalette()(if (isActingMember(contract)) VOUCHED else ready.identityState)
+                                Field(t(R.string.profile_identity), memberStatus(ready.identityState, contract), color)
                                 Field(t(R.string.profile_age), tp(R.plurals.profile_n_epochs, ready.age, ready.age), color)
                             }
                         }

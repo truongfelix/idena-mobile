@@ -21,6 +21,7 @@
     <string name="social_notice_tipped">%1$s vous a donné un pourboire de %2$s iDNA</string>
     <string name="social_notice_many">Du nouveau sur vos publications (%1$d) : %2$s</string>
     <string name="social_not_validated">Non validé</string>
+    <string name="social_vouched">Garanti</string>
     <string name="social_status_age">"%1$s  ·  âge %2$d"</string>
     <string name="social_ago_now">maintenant</string>
     <string name="social_ago_seconds">%1$d s</string>

@@ -123,8 +123,9 @@ fun PeopleCounts(trust: TrustCount?, circle: ProfileCircle?, onOpen: (PeopleList
     }
 }
 
-/** "Newbie · age 2", "Candidate": a person's state as a list shows it. */
-fun circleStatus(identity: ProfileIdentity?): String {
+/** "Newbie · age 2", "Candidate": a person's state as a list shows it; "Vouched" for a [vouched] member (B-316). */
+fun circleStatus(identity: ProfileIdentity?, vouched: Boolean = false): String {
+    if (vouched && isVouchable(identity?.state)) return t(R.string.social_vouched)
     if (identity == null) return t(R.string.profile_not_validated)
     return if (identity.age > 0) t(R.string.profile_status_age, identity.status, identity.age) else identity.status
 }
@@ -135,7 +136,7 @@ fun trustSplit(trust: TrustCount): String =
 
 /** One person of a profile's lists: picture or robot, name, state ([note] after it); a tap opens its profile. */
 @Composable
-fun CirclePersonRow(address: String, identity: ProfileIdentity?, onProfile: (String) -> Unit, note: String? = null) {
+fun CirclePersonRow(address: String, identity: ProfileIdentity?, onProfile: (String) -> Unit, note: String? = null, vouched: Boolean = false) {
     val names = LocalNames.current
     Row(
         Modifier.fillMaxWidth().clickable { onProfile(address) }.padding(vertical = 8.dp),
@@ -145,7 +146,7 @@ fun CirclePersonRow(address: String, identity: ProfileIdentity?, onProfile: (Str
         PersonAvatar(address, 40.dp)
         Column(Modifier.weight(1f)) {
             Text(displayName(address, names), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(circleStatus(identity) + (note?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(circleStatus(identity, vouched) + (note?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -210,7 +211,7 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
                         if (vouched.isNotEmpty()) item { Heading(t(R.string.profile_heading_vouched_members)) }
                         items(vouched, key = { "vouched:${it.address}" }) { giver ->
                             val voucher = trust.vouchers[giver.address]
-                            CirclePersonRow(giver.address, c.identities[giver.address], onProfile, note = voucher?.let { t(R.string.profile_vouched_by, displayName(it, names)) })
+                            CirclePersonRow(giver.address, c.identities[giver.address], onProfile, note = voucher?.let { t(R.string.profile_vouched_by, displayName(it, names)) }, vouched = true)
                         }
                     }
                     PeopleList.TrustsGiven -> {
@@ -228,7 +229,8 @@ fun ProfilePeopleView(address: String, list: PeopleList, myAddress: String?, rel
                             val identity = c.identities[member]
                             val note = if (isMe && identity != null && !isVouchable(identity.state)) t(R.string.profile_member_has_identity) else null
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) { CirclePersonRow(member, identity, onProfile, note) }
+                                // A member acts while this profile, its voucher, is validated.
+                                Column(Modifier.weight(1f)) { CirclePersonRow(member, identity, onProfile, note, vouched = isValidated(p.identity.state)) }
                                 val access = LocalProfileAccess.current
                                 if (isMe && access != null) {
                                     ActionButton(t(R.string.profile_end), t(R.string.profile_end_vouch_what), t(R.string.profile_end_vouch_detail), ProfileCalls.endVouch(member), access.canAct, access.onCall)

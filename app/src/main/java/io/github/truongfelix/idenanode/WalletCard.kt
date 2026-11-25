@@ -341,7 +341,7 @@ private fun RecipientLine(name: String, resolved: Result<ResolvedName>?) {
         Avatar(found.holder, 32.dp)
         Column {
             Text(found.holder, style = small, fontFamily = FontFamily.Monospace)
-            Text(identityStatus(found.profile?.state.orEmpty()), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(memberStatus(found.profile?.state.orEmpty(), found.profile), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

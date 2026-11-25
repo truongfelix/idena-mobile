@@ -23,6 +23,17 @@ fun wantsVouch(state: String?, voucher: String?) = voucher == null && isVouchabl
 fun isActingMember(profile: ContractProfile?) =
     profile?.voucher != null && isVouchable(profile.state) && isValidated(profile.voucherState)
 
+/** The color key ([statusPalette]) and the state word of a vouched member (B-316). */
+const val VOUCHED = "Vouched"
+
+/** The status shown for an identity [state] and its [profile] (null when not read): "Vouched" for a vouched member (B-316). */
+fun memberStatus(state: String, profile: ContractProfile?): String =
+    if (isActingMember(profile)) t(R.string.social_vouched) else identityStatus(state)
+
+/** The lowercase addresses of [profiles] that act as vouched members. */
+fun vouchedMembers(profiles: Collection<ContractProfile>): Set<String> =
+    profiles.filter(::isActingMember).map { it.address.lowercase() }.toSet()
+
 /** A vouch offered to a member, not accepted yet ([epoch] it was offered), or a member accepted ([epoch] accepted). */
 data class VouchEntry(val address: String, val epoch: Int)
 
