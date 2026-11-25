@@ -123,7 +123,7 @@ data class AuthorIdentity(val state: String, val age: Int, val vouched: Boolean 
 
     /** This identity, shown as a vouched member when [address] is one of [vouched] (lowercase). */
     fun among(address: String, vouched: Set<String>): AuthorIdentity =
-        if (address.lowercase() in vouched) copy(vouched = true) else this
+        if (address.lowercase() in vouched && showsVouched(state)) copy(vouched = true) else this
 }
 
 /**

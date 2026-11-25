@@ -26,9 +26,18 @@ fun isActingMember(profile: ContractProfile?) =
 /** The color key ([statusPalette]) and the state word of a vouched member (B-316). */
 const val VOUCHED = "Vouched"
 
-/** The status shown for an identity [state] and its [profile] (null when not read): "Vouched" for a vouched member (B-316). */
+/** Whether an identity [state] (read now) is shown "Vouched" for a vouched member: none of its own; Invite and Candidate keep theirs. */
+fun showsVouched(state: String?) = (state?.ifEmpty { null } ?: "Undefined") in setOf("Undefined", "Killed")
+
+/**
+ * Whether an account with the identity [state] read now and its [profile] (null when not read) reads "Vouched" (B-316):
+ * [state] decides first, a profile read before the account got an identity says nothing.
+ */
+fun isShownVouched(state: String?, profile: ContractProfile?) = showsVouched(state) && isActingMember(profile)
+
+/** The status shown for an identity [state] and its [profile]: "Vouched" for a vouched member ([isShownVouched]). */
 fun memberStatus(state: String, profile: ContractProfile?): String =
-    if (isActingMember(profile)) t(R.string.social_vouched) else identityStatus(state)
+    if (isShownVouched(state, profile)) t(R.string.social_vouched) else identityStatus(state)
 
 /** The lowercase addresses of [profiles] that act as vouched members. */
 fun vouchedMembers(profiles: Collection<ContractProfile>): Set<String> =

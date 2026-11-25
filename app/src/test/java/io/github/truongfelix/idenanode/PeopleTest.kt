@@ -167,5 +167,7 @@ class PeopleTest {
         assertEquals("Vouched", AuthorIdentity("Undefined", 3).among("0xABC", setOf("0xabc")).label)
         assertEquals("Vouched", AuthorIdentity("Undefined", 0, vouched = true).colorKey)
         assertEquals("Not validated", AuthorIdentity("Undefined", 3).among("0xabc", setOf("0xdef")).label)
+        // A member who got an identity since the profile was read shows it.
+        assertEquals("Newbie  ·  age 1", AuthorIdentity("Newbie", 1).among("0xabc", setOf("0xabc")).label)
     }
 }

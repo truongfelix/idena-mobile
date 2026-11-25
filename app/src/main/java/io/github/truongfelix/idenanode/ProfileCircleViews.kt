@@ -125,7 +125,7 @@ fun PeopleCounts(trust: TrustCount?, circle: ProfileCircle?, onOpen: (PeopleList
 
 /** "Newbie · age 2", "Candidate": a person's state as a list shows it; "Vouched" for a [vouched] member (B-316). */
 fun circleStatus(identity: ProfileIdentity?, vouched: Boolean = false): String {
-    if (vouched && isVouchable(identity?.state)) return t(R.string.social_vouched)
+    if (vouched && showsVouched(identity?.state)) return t(R.string.social_vouched)
     if (identity == null) return t(R.string.profile_not_validated)
     return if (identity.age > 0) t(R.string.profile_status_age, identity.status, identity.age) else identity.status
 }
@@ -138,6 +138,8 @@ fun trustSplit(trust: TrustCount): String =
 @Composable
 fun CirclePersonRow(address: String, identity: ProfileIdentity?, onProfile: (String) -> Unit, note: String? = null, vouched: Boolean = false) {
     val names = LocalNames.current
+    // Also a vouched member whose profile Social read (LocalVouched): the Trusts given, the offers, the invitees.
+    val shownVouched = vouched || address.lowercase() in LocalVouched.current
     Row(
         Modifier.fillMaxWidth().clickable { onProfile(address) }.padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -146,7 +148,7 @@ fun CirclePersonRow(address: String, identity: ProfileIdentity?, onProfile: (Str
         PersonAvatar(address, 40.dp)
         Column(Modifier.weight(1f)) {
             Text(displayName(address, names), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(circleStatus(identity, vouched) + (note?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(circleStatus(identity, shownVouched) + (note?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

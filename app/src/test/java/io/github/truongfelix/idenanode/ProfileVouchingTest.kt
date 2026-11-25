@@ -17,7 +17,11 @@ class ProfileVouchingTest {
     @Test
     fun aVouchedMemberReadsVouchedAndAnyOtherAccountItsOwnStatus() {
         assertEquals("Vouched", memberStatus("Undefined", profile("Undefined", alice, "Human")))
-        assertEquals("Vouched", memberStatus("Candidate", profile("Candidate", alice, "Newbie")))
+        assertEquals("Vouched", memberStatus("Killed", profile("Killed", alice, "Newbie")))
+        // Invite and Candidate keep their status; the state read now decides over an older profile.
+        assertEquals("Candidate", memberStatus("Candidate", profile("Candidate", alice, "Newbie")))
+        assertEquals("Invite", memberStatus("Invite", profile("Undefined", alice, "Human")))
+        assertEquals("Newbie", memberStatus("Newbie", profile("Undefined", alice, "Human")))
         // A voucher out of its validation, a member who validated, no profile read: the identity's own status.
         assertEquals("Not validated", memberStatus("Undefined", profile("Undefined", alice, "Suspended")))
         assertEquals("Newbie", memberStatus("Newbie", profile("Newbie", alice, "Human")))
