@@ -129,6 +129,14 @@ fun Editor(model: SocialModel, draft: Draft, canPost: Boolean) {
             Pill(t(R.string.social_remove_image_button), enabled = true) { model.sending.draftImage = null }
         }
         if (model.sending.textOnIpfs) TextOnIpfsNote()
+        // With Community moderation on, a banned account is told before it pays: its posts are not shown (B-308).
+        model.moderation.takeIf { it.on }?.state?.activeBan(model.myAddress, model.moderation.epoch)?.let { ban ->
+            Text(
+                if (ban.permanent) t(R.string.mod_editor_banned_permanently) else t(R.string.mod_editor_banned_until, ban.endEpoch),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 

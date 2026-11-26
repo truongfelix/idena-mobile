@@ -1,5 +1,7 @@
 package io.github.truongfelix.idenanode
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -128,5 +130,73 @@ class ProfileVouchingTest {
         assertFalse("already vouched for", wantsVouch("Undefined", bob))
         assertFalse("validated", wantsVouch("Verified", null))
         assertFalse("suspended comes back at the next validation", wantsVouch("Suspended", null))
+    }
+
+    @Test
+    fun theProfileCardTakesOnlyItsOwnAccountsProfile() {
+        // B-324: after a key import the card may still hold the previous account's profile; it says nothing of the new one.
+        val vouched = profile("Undefined", alice, "Human")
+        assertNull(profileOf(bob, vouched))
+        assertEquals("Not validated", memberStatus("Undefined", profileOf(bob, vouched)))
+        assertEquals(vouched, profileOf(holder.uppercase().replace("0X", "0x"), vouched))
+        assertNull(profileOf(holder, null))
+    }
+
+    @Test
+    fun theProfileCardTriesItsReadAgainUntilTheNodeAnswers() {
+        // B-324: a node in its first seconds answers no dna_ or contract call; the card waits 10 s, then longer, up to a minute.
+        val pauses = mutableListOf<Long>()
+        var calls = 0
+        val answer = kotlinx.coroutines.runBlocking {
+            readUntilAnswered(
+                read = { if (++calls < 6) throw java.io.IOException("not available") else profile("Undefined", alice, "Human") },
+                pause = { pauses += it },
+            )
+        }
+        assertEquals(profile("Undefined", alice, "Human"), answer)
+        assertEquals(listOf(10_000L, 20_000L, 40_000L, 60_000L, 60_000L), pauses)
+        // An answer at once: no pause.
+        pauses.clear()
+        kotlinx.coroutines.runBlocking { readUntilAnswered(read = { null }, pause = { pauses += it }) }
+        assertEquals(emptyList<Long>(), pauses)
+    }
+
+    @Test
+    fun theProfileCardsReadEndsOnlyWhenTheCardIsCancelled() {
+        // An Error, or a cancellation of the read alone (a timeout), is tried again, as the card's runCatching did.
+        val pauses = mutableListOf<Long>()
+        var calls = 0
+        val answer = kotlinx.coroutines.runBlocking {
+            readUntilAnswered(
+                read = {
+                    when (++calls) {
+                        1 -> throw NoClassDefFoundError("not loaded")
+                        2 -> throw kotlinx.coroutines.CancellationException("the read's own timeout")
+                        else -> "answer"
+                    }
+                },
+                pause = { pauses += it },
+            )
+        }
+        assertEquals("answer", answer)
+        assertEquals(listOf(10_000L, 20_000L), pauses)
+        // The card cancelled: no pause, no read again.
+        pauses.clear()
+        calls = 0
+        kotlinx.coroutines.runBlocking {
+            launch {
+                readUntilAnswered<String>(
+                    read = {
+                        calls++
+                        coroutineContext.cancel()
+                        throw kotlinx.coroutines.CancellationException("card gone")
+                    },
+                    // Like delay: ends at once in a cancelled coroutine.
+                    pause = { pauses += it; kotlinx.coroutines.yield() },
+                )
+            }.join()
+        }
+        assertEquals(1, calls)
+        assertEquals(emptyList<Long>(), pauses)
     }
 }

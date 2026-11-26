@@ -276,6 +276,22 @@ class SocialSending(private val context: Context, private val scope: CoroutineSc
             PendingPost(what, call, from, fee, detail, files, memberExtra = extra)
         }
 
+    /**
+     * A call to the moderation contract ([ModerationCalls]): a first dry run (a refusal there, the contract's reason
+     * in a callback included, shows and nothing is sent) sizes the callbacks' gas ([withSizedCallbacks]), a second
+     * gives the fee; the max fee covers what the callbacks reserve ([profileFee]). [detail] tells what it does.
+     */
+    fun prepareModeration(what: String, detail: String?, call: SocialCall, onSent: () -> Unit = {}) =
+        prepareWith(what) { posting, from ->
+            val first = posting.estimateReceipt(from, call)
+            val sized = withSizedCallbacks(call, first)
+            val receipt = if (sized === call) first else posting.estimateReceipt(from, sized)
+            val fee = profileFee(receipt)
+            val balance = posting.balance(from)
+            if (balance < fee.maxFee) throw IOException(balanceText(fee.maxFee, balance))
+            PendingPost(what, sized, from, fee, detail, emptyList(), onSent = onSent)
+        }
+
     fun prepareWith(what: String, build: (SocialPosting, String) -> PendingPost) {
         busy = true
         report(null)

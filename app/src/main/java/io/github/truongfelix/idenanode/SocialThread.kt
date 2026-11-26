@@ -77,20 +77,25 @@ fun ThreadView(
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), state = pageState.list, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // The topic, then its author (who shows the time).
-                    post.topic?.let { TopicLine(it, time = null) }
-                    PostHeader(post.call, states, onProfile)
-                    PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
-                    if (post.isOlder) {
-                        Text(
-                            t(R.string.social_thread_older, post.call.version),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    // The topic, then its author (who shows the time); a post Community moderation hid: one line.
+                    val moderation = LocalModeration.current
+                    if (moderation?.isPlaceholder(post) == true) {
+                        ModeratedLine(moderation.reasonOf(post))
+                    } else {
+                        post.topic?.let { TopicLine(it, time = null) }
+                        PostHeader(post.call, states, onProfile)
+                        PostContent(post.call, MaterialTheme.typography.bodyLarge, selectable = true, inThread = true)
+                        if (post.isOlder) {
+                            Text(
+                                t(R.string.social_thread_older, post.call.version),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        ActionBar(post, myAddress, canAct, t(R.string.social_reply_pill), onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
+                            onAnswer(replyDraft(post))
+                        }, onTip = { onTip(post) }, onWho = { onWho(post) })
                     }
-                    ActionBar(post, myAddress, canAct, t(R.string.social_reply_pill), onLike = { onLike(PostTarget.onPost(post.id)) }, onAnswer = {
-                        onAnswer(replyDraft(post))
-                    }, onTip = { onTip(post) }, onWho = { onWho(post) })
                     ad?.invoke()
                     HorizontalDivider()
                     val answers = replyCount(post)
@@ -159,6 +164,13 @@ private fun ThreadItem(item: SocialPost, children: List<CommentNode>, depth: Int
                     .padding(start = RAIL),
             ),
     ) {
+        val moderation = LocalModeration.current
+        if (moderation?.isPlaceholder(item) == true) {
+            // Hidden by Community moderation, answers under it shown: one line, no author or actions.
+            ModeratedLine(moderation.reasonOf(item))
+            children.forEach { node -> key(node.comment.id) { ThreadItem(node.comment, node.children, depth + 1, replyId, thread) } }
+            return@Column
+        }
         if (folded) {
             FoldedLine(item, hidden = children.sumOf { 1 + it.descendants }, onProfile = thread.onProfile, onUnfold = { toggle() })
             return@Column

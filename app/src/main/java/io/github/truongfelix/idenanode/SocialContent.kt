@@ -7,7 +7,7 @@ import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
@@ -317,9 +316,13 @@ fun MessageText(text: String, password: String, style: TextStyle) {
     }
 }
 
+/**
+ * Content no node has: the note, then Retry on a line of its own, so that a long translation (French) never squeezes
+ * the button off the screen (B-323).
+ */
 @Composable
 private fun Unavailable(retry: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Note(t(R.string.social_ipfs_gone))
         AssistChip(onClick = retry, label = { Text(t(R.string.social_retry)) })
     }

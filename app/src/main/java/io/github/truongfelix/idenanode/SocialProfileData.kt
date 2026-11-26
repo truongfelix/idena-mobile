@@ -59,20 +59,23 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
 
     fun visit(node: SocialPost, threadId: Long, parent: PostCall?, list: MutableList<ProfileItem>) {
         val own = node.call.author == me
+        // A post Community moderation hid (its call emptied: ModerationFeed.kt) is in no list, it shows no author;
+        // its likes and tips still count.
+        val listed = !node.call.isModeratedPlaceholder
         if (own) {
             val item = ProfileItem(node, threadId, parent)
-            list += item
-            if (node.call.hasMedia) media += item
+            if (listed) list += item
+            if (listed && node.call.hasMedia) media += item
             likesReceived += node.likes
         }
         for (like in node.likeCalls) {
-            if (like.author == me) likes += ProfileItem(node, threadId, parent, like = like)
+            if (listed && like.author == me) likes += ProfileItem(node, threadId, parent, like = like)
         }
         for (tip in node.tips) {
             val amount = tip.validAmount ?: BigDecimal.ZERO
             if (own) tipsReceived += amount
             if (tip.from == me) tipsGiven += amount
-            if (tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
+            if (listed && tip.from == me) tips += ProfileItem(node, threadId, parent, tip = tip)
         }
     }
 
@@ -105,10 +108,11 @@ fun identityStatus(state: String): String =
     if (state.isEmpty() || state == "Undefined") t(R.string.social_not_validated) else identityStateText(state)
 
 /**
- * What a post's header shows of its author's identity: the state and the age in epochs; [vouched]: the author acts
- * as a vouched member of the profiles contract ([isActingMember]), shown "Vouched" (B-316).
+ * What a post's header shows of its author's identity: the state and the age in epochs; [stake] in iDNA (Community
+ * moderation's moderators hold 1,000,000, Moderation.kt); [vouched]: the author acts as a vouched member of the
+ * profiles contract ([isActingMember]), shown "Vouched" (B-316).
  */
-data class AuthorIdentity(val state: String, val age: Int, val vouched: Boolean = false) {
+data class AuthorIdentity(val state: String, val age: Int, val stake: Double = 0.0, val vouched: Boolean = false) {
     /** "Vouched" for a vouched member, the state as idena.social names it otherwise ([identityStatus]). */
     val status: String
         get() = if (vouched) t(R.string.social_vouched) else identityStatus(state)

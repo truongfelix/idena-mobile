@@ -50,6 +50,12 @@ fun SocialSettingsView(model: SocialModel, modifier: Modifier = Modifier) {
         HorizontalDivider()
         PicturesSetting(model.picturesMode, model::changePicturesMode)
         HorizontalDivider()
+        CommunityModerationSetting(
+            model.moderation,
+            isModerator = model.moderation.state.moderatorRole(model.moderation.epoch, model.myAddress, model.moderation.myStake) != null,
+            openPage = { model.open(SocialPage.Moderation) },
+        )
+        HorizontalDivider()
         ListsBackup(model)
     }
 }

@@ -137,6 +137,13 @@ fun ProfileList(
     }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = POST_BUTTON_ROOM)) {
         item { ProfileHeader(address, identity, profile, isMe = isMe, historyDone = historyDone, person, onFollow, onName, onBlock, mine, contract, myAddress, onEditProfile, contractExtras, people, trustButton, vouchButton) }
+        // Community moderation (B-308): a banned account's banner (one's own too), and a moderator's Moderate panel.
+        item(key = "moderation") {
+            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BanBanner(address, onProfile)
+                if (!isMe) ModeratePanel(address)
+            }
+        }
         // Own profile: the node's task (flips to make), then, for an account without an identity, how to be vouched for.
         if (isMe) {
             myTask?.let { item { it() } }
@@ -242,7 +249,7 @@ private fun ProfileHeader(
                         // A vouched member: "Vouched" alone, without an age or a stake of its own (B-316).
                         val vouched = isShownVouched(it.state, contract)
                         withStyle(SpanStyle(color = palette(if (vouched) VOUCHED else it.state), fontWeight = FontWeight.Medium)) {
-                            append(if (vouched) memberStatus(it.state, contract) else t(R.string.socialb_identity_line, identityStatus(it.state), it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
+                            append(if (vouched) t(R.string.social_vouched) else t(R.string.socialb_identity_line, identityStatus(it.state), it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
                         }
                     }
                 },

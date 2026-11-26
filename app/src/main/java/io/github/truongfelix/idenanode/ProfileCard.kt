@@ -32,7 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
@@ -40,6 +42,28 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /* The Node tab's Profile card: the identity, its validation, its invitation and the screens behind it. */
+
+/**
+ * [read]'s answer, tried again while it fails (the node's first seconds serve bcn_ calls only): after 10 s, then
+ * twice as long each time, at most a minute apart ([pause]). Ends only with an answer or when its caller is cancelled.
+ */
+internal suspend fun <T> readUntilAnswered(read: suspend () -> T, pause: suspend (Long) -> Unit): T {
+    var wait = 10_000L
+    while (true) {
+        try {
+            return read()
+        } catch (e: Throwable) {
+            // As runCatching did: anything is tried again, unless the caller itself was cancelled.
+            currentCoroutineContext().ensureActive()
+            pause(wait)
+            wait = minOf(wait * 2, 60_000L)
+        }
+    }
+}
+
+/** [profile] when it is [address]'s, else null: a read of another account (before a key import) says nothing. */
+internal fun profileOf(address: String, profile: ContractProfile?): ContractProfile? =
+    profile?.takeIf { it.address.equals(address, ignoreCase = true) }
 
 /**
  * The Profile card, first on the Node tab: the avatar (drawn from the address), the identity and its age, the address
@@ -68,18 +92,26 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                             ready == null -> Text(t(R.string.profile_identity_after_sync), style = MaterialTheme.typography.bodyMedium)
                             else -> {
                                 // A vouched member reads "Vouched" (B-316), from its profile in the profiles contract: read
-                                // at each opening for an account without an identity only, the last answer shown meanwhile.
-                                val contract by produceState(ProfileReads.contract(address), address, ready.identityState) {
+                                // at each opening for an account without an identity only, and again when the node starts
+                                // or stops syncing; the last answer for this address shown meanwhile (B-324: never the
+                                // account's before a key import). While the node does not answer (its first seconds serve
+                                // bcn_ calls only), tried again 10 s later, then up to every minute.
+                                val read by produceState(ProfileReads.contract(address), address, ready.identityState, ready.syncing) {
+                                    value = profileOf(address, value) ?: ProfileReads.contract(address)
                                     if (!showsVouched(ready.identityState)) return@produceState
-                                    withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
-                                        }.getOrNull()?.values?.firstOrNull()
-                                    }?.let {
+                                    readUntilAnswered(
+                                        read = {
+                                            withContext(Dispatchers.IO) {
+                                                NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
+                                            }.values.firstOrNull()
+                                        },
+                                        pause = { delay(it) },
+                                    )?.let {
                                         ProfileReads.keep(address, it)
                                         value = it
                                     }
                                 }
+                                val contract = profileOf(address, read)
                                 val vouched = isShownVouched(ready.identityState, contract)
                                 val color = statusPalette()(if (vouched) VOUCHED else ready.identityState)
                                 Field(t(R.string.profile_identity), memberStatus(ready.identityState, contract), color)

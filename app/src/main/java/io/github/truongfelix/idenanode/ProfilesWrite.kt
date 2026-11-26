@@ -46,7 +46,8 @@ object ProfileCalls {
  * argument without the gas the app sizes for it ("_gas", "_keepGas").
  */
 fun actionKey(call: SocialCall): String =
-    "${call.contract.lowercase()}:${call.method}:${call.argument?.replace(Regex(",?\"_(keep)?[gG]as\":[0-9]+"), "")?.replace("{,", "{").orEmpty()}"
+    if (call.contract.lowercase() == MODERATION_CONTRACT) moderationKey(call) // one per target, whatever its reason
+    else "${call.contract.lowercase()}:${call.method}:${call.argument?.replace(Regex(",?\"_(keep)?[gG]as\":[0-9]+"), "")?.replace("{,", "{").orEmpty()}"
 
 /** The contract's default gas for a callback (WASM gas), and the least the app asks for. */
 private const val DEFAULT_CALLBACK_GAS = 10_000_000L

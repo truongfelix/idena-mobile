@@ -244,6 +244,7 @@
     <string name="profile_heading_identities">Identités</string>
     <string name="profile_heading_vouched_members">Membres garantis</string>
     <string name="profile_vouched_by">garanti par %1$s</string>
+    <string name="profile_vouched_by_status">Garanti par %1$s</string>
     <string name="profile_vouch_cap">Vous vous portez garant de %1$d sur %2$d au plus</string>
     <string name="profile_member_has_identity">a maintenant une identité : « Terminer » libère votre place</string>
     <string name="profile_end">Terminer</string>

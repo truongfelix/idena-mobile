@@ -227,6 +227,7 @@
     <string name="profile_heading_identities">Identities</string>
     <string name="profile_heading_vouched_members">Vouched members</string>
     <string name="profile_vouched_by">vouched by %1$s</string>
+    <string name="profile_vouched_by_status">Vouched by %1$s</string>
     <string name="profile_vouch_cap">You vouch for %1$d of at most %2$d</string>
     <string name="profile_member_has_identity">has an identity now: End frees your slot</string>
     <string name="profile_end">End</string>
