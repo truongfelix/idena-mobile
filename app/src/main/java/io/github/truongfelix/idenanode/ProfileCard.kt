@@ -41,6 +41,10 @@ import java.time.format.FormatStyle
 
 /* The Node tab's Profile card: the identity, its validation, its invitation and the screens behind it. */
 
+/** [profile] when it is [address]'s, else null: a read of another account (before a key import) says nothing. */
+internal fun profileOf(address: String, profile: ContractProfile?): ContractProfile? =
+    profile?.takeIf { it.address.equals(address, ignoreCase = true) }
+
 /**
  * The Profile card, first on the Node tab: the avatar (drawn from the address), the identity and its age, the address
  * with copy; once the node has the account, the validation ([ValidationSection]) and the invitation that applies (a
@@ -68,18 +72,30 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                             ready == null -> Text(t(R.string.profile_identity_after_sync), style = MaterialTheme.typography.bodyMedium)
                             else -> {
                                 // A vouched member reads "Vouched" (B-316), from its profile in the profiles contract: read
-                                // at each opening for an account without an identity only, the last answer shown meanwhile.
-                                val contract by produceState(ProfileReads.contract(address), address, ready.identityState) {
+                                // at each opening for an account without an identity only, the last answer for this
+                                // address shown meanwhile (B-324: never the account's before a key import). Read again
+                                // once the node is synced, and every 10 s while the node does not answer (its first
+                                // seconds serve bcn_ calls only).
+                                val read by produceState(ProfileReads.contract(address), address, ready.identityState, ready.syncing) {
+                                    value = ProfileReads.contract(address)
                                     if (!showsVouched(ready.identityState)) return@produceState
-                                    withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
-                                        }.getOrNull()?.values?.firstOrNull()
-                                    }?.let {
-                                        ProfileReads.keep(address, it)
-                                        value = it
+                                    repeat(6) { attempt ->
+                                        if (attempt > 0) delay(10_000)
+                                        val answer = withContext(Dispatchers.IO) {
+                                            runCatching {
+                                                NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
+                                            }
+                                        }
+                                        if (answer.isSuccess) {
+                                            // No profile in the contract: no vouch either.
+                                            val profile = answer.getOrNull()?.values?.firstOrNull()
+                                            profile?.let { ProfileReads.keep(address, it) }
+                                            value = profile
+                                            return@produceState
+                                        }
                                     }
                                 }
+                                val contract = profileOf(address, read)
                                 val vouched = isShownVouched(ready.identityState, contract)
                                 val color = statusPalette()(if (vouched) VOUCHED else ready.identityState)
                                 Field(t(R.string.profile_identity), memberStatus(ready.identityState, contract), color)

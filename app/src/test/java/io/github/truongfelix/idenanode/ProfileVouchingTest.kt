@@ -129,4 +129,14 @@ class ProfileVouchingTest {
         assertFalse("validated", wantsVouch("Verified", null))
         assertFalse("suspended comes back at the next validation", wantsVouch("Suspended", null))
     }
+
+    @Test
+    fun theProfileCardTakesOnlyItsOwnAccountsProfile() {
+        // B-324: after a key import the card may still hold the previous account's profile; it says nothing of the new one.
+        val vouched = profile("Undefined", alice, "Human")
+        assertNull(profileOf(bob, vouched))
+        assertEquals("Not validated", memberStatus("Undefined", profileOf(bob, vouched)))
+        assertEquals(vouched, profileOf(holder.uppercase().replace("0X", "0x"), vouched))
+        assertNull(profileOf(holder, null))
+    }
 }

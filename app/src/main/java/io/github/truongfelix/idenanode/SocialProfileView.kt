@@ -249,7 +249,7 @@ private fun ProfileHeader(
                         // A vouched member: "Vouched" alone, without an age or a stake of its own (B-316).
                         val vouched = isShownVouched(it.state, contract)
                         withStyle(SpanStyle(color = palette(if (vouched) VOUCHED else it.state), fontWeight = FontWeight.Medium)) {
-                            append(if (vouched) memberStatus(it.state, contract) else t(R.string.socialb_identity_line, identityStatus(it.state), it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
+                            append(if (vouched) t(R.string.social_vouched) else t(R.string.socialb_identity_line, identityStatus(it.state), it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
                         }
                     }
                 },

@@ -43,4 +43,17 @@ class ProfileCircleTest {
         // A member who got an identity of its own shows it.
         assertEquals("Newbie · age 1", circleStatus(ProfileIdentity("Newbie", 1, BigDecimal.ZERO), vouched = true))
     }
+
+    @Test
+    fun aTrustFromAVouchedMemberSaysVouchedOnce() {
+        // Under "Vouched members" (B-324): "Vouched by alice", never "Vouched · vouched by alice".
+        val none = ProfileIdentity("Undefined", 0, BigDecimal.ZERO)
+        assertEquals("Vouched by alice", circleLine(none, vouched = true, vouchedBy = "alice"))
+        assertEquals("Vouched by alice", circleLine(null, vouched = true, vouchedBy = "alice"))
+        // A giver who got an identity of its own since: its status, then who vouched for it.
+        assertEquals("Newbie · age 1 · vouched by alice", circleLine(ProfileIdentity("Newbie", 1, BigDecimal.ZERO), vouched = true, vouchedBy = "alice"))
+        // No voucher read, or another note: as before.
+        assertEquals("Vouched", circleLine(none, vouched = true))
+        assertEquals("Newbie · age 1 · has an identity", circleLine(ProfileIdentity("Newbie", 1, BigDecimal.ZERO), vouched = false, note = "has an identity"))
+    }
 }

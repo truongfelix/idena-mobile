@@ -41,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -128,10 +130,12 @@ fun SocialScreen(
             value = System.currentTimeMillis() / 1000
         }
     }
+    // Rebuilt only when a read profile changes who acts as a vouched member, not at every profile read.
+    val vouched by remember(model) { derivedStateOf(structuralEqualityPolicy()) { vouchedMembers(model.profiles.values) } }
     CompositionLocalProvider(
         LocalNames provides model.names,
         LocalPictures provides shownPictures(model.shownProfiles),
-        LocalVouched provides vouchedMembers(model.profiles.values),
+        LocalVouched provides vouched,
         LocalHiding provides HiddenContent(model.hiding, myAddress),
         LocalPostMenu provides PostMenu(
             me = myAddress,
