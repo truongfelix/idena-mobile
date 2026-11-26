@@ -72,30 +72,29 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                             ready == null -> Text(t(R.string.profile_identity_after_sync), style = MaterialTheme.typography.bodyMedium)
                             else -> {
                                 // A vouched member reads "Vouched" (B-316), from its profile in the profiles contract: read
-                                // at each opening for an account without an identity only, the last answer for this
-                                // address shown meanwhile (B-324: never the account's before a key import). Read again
-                                // once the node has been synced (not at each flip near the head), and up to six times,
-                                // 10 s apart, while the node does not answer (its first seconds serve bcn_ calls only).
-                                val latch = remember(address) { booleanArrayOf(false) }
-                                if (!ready.syncing) latch[0] = true
-                                val syncedOnce = latch[0]
-                                val read by produceState(ProfileReads.contract(address), address, ready.identityState, syncedOnce) {
-                                    value = ProfileReads.contract(address)
+                                // at each opening for an account without an identity only, and again when the node starts
+                                // or stops syncing; the last answer for this address shown meanwhile (B-324: never the
+                                // account's before a key import). While the node does not answer (its first seconds serve
+                                // bcn_ calls only), tried again 10 s later, then up to every minute.
+                                val read by produceState(ProfileReads.contract(address), address, ready.identityState, ready.syncing) {
+                                    value = profileOf(address, value) ?: ProfileReads.contract(address)
                                     if (!showsVouched(ready.identityState)) return@produceState
-                                    repeat(6) { attempt ->
-                                        if (attempt > 0) delay(10_000)
+                                    var pause = 10_000L
+                                    while (true) {
                                         val answer = withContext(Dispatchers.IO) {
                                             runCatching {
                                                 NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
                                             }
                                         }
-                                        if (answer.isSuccess) {
-                                            val profile = answer.getOrNull()?.values?.firstOrNull()
-                                            // An answer read while syncing is the card's only: other screens wait for a synced one.
-                                            if (profile != null && syncedOnce) ProfileReads.keep(address, profile)
-                                            value = profile
+                                        answer.getOrNull()?.let { profiles ->
+                                            profiles.values.firstOrNull()?.let {
+                                                ProfileReads.keep(address, it)
+                                                value = it
+                                            }
                                             return@produceState
                                         }
+                                        delay(pause)
+                                        pause = minOf(pause * 2, 60_000L)
                                     }
                                 }
                                 val contract = profileOf(address, read)
