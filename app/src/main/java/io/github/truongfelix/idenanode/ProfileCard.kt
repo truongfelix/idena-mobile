@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,9 +67,23 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                             status == null -> Text(t(R.string.profile_switch_sync_on), style = MaterialTheme.typography.bodyMedium)
                             ready == null -> Text(t(R.string.profile_identity_after_sync), style = MaterialTheme.typography.bodyMedium)
                             else -> {
-                                val color = statusPalette()(ready.identityState)
-                                Field(t(R.string.profile_identity), identityStatus(ready.identityState), color)
-                                Field(t(R.string.profile_age), tp(R.plurals.profile_n_epochs, ready.age, ready.age), color)
+                                // A vouched member reads "Vouched" (B-316), from its profile in the profiles contract: read
+                                // at each opening for an account without an identity only, the last answer shown meanwhile.
+                                val contract by produceState(ProfileReads.contract(address), address, ready.identityState) {
+                                    if (!showsVouched(ready.identityState)) return@produceState
+                                    withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
+                                        }.getOrNull()?.values?.firstOrNull()
+                                    }?.let {
+                                        ProfileReads.keep(address, it)
+                                        value = it
+                                    }
+                                }
+                                val vouched = isShownVouched(ready.identityState, contract)
+                                val color = statusPalette()(if (vouched) VOUCHED else ready.identityState)
+                                Field(t(R.string.profile_identity), memberStatus(ready.identityState, contract), color)
+                                if (!vouched) Field(t(R.string.profile_age), tp(R.plurals.profile_n_epochs, ready.age, ready.age), color)
                             }
                         }
                     }

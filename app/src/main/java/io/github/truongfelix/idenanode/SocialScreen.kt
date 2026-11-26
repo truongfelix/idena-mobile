@@ -131,6 +131,7 @@ fun SocialScreen(
     CompositionLocalProvider(
         LocalNames provides model.names,
         LocalPictures provides shownPictures(model.shownProfiles),
+        LocalVouched provides vouchedMembers(model.profiles.values),
         LocalHiding provides HiddenContent(model.hiding, myAddress),
         LocalPostMenu provides PostMenu(
             me = myAddress,

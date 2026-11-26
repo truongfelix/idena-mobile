@@ -246,8 +246,10 @@ private fun ProfileHeader(
             identity?.fold(
                 {
                     buildAnnotatedString {
-                        withStyle(SpanStyle(color = palette(it.state), fontWeight = FontWeight.Medium)) {
-                            append(t(R.string.socialb_identity_line, it.status, it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
+                        // A vouched member: "Vouched" alone, without an age or a stake of its own (B-316).
+                        val vouched = isShownVouched(it.state, contract)
+                        withStyle(SpanStyle(color = palette(if (vouched) VOUCHED else it.state), fontWeight = FontWeight.Medium)) {
+                            append(if (vouched) memberStatus(it.state, contract) else t(R.string.socialb_identity_line, identityStatus(it.state), it.age, blockNumber.format(it.stake.setScale(0, RoundingMode.DOWN))))
                         }
                     }
                 },

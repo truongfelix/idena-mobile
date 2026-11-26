@@ -15,6 +15,22 @@ class ProfileVouchingTest {
         ContractProfile(holder, "carol", null, null, 0, 0, voucher, state, voucherState)
 
     @Test
+    fun aVouchedMemberReadsVouchedAndAnyOtherAccountItsOwnStatus() {
+        assertEquals("Vouched", memberStatus("Undefined", profile("Undefined", alice, "Human")))
+        assertEquals("Vouched", memberStatus("Killed", profile("Killed", alice, "Newbie")))
+        // Invite and Candidate keep their status; the state read now decides over an older profile.
+        assertEquals("Candidate", memberStatus("Candidate", profile("Candidate", alice, "Newbie")))
+        assertEquals("Invite", memberStatus("Invite", profile("Undefined", alice, "Human")))
+        assertEquals("Newbie", memberStatus("Newbie", profile("Undefined", alice, "Human")))
+        // A voucher out of its validation, a member who validated, no profile read: the identity's own status.
+        assertEquals("Not validated", memberStatus("Undefined", profile("Undefined", alice, "Suspended")))
+        assertEquals("Newbie", memberStatus("Newbie", profile("Newbie", alice, "Human")))
+        assertEquals("Not validated", memberStatus("Undefined", null))
+        assertEquals(setOf(holder), vouchedMembers(listOf(profile("Undefined", alice, "Human"))))
+        assertEquals(emptySet<String>(), vouchedMembers(listOf(profile("Undefined", alice, "Zombie"))))
+    }
+
+    @Test
     fun aChallengeStartsWithItsFirstCall() {
         assertEquals(ChallengeStep(1, canCall = true, frees = false, since = 10), challengeStep(null, 10, holder))
     }

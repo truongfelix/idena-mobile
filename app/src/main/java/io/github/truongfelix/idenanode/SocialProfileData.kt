@@ -107,12 +107,27 @@ fun socialProfile(feed: List<SocialPost>, address: String): SocialProfile {
 fun identityStatus(state: String): String =
     if (state.isEmpty() || state == "Undefined") t(R.string.social_not_validated) else identityStateText(state)
 
-/** What a post's header shows of its author's identity: the state and the age in epochs. */
-/** [stake] in iDNA: Community moderation's moderators hold 1,000,000 (Moderation.kt). */
-data class AuthorIdentity(val state: String, val age: Int, val stake: Double = 0.0) {
-    /** "Human · age 12"; the state alone without an identity or at age 0. */
+/**
+ * What a post's header shows of its author's identity: the state and the age in epochs; [stake] in iDNA (Community
+ * moderation's moderators hold 1,000,000, Moderation.kt); [vouched]: the author acts as a vouched member of the
+ * profiles contract ([isActingMember]), shown "Vouched" (B-316).
+ */
+data class AuthorIdentity(val state: String, val age: Int, val stake: Double = 0.0, val vouched: Boolean = false) {
+    /** "Vouched" for a vouched member, the state as idena.social names it otherwise ([identityStatus]). */
+    val status: String
+        get() = if (vouched) t(R.string.social_vouched) else identityStatus(state)
+
+    /** The key of its color ([statusPalette]). */
+    val colorKey: String
+        get() = if (vouched) VOUCHED else state
+
+    /** "Human · age 12"; the status alone without an identity of its own or at age 0. */
     val label: String
-        get() = if (age > 0 && state.isNotEmpty() && state != "Undefined") t(R.string.social_status_age, identityStatus(state), age) else identityStatus(state)
+        get() = if (!vouched && age > 0 && state.isNotEmpty() && state != "Undefined") t(R.string.social_status_age, status, age) else status
+
+    /** This identity, shown as a vouched member when [address] is one of [vouched] (lowercase). */
+    fun among(address: String, vouched: Set<String>): AuthorIdentity =
+        if (address.lowercase() in vouched && showsVouched(state)) copy(vouched = true) else this
 }
 
 /**
