@@ -74,9 +74,12 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                                 // A vouched member reads "Vouched" (B-316), from its profile in the profiles contract: read
                                 // at each opening for an account without an identity only, the last answer for this
                                 // address shown meanwhile (B-324: never the account's before a key import). Read again
-                                // once the node is synced, and every 10 s while the node does not answer (its first
-                                // seconds serve bcn_ calls only).
-                                val read by produceState(ProfileReads.contract(address), address, ready.identityState, ready.syncing) {
+                                // once the node has been synced (not at each flip near the head), and up to six times,
+                                // 10 s apart, while the node does not answer (its first seconds serve bcn_ calls only).
+                                val latch = remember(address) { booleanArrayOf(false) }
+                                if (!ready.syncing) latch[0] = true
+                                val syncedOnce = latch[0]
+                                val read by produceState(ProfileReads.contract(address), address, ready.identityState, syncedOnce) {
                                     value = ProfileReads.contract(address)
                                     if (!showsVouched(ready.identityState)) return@produceState
                                     repeat(6) { attempt ->
@@ -87,9 +90,9 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                                             }
                                         }
                                         if (answer.isSuccess) {
-                                            // No profile in the contract: no vouch either.
                                             val profile = answer.getOrNull()?.values?.firstOrNull()
-                                            profile?.let { ProfileReads.keep(address, it) }
+                                            // An answer read while syncing is the card's only: other screens wait for a synced one.
+                                            if (profile != null && syncedOnce) ProfileReads.keep(address, profile)
                                             value = profile
                                             return@produceState
                                         }
