@@ -21,6 +21,7 @@
     <string name="social_notice_tipped">%1$s tipped you %2$s iDNA</string>
     <string name="social_notice_many">%1$d new on your posts: %2$s</string>
     <string name="social_not_validated">Not validated</string>
+    <string name="social_vouched">Vouched</string>
     <string name="social_status_age">"%1$s  ·  age %2$d"</string>
     <string name="social_ago_now">now</string>
     <string name="social_ago_seconds">%1$ds</string>

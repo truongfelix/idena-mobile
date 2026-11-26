@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.luminance
 /**
  * The color of each identity state, readable on the theme's background (lighter in the dark theme):
  * Human gold, Verified blue, Newbie green, Candidate teal, Invite purple, Suspended orange, Zombie red,
- * Killed brown; Not validated stays grey.
+ * Killed brown, Vouched (a vouched member, B-316) pink; Not validated stays grey.
  */
 @Composable
 fun statusPalette(): (String) -> Color {
@@ -25,6 +25,7 @@ fun statusPalette(): (String) -> Color {
             "Suspended" -> pick(0xFFE65100, 0xFFFFB74D)
             "Zombie" -> pick(0xFFC62828, 0xFFEF9A9A)
             "Killed" -> pick(0xFF5D4037, 0xFFBCAAA4)
+            VOUCHED -> pick(0xFFAD1457, 0xFFF48FB1)
             else -> grey
         }
     }

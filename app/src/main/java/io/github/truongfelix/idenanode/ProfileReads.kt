@@ -16,20 +16,24 @@ object ProfileReads {
     private val identities = Recent<ProfileIdentity>()
     private val trusts = Recent<TrustCount>()
     private val circles = Recent<ProfileCircle>()
+    private val contracts = Recent<ContractProfile>()
 
     @Synchronized fun identity(address: String): ProfileIdentity? = identities[address.lowercase()]
     @Synchronized fun trust(address: String): TrustCount? = trusts[address.lowercase()]
     @Synchronized fun circle(address: String): ProfileCircle? = circles[address.lowercase()]
+    @Synchronized fun contract(address: String): ContractProfile? = contracts[address.lowercase()]
 
     @Synchronized fun keep(address: String, identity: ProfileIdentity) { identities[address.lowercase()] = identity }
     @Synchronized fun keep(address: String, trust: TrustCount) { trusts[address.lowercase()] = trust }
     @Synchronized fun keep(address: String, circle: ProfileCircle) { circles[address.lowercase()] = circle }
+    @Synchronized fun keep(address: String, contract: ContractProfile) { contracts[address.lowercase()] = contract }
 
     /** Forgets everything: another account (a key import) sees other Trusts and offers. */
     @Synchronized fun clear() {
         identities.clear()
         trusts.clear()
         circles.clear()
+        contracts.clear()
     }
 }
 

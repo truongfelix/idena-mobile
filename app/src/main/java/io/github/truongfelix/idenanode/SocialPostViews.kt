@@ -53,13 +53,16 @@ fun ago(seconds: Long): String = timeAgo(seconds, LocalNow.current)
 /** The names of the contact list by lowercase address, shown instead of the addresses. */
 val LocalNames = compositionLocalOf<Map<String, String>> { emptyMap() }
 
+/** The accounts shown that act as vouched members ([vouchedMembers]), lowercase: their status reads "Vouched" (B-316). */
+val LocalVouched = compositionLocalOf<Set<String>> { emptySet() }
+
 /** The posts, replies and comments liked by a like sent but not read by the scan yet ([SentList]). */
 val LocalPendingLikes = compositionLocalOf<Set<Long>> { emptySet() }
 
 /** "  ·  Human  ·  age 12", the state and its age in the state's color. */
 private fun AnnotatedString.Builder.appendStatus(identity: AuthorIdentity, palette: (String) -> Color) {
     append("  ·  ")
-    withStyle(SpanStyle(color = palette(identity.state), fontWeight = FontWeight.Medium)) { append(identity.label) }
+    withStyle(SpanStyle(color = palette(identity.colorKey), fontWeight = FontWeight.Medium)) { append(identity.label) }
 }
 
 /** How an address shows as a link to its profile: the style, and the names to show. */
@@ -89,7 +92,7 @@ fun PostHeader(
     op: Boolean = false,
 ) {
     // No state while the node is asked for it.
-    val identity = states[call.author]
+    val identity = states[call.author]?.among(call.author, LocalVouched.current)
     val styles = addressLinkStyles()
     val palette = statusPalette()
     val color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -109,9 +112,9 @@ fun PostHeader(
             )
             identity?.let {
                 Text(
-                    "  ·  " + identityStatus(it.state),
+                    "  ·  " + it.status,
                     style = MaterialTheme.typography.bodySmall,
-                    color = palette(it.state),
+                    color = palette(it.colorKey),
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     softWrap = false,
@@ -148,7 +151,7 @@ fun PostHeader(
                 Text(
                     it.label,
                     style = MaterialTheme.typography.bodySmall,
-                    color = palette(it.state),
+                    color = palette(it.colorKey),
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -277,9 +280,10 @@ fun ActionBar(
 fun WhoDialog(post: SocialPost, states: Map<String, AuthorIdentity>, onProfile: (String) -> Unit, onDismiss: () -> Unit) {
     val styles = addressLinkStyles()
     val palette = statusPalette()
+    val vouched = LocalVouched.current
     fun AnnotatedString.Builder.who(address: String) {
         appendAddress(address, styles, onProfile)
-        states[address]?.let { appendStatus(it, palette) }
+        states[address]?.let { appendStatus(it.among(address, vouched), palette) }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
