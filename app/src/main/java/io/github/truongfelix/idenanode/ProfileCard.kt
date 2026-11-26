@@ -41,6 +41,24 @@ import java.time.format.FormatStyle
 
 /* The Node tab's Profile card: the identity, its validation, its invitation and the screens behind it. */
 
+/**
+ * [read]'s answer, tried again while it fails (the node's first seconds serve bcn_ calls only): after 10 s, then
+ * twice as long each time, at most a minute apart ([pause]). Ends only with an answer or when its caller is cancelled.
+ */
+internal suspend fun <T> readUntilAnswered(read: suspend () -> T, pause: suspend (Long) -> Unit): T {
+    var wait = 10_000L
+    while (true) {
+        try {
+            return read()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            pause(wait)
+            wait = minOf(wait * 2, 60_000L)
+        }
+    }
+}
+
 /** [profile] when it is [address]'s, else null: a read of another account (before a key import) says nothing. */
 internal fun profileOf(address: String, profile: ContractProfile?): ContractProfile? =
     profile?.takeIf { it.address.equals(address, ignoreCase = true) }
@@ -79,22 +97,16 @@ fun ProfileCard(state: ScreenState, people: Map<String, Person>, onChanged: () -
                                 val read by produceState(ProfileReads.contract(address), address, ready.identityState, ready.syncing) {
                                     value = profileOf(address, value) ?: ProfileReads.contract(address)
                                     if (!showsVouched(ready.identityState)) return@produceState
-                                    var pause = 10_000L
-                                    while (true) {
-                                        val answer = withContext(Dispatchers.IO) {
-                                            runCatching {
+                                    readUntilAnswered(
+                                        read = {
+                                            withContext(Dispatchers.IO) {
                                                 NodeProfilesSource(NodeRpc(NodeSettings.RPC_PORT, NodeSettings.apiKey(context))).profiles(listOf(address))
-                                            }
-                                        }
-                                        answer.getOrNull()?.let { profiles ->
-                                            profiles.values.firstOrNull()?.let {
-                                                ProfileReads.keep(address, it)
-                                                value = it
-                                            }
-                                            return@produceState
-                                        }
-                                        delay(pause)
-                                        pause = minOf(pause * 2, 60_000L)
+                                            }.values.firstOrNull()
+                                        },
+                                        pause = { delay(it) },
+                                    )?.let {
+                                        ProfileReads.keep(address, it)
+                                        value = it
                                     }
                                 }
                                 val contract = profileOf(address, read)

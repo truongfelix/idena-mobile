@@ -139,4 +139,23 @@ class ProfileVouchingTest {
         assertEquals(vouched, profileOf(holder.uppercase().replace("0X", "0x"), vouched))
         assertNull(profileOf(holder, null))
     }
+
+    @Test
+    fun theProfileCardTriesItsReadAgainUntilTheNodeAnswers() {
+        // B-324: a node in its first seconds answers no dna_ or contract call; the card waits 10 s, then longer, up to a minute.
+        val pauses = mutableListOf<Long>()
+        var calls = 0
+        val answer = kotlinx.coroutines.runBlocking {
+            readUntilAnswered(
+                read = { if (++calls < 6) throw java.io.IOException("not available") else profile("Undefined", alice, "Human") },
+                pause = { pauses += it },
+            )
+        }
+        assertEquals(profile("Undefined", alice, "Human"), answer)
+        assertEquals(listOf(10_000L, 20_000L, 40_000L, 60_000L, 60_000L), pauses)
+        // An answer at once: no pause.
+        pauses.clear()
+        kotlinx.coroutines.runBlocking { readUntilAnswered(read = { null }, pause = { pauses += it }) }
+        assertEquals(emptyList<Long>(), pauses)
+    }
 }
