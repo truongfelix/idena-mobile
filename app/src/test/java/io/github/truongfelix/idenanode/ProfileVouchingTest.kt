@@ -1,5 +1,7 @@
 package io.github.truongfelix.idenanode
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -156,6 +158,45 @@ class ProfileVouchingTest {
         // An answer at once: no pause.
         pauses.clear()
         kotlinx.coroutines.runBlocking { readUntilAnswered(read = { null }, pause = { pauses += it }) }
+        assertEquals(emptyList<Long>(), pauses)
+    }
+
+    @Test
+    fun theProfileCardsReadEndsOnlyWhenTheCardIsCancelled() {
+        // An Error, or a cancellation of the read alone (a timeout), is tried again, as the card's runCatching did.
+        val pauses = mutableListOf<Long>()
+        var calls = 0
+        val answer = kotlinx.coroutines.runBlocking {
+            readUntilAnswered(
+                read = {
+                    when (++calls) {
+                        1 -> throw NoClassDefFoundError("not loaded")
+                        2 -> throw kotlinx.coroutines.CancellationException("the read's own timeout")
+                        else -> "answer"
+                    }
+                },
+                pause = { pauses += it },
+            )
+        }
+        assertEquals("answer", answer)
+        assertEquals(listOf(10_000L, 20_000L), pauses)
+        // The card cancelled: no pause, no read again.
+        pauses.clear()
+        calls = 0
+        kotlinx.coroutines.runBlocking {
+            launch {
+                readUntilAnswered<String>(
+                    read = {
+                        calls++
+                        coroutineContext.cancel()
+                        throw kotlinx.coroutines.CancellationException("card gone")
+                    },
+                    // Like delay: ends at once in a cancelled coroutine.
+                    pause = { pauses += it; kotlinx.coroutines.yield() },
+                )
+            }.join()
+        }
+        assertEquals(1, calls)
         assertEquals(emptyList<Long>(), pauses)
     }
 }

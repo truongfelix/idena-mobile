@@ -32,7 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
@@ -50,9 +52,9 @@ internal suspend fun <T> readUntilAnswered(read: suspend () -> T, pause: suspend
     while (true) {
         try {
             return read()
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // As runCatching did: anything is tried again, unless the caller itself was cancelled.
+            currentCoroutineContext().ensureActive()
             pause(wait)
             wait = minOf(wait * 2, 60_000L)
         }
